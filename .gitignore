@@ -1,0 +1,18 @@
+# Gradle
+.gradle/
+build/
+*.apk
+*.aab
+
+# Local config
+local.properties
+.idea/
+*.iml
+.vscode/
+.DS_Store
+captures/
+.kotlin/
+
+# Tool download (local only)
+.tools/
+.omp/
