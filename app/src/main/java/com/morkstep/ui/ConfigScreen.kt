@@ -73,6 +73,12 @@ fun ConfigScreen(
     onSelect: (Long) -> Unit,
     onSave: (WorkoutProfile) -> Unit,
     onNewProfile: () -> Unit,
+    simulated: Boolean,
+    sensorNote: String,
+    onSimulatedChange: (Boolean) -> Unit,
+    onRequestPermissions: () -> Unit,
+    locationGranted: Boolean,
+    bluetoothGranted: Boolean,
 ) {
     val profile = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
 
@@ -224,13 +230,44 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Audio cues", style = MaterialTheme.typography.bodyLarge)
-            Switch(checked = audio, onCheckedChange = { audio = it })
+        Text("Sensors", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Simulated sensors (debug)", style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = simulated, onCheckedChange = onSimulatedChange)
+                }
+                Text(
+                    "Off uses real hardware: GPS pace and a Bluetooth heart-rate strap. " +
+                        "No automatic fallback — if off and a signal is missing, readings stay blank.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (!simulated) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = onRequestPermissions,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Grant sensor permissions")
+                        }
+                    }
+                    Text(
+                        "Location: ${if (locationGranted) "granted" else "not granted"} · " +
+                            "Bluetooth: ${if (bluetoothGranted) "granted" else "not granted"}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text(
+                        sensorNote,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(24.dp))

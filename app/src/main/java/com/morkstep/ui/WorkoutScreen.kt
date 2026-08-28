@@ -44,6 +44,7 @@ private fun formatClock(sec: Int): String {
 fun WorkoutScreen(
     live: LiveState,
     profile: WorkoutProfile,
+    simulated: Boolean,
     onEnd: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -58,6 +59,13 @@ fun WorkoutScreen(
 
         Text(profile.name, style = MaterialTheme.typography.titleMedium)
         Text(live.lengthLabel.ifEmpty { profile.lengthLabel() }, style = MaterialTheme.typography.bodySmall)
+        if (simulated) {
+            Text(
+                "Simulated sensors (debug) — no live hardware readings",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
 
         Spacer(Modifier.height(8.dp))
 

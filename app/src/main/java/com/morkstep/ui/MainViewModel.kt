@@ -14,6 +14,10 @@ import com.morkstep.data.defaultProfile
 import com.morkstep.engine.CueSink
 import com.morkstep.engine.LiveState
 import com.morkstep.engine.SessionEngine
+import com.morkstep.sensing.BleHeartRateSource
+import com.morkstep.sensing.GpsPaceSource
+import com.morkstep.sensing.HeartRateSource
+import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.SimulatedSensors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -31,10 +35,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val container: AppContainer = (app as MorkApplication).container
     private val speaker = CueSpeaker(app)
     private val sink = SpeakerSink(speaker)
-    private val sensors = SimulatedSensors()
 
     private var engine: SessionEngine? = null
     private var tickerJob: Job? = null
+
+    // Real sources (only live while simulated mode is OFF).
+    private var gps: GpsPaceSource? = null
+    private var ble: BleHeartRateSource? = null
+    private var sim: SimulatedSensors? = null
 
     private val _profiles = MutableStateFlow(emptyList<WorkoutProfile>())
     val profiles: StateFlow<List<WorkoutProfile>> = _profiles.asStateFlow()
@@ -42,15 +50,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _activeId = MutableStateFlow(0L)
     val activeId: StateFlow<Long> = _activeId.asStateFlow()
 
-    /** The currently selected profile (fresh copy each emission). */
-    val activeProfile: StateFlow<WorkoutProfile?>
-        get() = _activeProfile.asStateFlow()
     private val _activeProfile = MutableStateFlow<WorkoutProfile?>(null)
+    val activeProfile: StateFlow<WorkoutProfile?> = _activeProfile.asStateFlow()
+
+    private val _simulated = MutableStateFlow(false)
+    val simulated: StateFlow<Boolean> = _simulated.asStateFlow()
+
+    /** Human-readable note about which sensor sources are in use. */
+    private val _sensorNote = MutableStateFlow("")
+    val sensorNote: StateFlow<String> = _sensorNote.asStateFlow()
+
+    private val _locationGranted = MutableStateFlow(false)
+    val locationGranted: StateFlow<Boolean> = _locationGranted.asStateFlow()
+
+    private val _bluetoothGranted = MutableStateFlow(false)
+    val bluetoothGranted: StateFlow<Boolean> = _bluetoothGranted.asStateFlow()
 
     private val _live = MutableStateFlow(LiveState())
     val live: StateFlow<LiveState> = _live.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            container.configStore.simulatedSensors.collect { simOn ->
+                _simulated.value = simOn
+                rebuildSources()
+            }
+        }
         viewModelScope.launch {
             container.configStore.profiles.collect { list ->
                 _profiles.value = list
@@ -65,6 +90,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** (Re)create pace/HR sources per the simulated toggle. Real sources do NOT fall back. */
+    private fun rebuildSources() {
+        stopSources()
+        refreshPermissions()
+        if (_simulated.value) {
+            sim = SimulatedSensors()
+            _sensorNote.value = "Simulated sensors (debug)"
+        } else {
+            gps = GpsPaceSource(getApplication())
+            ble = BleHeartRateSource(getApplication())
+            _sensorNote.value = "GPS pace · BLE heart rate"
+        }
+        setupEngine()
+    }
+
+    fun refreshPermissions() {
+        val app = getApplication<Application>()
+        _locationGranted.value =
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                app, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        _bluetoothGranted.value =
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                app, android.Manifest.permission.BLUETOOTH_SCAN
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                app, android.Manifest.permission.BLUETOOTH_CONNECT
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun stopSources() {
+        gps?.stop()
+        ble?.stop()
+        gps = null
+        ble = null
+        sim = null
+    }
+
     private fun refreshActive() {
         val id = _activeId.value
         _activeProfile.value = _profiles.value.firstOrNull { it.id == id }
@@ -75,13 +138,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun setupEngine() {
         val p = _activeProfile.value ?: return
-        engine = null
-        val e = SessionEngine(p, sensors, sensors, sink)
+        val paceSrc: PaceSource = sim ?: gps ?: return
+        val hrSrc: HeartRateSource = if (_simulated.value) sim!! else ble ?: return
+        val e = SessionEngine(p, paceSrc, hrSrc, sink)
         e.start(viewModelScope)
         engine = e
         viewModelScope.launch {
             e.state.collect { _live.value = it }
         }
+    }
+
+    fun setSimulatedSensors(on: Boolean) {
+        viewModelScope.launch { container.configStore.setSimulatedSensors(on) }
     }
 
     /** Select which profile is shown on the home screen and used for the next workout. */
@@ -112,7 +180,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Start the active profile as a new workout session. */
     fun startWorkout() {
         val p = _activeProfile.value ?: return
         if (p.fastSec <= 0 || p.slowSec <= 0) return
@@ -123,7 +190,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 delay(1000)
                 engine?.tick()
                 val ls = engine?.state?.value ?: break
-                sensors.setPhase(ls.phase)
+                // Drive simulated values only when simulated mode is on.
+                if (_simulated.value) sim?.setPhase(ls.phase)
                 if (ls.finished) onFinished()
             }
         }
@@ -164,6 +232,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        stopSources()
         speaker.shutdown()
     }
 }

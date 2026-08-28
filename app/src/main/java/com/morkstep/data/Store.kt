@@ -3,6 +3,7 @@ package com.morkstep.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** Persists the user's workout profiles and the active profile id. */
+/** Persists the user's workout profiles, active profile id, and sensor mode. */
 class ConfigStore(private val context: Context) {
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "mork_config")
 
@@ -21,6 +22,14 @@ class ConfigStore(private val context: Context) {
     companion object {
         private val PROFILES_JSON = stringPreferencesKey("profilesJson")
         private val ACTIVE_ID = longPreferencesKey("activeProfileId")
+        private val SIMULATED = booleanPreferencesKey("simulatedSensors")
+    }
+
+    /** Whether to use simulated sensor readings (developer testing). Default OFF. */
+    val simulatedSensors: Flow<Boolean> = context.dataStore.data.map { it[SIMULATED] ?: false }
+
+    suspend fun setSimulatedSensors(value: Boolean) = context.dataStore.edit { p ->
+        p[SIMULATED] = value
     }
 
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->

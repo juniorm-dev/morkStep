@@ -27,10 +27,11 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 | Tool | Version |
 | ---- | ------- |
 | Android Studio JBR (JDK) | 21 |
-| Android SDK | compileSdk 35, minSdk 26 |
+| Android SDK | compileSdk 36 (Android 16), targetSdk 36, minSdk 26 |
 | Gradle | 8.11.1 (wrapper) |
-| Android Gradle Plugin | 8.7.2 |
+| Android Gradle Plugin | 8.10.1 |
 | Kotlin | 2.0.21 (Compose compiler plugin 2.0.21) |
+| Play Services (Fused Location) | play-services-location 21.3.0 |
 
 `local.properties` must set `sdk.dir` to your SDK path.
 
@@ -89,11 +90,15 @@ The pure mapping helpers have **no Android dependencies**, so they are unit-test
 - **Distance is integrated, not sampled.** Each tick adds `pace × dt / 3600` miles, so distance tracks the live pace signal smoothly and its accumulation works even with irregular tick cadence (unit-tested).
 - **Pull sensors, push state.** The engine observes pace/HR via `StateFlow` and emits aggregated state downstream. The UI never drives the engine's truth; it only renders `LiveState`.
 
-### Sensing — `sensing/Sensors.kt`
+### Sensing — `sensing/`
 
-Pace and HR are defined as two narrow interfaces (`PaceSource`, `HeartRateSource`) returning `StateFlow`. The app ships **`SimulatedSensors`**, which random-walk toward phase-appropriate targets (e.g. ~6.2 km/h / ~138 bpm during push). This makes the cue path and history work on the Android emulator, which has neither GPS nor a BLE heart-rate strap.
+Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returning `StateFlow`; the engine and UI depend only on those. Production sources:
 
-A real implementation (Fused Location for pace, a Bluetooth LE health-service client for HR) can be dropped in behind the same interfaces with no change to the engine or UI.
+- **`GpsPaceSource`** — real pace via the **Fused Location Provider** (Play Services), `Location.getSpeed()` m/s → mph (×2.23694), 1 s updates.
+- **`BleHeartRateSource`** — real HR via a **Bluetooth LE heart-rate strap** (Heart Rate Service `0x180D` / measurement `0x2A37`): scans for the service, connects, subscribes to notifications, parses 8/16-bit HR payloads. Disconnects re-scan automatically; gives up after 60 s.
+- **`SimulatedSensors`** — developer-only. Random-walks toward phase targets so cue/history paths can be exercised **when explicitly toggled on** in Settings. It is **never an automatic fallback**: when off, a missing signal simply reads blank (`–`), so real workouts can never be silently polluted by fake readings.
+
+The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
 ### Storage — `data/`
 
