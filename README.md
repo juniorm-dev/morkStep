@@ -20,7 +20,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
   - spoken guidance when pace drops below the floor or HR rises above the ceiling during push,
   - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
-- **Workout history** — every completed session is auto-saved (date, duration, push count, average pace *mph*, distance *mi*, average HR, seconds over ceiling) and listed in a History screen.
+- **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds over ceiling) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
 
 ## Requirements
 
@@ -151,5 +151,6 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 - quarter cues fire at 25% / 50% / 75%
 - pace-below-floor cue, HR-above-ceiling cue + over-ceiling counter
 - distance accumulation from pace (mph → miles)
+- per-phase average accumulation: push/recovery/overall pace & HR bucketed from 1 Hz samples
 
 Run with `./gradlew testDebugUnitTest`.

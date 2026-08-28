@@ -208,10 +208,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     endTime = ended,
                     durationSec = ls.totalSeconds,
                     fastSegments = ls.fastSegmentsDone,
-                    avgFastPace = ls.pace,
-                    avgHeartRate = ls.hr,
+                    avgFastPace = ls.avgOverallPaceMph,
+                    avgHeartRate = ls.avgOverallHr,
                     overCeilingSec = ls.overCeilingSec,
                     distanceMiles = ls.distanceMiles.toFloat(),
+                    avgPushPace = ls.avgPushPaceMph,
+                    avgRecoveryPace = ls.avgRecoveryPaceMph,
+                    avgOverallPace = ls.avgOverallPaceMph,
+                    avgPushHr = ls.avgPushHr,
+                    avgRecoveryHr = ls.avgRecoveryHr,
+                    avgOverallHr = ls.avgOverallHr,
                 )
             )
         }

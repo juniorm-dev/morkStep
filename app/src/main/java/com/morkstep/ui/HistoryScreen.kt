@@ -79,8 +79,32 @@ private fun WorkoutRow(w: WorkoutEntity) {
                 "${formatDuration(w.durationSec)} · ${w.fastSegments} push intervals",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            // Per-phase + overall averages (v3; older rows may be null).
+            val paceAvgs = buildList {
+                w.avgPushPace?.let { add("push %.1f".format(it)) }
+                w.avgRecoveryPace?.let { add("rec %.1f".format(it)) }
+                w.avgOverallPace?.let { add("overall %.1f".format(it)) }
+            }
+            if (paceAvgs.isNotEmpty()) {
+                Text(
+                    "pace mph:  " + paceAvgs.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            val hrAvgs = buildList {
+                w.avgPushHr?.let { add("push $it") }
+                w.avgRecoveryHr?.let { add("rec $it") }
+                w.avgOverallHr?.let { add("overall $it") }
+            }
+            if (hrAvgs.isNotEmpty()) {
+                Text(
+                    "HR bpm:  " + hrAvgs.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             val stats = buildList {
-                w.avgFastPace?.let { add("avg pace %.1f mph".format(it)) }
                 w.avgHeartRate?.let { add("avg HR $it bpm") }
                 if (w.distanceMiles > 0f) add("%.2f mi".format(w.distanceMiles))
                 if (w.overCeilingSec > 0) add("above ceiling ${w.overCeilingSec}s")

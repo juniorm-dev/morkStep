@@ -22,6 +22,8 @@ class FakeSensors(initPace: Float?, initHr: Int?) : PaceSource, HeartRateSource 
     override val pace: kotlinx.coroutines.flow.StateFlow<Float?> = _pace
     private val _hr = MutableStateFlow(initHr)
     override val hr: kotlinx.coroutines.flow.StateFlow<Int?> = _hr
+    fun setPace(p: Float?) { _pace.value = p }
+    fun setHr(h: Int?) { _hr.value = h }
 }
 
 class RecordingCue : CueSink {
@@ -273,5 +275,28 @@ class SessionEngineTest {
         eng.tick()
         val miles = eng.snapshot.distanceMiles
         assertTrue(miles > 0.010 && miles < 0.013)
+    }
+
+    @Test
+    fun phaseAverages_paceAndHrPerBucket() {
+        val p = roundsProfile // warmup 60, fast 60, slow 60
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val sensors = FakeSensors(3.0f, 100)
+        val eng = SessionEngine(p, sensors, sensors, cue, clock)
+        eng.run() // t=0 warmup sample: 3.0 / 100
+        sensors.setPace(3.0f); sensors.setHr(100)
+        clock.advance(10_000); eng.tick() // warmup sample 3.0 / 100
+        sensors.setPace(4.0f); sensors.setHr(140)
+        clock.advance(60_000); eng.tick() // t=70 → FAST, sample 4.0 / 140
+        sensors.setPace(2.0f); sensors.setHr(110)
+        clock.advance(60_000); eng.tick() // t=130 → SLOW, sample 2.0 / 110
+
+        assertEquals(4.0f, eng.snapshot.avgPushPaceMph!!, 0.01f)
+        assertEquals(2.0f, eng.snapshot.avgRecoveryPaceMph!!, 0.01f)
+        assertEquals(3.0f, eng.snapshot.avgOverallPaceMph!!, 0.01f) // (3+3+4+2)/4
+        assertEquals(140, eng.snapshot.avgPushHr!!)
+        assertEquals(110, eng.snapshot.avgRecoveryHr!!)
+        assertEquals(112, eng.snapshot.avgOverallHr!!) // (100+100+140+110)/4 = 112.5 → 112
     }
 }

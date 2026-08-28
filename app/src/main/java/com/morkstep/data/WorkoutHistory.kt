@@ -29,6 +29,14 @@ data class WorkoutEntity(
     val overCeilingSec: Int,
     /** Distance covered, in miles. */
     val distanceMiles: Float,
+    /** Average pace (mph) during push / recovery / overall. */
+    val avgPushPace: Float?,
+    val avgRecoveryPace: Float?,
+    val avgOverallPace: Float?,
+    /** Average heart rate (bpm) during push / recovery / overall. */
+    val avgPushHr: Int?,
+    val avgRecoveryHr: Int?,
+    val avgOverallHr: Int?,
 )
 
 @Dao
@@ -46,7 +54,7 @@ interface WorkoutDao {
     suspend fun clear()
 }
 
-@Database(entities = [WorkoutEntity::class], version = 2, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 3, exportSchema = false)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
 
@@ -55,6 +63,18 @@ abstract class MorkDatabase : RoomDatabase() {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE workouts RENAME COLUMN distanceKm TO distanceMiles")
+            }
+        }
+
+        /** v3 adds per-phase and overall average pace/HR columns. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workouts ADD COLUMN avgPushPace REAL")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN avgRecoveryPace REAL")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN avgOverallPace REAL")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN avgPushHr INTEGER")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN avgRecoveryHr INTEGER")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN avgOverallHr INTEGER")
             }
         }
     }

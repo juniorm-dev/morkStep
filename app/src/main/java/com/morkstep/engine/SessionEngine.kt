@@ -41,6 +41,14 @@ data class LiveState(
     val fastRoundsTotal: Int? = null,
     /** Human length label, e.g. "5 rounds", "35 min", "Adhoc". */
     val lengthLabel: String = "",
+    /** 1 Hz moving averages: pace in mph during push/recovery/overall. */
+    val avgPushPaceMph: Float? = null,
+    val avgRecoveryPaceMph: Float? = null,
+    val avgOverallPaceMph: Float? = null,
+    /** 1 Hz moving averages: HR in bpm during push/recovery/overall. */
+    val avgPushHr: Int? = null,
+    val avgRecoveryHr: Int? = null,
+    val avgOverallHr: Int? = null,
 )
 
 /** Wall-clock abstraction so the ticker is unit-testable. */
@@ -147,6 +155,20 @@ class SessionEngine(
     private val lastCueAt = mutableMapOf<String, Long>()
     private val cueCooldownMs = 8_000L
 
+    // Phase-average accumulators (pace in mph, HR in bpm).
+    private var fastPaceSum = 0.0
+    private var fastPaceCnt = 0
+    private var slowPaceSum = 0.0
+    private var slowPaceCnt = 0
+    private var allPaceSum = 0.0
+    private var allPaceCnt = 0
+    private var fastHrSum = 0L
+    private var fastHrCnt = 0
+    private var slowHrSum = 0L
+    private var slowHrCnt = 0
+    private var allHrSum = 0L
+    private var allHrCnt = 0
+
     val snapshot: LiveState get() = _state.value
 
     /** Start observing sensor values. Call once when the engine is owned. */
@@ -173,6 +195,12 @@ class SessionEngine(
         lastPhase = null
         lastQuarter = 0
         lastAdhocCueN = 0
+        fastPaceSum = 0.0; fastPaceCnt = 0
+        slowPaceSum = 0.0; slowPaceCnt = 0
+        allPaceSum = 0.0; allPaceCnt = 0
+        fastHrSum = 0L; fastHrCnt = 0
+        slowHrSum = 0L; slowHrCnt = 0
+        allHrSum = 0L; allHrCnt = 0
         _state.value = snapshot.copy(
             running = true, finished = false, totalSeconds = 0, secondsInPhase = 0,
             phase = PhaseType.WARMUP,
@@ -210,6 +238,30 @@ class SessionEngine(
             lastPhase = pa.phase
             lastCueAt.clear()
         }
+
+        // Sample pace/HR once per tick into phase buckets (1 Hz averages).
+        paceSource.pace.value?.let { p ->
+            allPaceSum += p; allPaceCnt++
+            when (pa.phase) {
+                PhaseType.FAST -> { fastPaceSum += p; fastPaceCnt++ }
+                PhaseType.SLOW -> { slowPaceSum += p; slowPaceCnt++ }
+                else -> Unit
+            }
+        }
+        hrSource.hr.value?.let { h ->
+            allHrSum += h; allHrCnt++
+            when (pa.phase) {
+                PhaseType.FAST -> { fastHrSum += h; fastHrCnt++ }
+                PhaseType.SLOW -> { slowHrSum += h; slowHrCnt++ }
+                else -> Unit
+            }
+        }
+        val avgPushPace = if (fastPaceCnt > 0) (fastPaceSum / fastPaceCnt).toFloat() else null
+        val avgRecoveryPace = if (slowPaceCnt > 0) (slowPaceSum / slowPaceCnt).toFloat() else null
+        val avgOverallPace = if (allPaceCnt > 0) (allPaceSum / allPaceCnt).toFloat() else null
+        val avgPushHr = if (fastHrCnt > 0) (fastHrSum / fastHrCnt).toInt() else null
+        val avgRecoveryHr = if (slowHrCnt > 0) (slowHrSum / slowHrCnt).toInt() else null
+        val avgOverallHr = if (allHrCnt > 0) (allHrSum / allHrCnt).toInt() else null
 
         // Quarter cues keyed to the length dimension the user chose:
         // ROUNDS → quarters of the round count; DISTANCE/TIME → quarters of
@@ -261,6 +313,12 @@ class SessionEngine(
             distanceMiles = distance,
             progress = prog,
             finished = finished,
+            avgPushPaceMph = avgPushPace,
+            avgRecoveryPaceMph = avgRecoveryPace,
+            avgOverallPaceMph = avgOverallPace,
+            avgPushHr = avgPushHr,
+            avgRecoveryHr = avgRecoveryHr,
+            avgOverallHr = avgOverallHr,
         )
 
         if (finished) {
