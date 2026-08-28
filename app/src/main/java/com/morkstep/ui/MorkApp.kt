@@ -15,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -36,7 +35,6 @@ fun MorkApp(viewModel: MainViewModel) {
 
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     val activeId by viewModel.activeId.collectAsStateWithLifecycle()
-    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val live by viewModel.live.collectAsStateWithLifecycle()
 
     val bottomTabs = listOf(
@@ -52,12 +50,13 @@ fun MorkApp(viewModel: MainViewModel) {
                     NavigationBarItem(
                         selected = currentDestination?.hierarchy?.any { it.route == route } == true,
                         onClick = {
+                            // Deterministic tab switch: reset the back stack to just
+                            // this tab (no saveState/restoreState — restoring can
+                            // land on a stale saved destination, e.g. Settings when
+                            // the user taps Home).
                             navController.navigate(route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
+                                popUpTo(navController.graph.id) { inclusive = true }
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = { Icon(icon, contentDescription = label) },
@@ -86,10 +85,11 @@ fun MorkApp(viewModel: MainViewModel) {
                 )
             }
             composable(Routes.WORKOUT) {
-                if (activeProfile != null) {
+                val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+                activeProfile?.let { profile ->
                     WorkoutScreen(
                         live = live,
-                        profile = activeProfile!!,
+                        profile = profile,
                         onEnd = {
                             viewModel.endWorkout()
                             navController.popBackStack()
@@ -102,7 +102,13 @@ fun MorkApp(viewModel: MainViewModel) {
                 }
             }
             composable(Routes.CONFIG) {
-                activeProfile?.let { ConfigScreen(profile = it, onSave = viewModel::saveActiveProfile) }
+                ConfigScreen(
+                    profiles = profiles,
+                    selectedId = activeId,
+                    onSelect = viewModel::selectProfile,
+                    onSave = viewModel::updateProfile,
+                    onNewProfile = viewModel::newProfileFromActive,
+                )
             }
             composable(Routes.HISTORY) {
                 HistoryScreen()

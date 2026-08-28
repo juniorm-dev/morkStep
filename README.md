@@ -6,7 +6,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 
 ## Features
 
-- **Profiles** — save unlimited named workout configurations; pick the active one on the home screen. Defaults to *Adhoc*.
+- **Profiles** — save unlimited named workout configurations; pick the active one on the **home screen** or in **Settings** (which also lists all saved profiles and can clone a new one). Defaults to *Adhoc*.
 - **Workout-length modes** — choose how each workout is bounded:
   - **Rounds** — a fixed number of push/recovery pairs plus warm-up/cool-down.
   - **Distance** — runs until a target distance (miles) is covered.
@@ -18,7 +18,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 - **Audio cues** —
   - per-phase spoken announcements plus beeps on transitions,
   - spoken guidance when pace drops below the floor or HR rises above the ceiling during push,
-  - a cue on **each quarter** of a finite-length workout ("One quarter done", "Halfway there", "Three quarters done"),
+  - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
 - **Workout history** — every completed session is auto-saved (date, duration, push count, average pace *mph*, distance *mi*, average HR, seconds over ceiling) and listed in a History screen.
 

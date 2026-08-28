@@ -90,14 +90,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { container.configStore.setActive(id) }
     }
 
-    /** Replace the currently active profile's settings. */
-    fun saveActiveProfile(updated: WorkoutProfile) {
+    /** Save edits to any existing profile (by id). */
+    fun updateProfile(updated: WorkoutProfile) {
         viewModelScope.launch {
             val list = _profiles.value.map { if (it.id == updated.id) updated else it }
             container.configStore.saveProfiles(list)
-            if (!list.any { it.id == _activeId.value }) {
-                container.configStore.setActive(updated.id)
-            }
+        }
+    }
+
+    /** Clone the active profile under a fresh id and make it active. */
+    fun newProfileFromActive() {
+        val src = _activeProfile.value ?: return
+        val fresh = src.copy(
+            id = System.currentTimeMillis(),
+            name = "Profile ${_profiles.value.size + 1}",
+        )
+        viewModelScope.launch {
+            val list = _profiles.value + fresh
+            container.configStore.saveProfiles(list)
+            container.configStore.setActive(fresh.id)
         }
     }
 

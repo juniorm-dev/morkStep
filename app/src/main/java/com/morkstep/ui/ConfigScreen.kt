@@ -14,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -66,24 +68,13 @@ private fun SliderRow(
 
 @Composable
 fun ConfigScreen(
-    profile: WorkoutProfile,
+    profiles: List<WorkoutProfile>,
+    selectedId: Long,
+    onSelect: (Long) -> Unit,
     onSave: (WorkoutProfile) -> Unit,
+    onNewProfile: () -> Unit,
 ) {
-    var name by rememberSaveable(profile.id) { mutableStateOf(profile.name) }
-    var lengthMode by rememberSaveable(profile.id) { mutableStateOf(profile.lengthMode) }
-    var rounds by rememberSaveable(profile.id) { mutableIntStateOf(profile.rounds) }
-    var distanceMiles by rememberSaveable(profile.id) { mutableFloatStateOf(profile.distanceMiles.toFloat()) }
-    var timeMinutes by rememberSaveable(profile.id) { mutableIntStateOf(profile.timeMinutes) }
-    var adhocCueEveryNPush by rememberSaveable(profile.id) { mutableIntStateOf(profile.adhocCueEveryNPush) }
-    var fastSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.fastSec) }
-    var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
-    var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
-    var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
-    var paceCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceCeilingMph.toFloat()) }
-    var paceFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceFloorMph.toFloat()) }
-    var hrCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrCeiling) }
-    var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
-    var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
+    val profile = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
 
     Column(
         modifier = Modifier
@@ -93,10 +84,66 @@ fun ConfigScreen(
     ) {
         Text("Profile settings", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
+
+        // Profile picker: select any saved profile to edit it.
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Profiles", style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(onClick = onNewProfile) {
+                        Text("New")
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                profiles.forEach { p ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = p.id == selectedId, onClick = { onSelect(p.id) })
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = p.id == selectedId, onClick = { onSelect(p.id) })
+                        Column {
+                            Text(p.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(p.lengthLabel(), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (profile == null) {
+            Spacer(Modifier.height(16.dp))
+            Text("No profiles yet — tap New to create one.", style = MaterialTheme.typography.bodyMedium)
+            return@Column
+        }
+
+        var name by rememberSaveable(profile.id) { mutableStateOf(profile.name) }
+        var lengthMode by rememberSaveable(profile.id) { mutableStateOf(profile.lengthMode) }
+        var rounds by rememberSaveable(profile.id) { mutableIntStateOf(profile.rounds) }
+        var distanceMiles by rememberSaveable(profile.id) { mutableFloatStateOf(profile.distanceMiles.toFloat()) }
+        var timeMinutes by rememberSaveable(profile.id) { mutableIntStateOf(profile.timeMinutes) }
+        var adhocCueEveryNPush by rememberSaveable(profile.id) { mutableIntStateOf(profile.adhocCueEveryNPush) }
+        var fastSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.fastSec) }
+        var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
+        var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
+        var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
+        var paceCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceCeilingMph.toFloat()) }
+        var paceFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceFloorMph.toFloat()) }
+        var hrCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrCeiling) }
+        var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
+        var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
+
+        Spacer(Modifier.height(16.dp))
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Name", style = MaterialTheme.typography.bodyLarge)
-                androidx.compose.material3.OutlinedTextField(
+                OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     singleLine = true,
@@ -129,7 +176,7 @@ fun ConfigScreen(
                     ) { rounds = it.toInt() }
                     WorkoutLength.DISTANCE -> SliderRow(
                         "Distance (mi)", "%.1f".format(distanceMiles),
-                        distanceMiles, 0.5f..20f, 20,
+                        distanceMiles, 0.5f..20f, 78,
                     ) { distanceMiles = it }
                     WorkoutLength.TIME -> SliderRow(
                         "Duration (min)", "$timeMinutes min",

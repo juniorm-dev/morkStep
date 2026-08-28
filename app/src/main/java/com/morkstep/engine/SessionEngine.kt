@@ -5,6 +5,7 @@ import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
 import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.PaceSource
+import kotlin.math.ceil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -210,19 +211,34 @@ class SessionEngine(
             lastCueAt.clear()
         }
 
-        // Quarter progress cues (finite modes).
+        // Quarter cues keyed to the length dimension the user chose:
+        // ROUNDS → quarters of the round count; DISTANCE/TIME → quarters of
+        // miles/minutes; ADHOC → every-Nth-push cue only.
         val prog = progressAt(t, profile, coreEndSec, finishSec, distance)
-        if (prog != null) {
-            val q = when {
-                prog >= 0.75f -> 3
-                prog >= 0.50f -> 2
-                prog >= 0.25f -> 1
-                else -> 0
+        val q = when (profile.lengthMode) {
+            WorkoutLength.ROUNDS -> {
+                val target = profile.rounds
+                when {
+                    target <= 0 -> 0
+                    pa.fastDone >= ceil(target * 0.75).toInt() -> 3
+                    pa.fastDone >= ceil(target * 0.50).toInt() -> 2
+                    pa.fastDone >= ceil(target * 0.25).toInt() -> 1
+                    else -> 0
+                }
             }
-            if (q > lastQuarter) {
-                lastQuarter = q
-                speak(qText(q))
+            WorkoutLength.TIME, WorkoutLength.DISTANCE -> {
+                if (prog == null) 0 else when {
+                    prog >= 0.75f -> 3
+                    prog >= 0.50f -> 2
+                    prog >= 0.25f -> 1
+                    else -> 0
+                }
             }
+            WorkoutLength.ADHOC -> 0
+        }
+        if (q > lastQuarter) {
+            lastQuarter = q
+            speak(qText(q))
         }
 
         // ADHOC: cue on every Nth completed push round.

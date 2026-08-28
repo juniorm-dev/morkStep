@@ -183,20 +183,57 @@ class SessionEngineTest {
     }
 
     @Test
-    fun quarterCues_fireAtEachQuarter() {
+    fun roundsMode_quarterCuesByPushCount() {
+        val p = WorkoutProfile(
+            id = 20, name = "QR", lengthMode = WorkoutLength.ROUNDS, rounds = 4,
+            warmupSec = 60, fastSec = 60, slowSec = 60, cooldownSec = 0,
+        )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue)
+        val eng = engineWith(p, clock, cue)
         eng.run()
-        clock.advance(90_000)
+        clock.advance(121_000) // t=121: fast 1 complete → 25% of 4 rounds
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("quarter") })
-        clock.advance(90_000)
+        assertTrue(cue.spoken.any { it.contains("One quarter") })
+        clock.advance(119_000) // t=240: fast 2 complete → 50%
         eng.tick()
         assertTrue(cue.spoken.any { it.contains("Halfway") })
-        clock.advance(90_000)
+        clock.advance(120_000) // t=360: fast 3 complete → 75%
         eng.tick()
         assertTrue(cue.spoken.any { it.contains("Three quarters") })
+    }
+
+    @Test
+    fun timeMode_quarterCuesByTime() {
+        val p = WorkoutProfile(
+            id = 21, name = "QT", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
+            warmupSec = 0, fastSec = 30, slowSec = 30, cooldownSec = 0,
+        )
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue)
+        eng.run()
+        clock.advance(16_000) // t=16/60 s ≈ 27%
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("One quarter") })
+        clock.advance(14_000) // t=30/60 s = 50%
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Halfway") })
+    }
+
+    @Test
+    fun distanceMode_quarterCuesByMiles() {
+        val p = WorkoutProfile(
+            id = 22, name = "QD", lengthMode = WorkoutLength.DISTANCE, distanceMiles = 1.0,
+            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+        )
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue, pace = 4.0f, hr = 120)
+        eng.run()
+        clock.advance(226_000) // 4.0 mph × 225s = 0.25 mi
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("One quarter") })
     }
 
     @Test
