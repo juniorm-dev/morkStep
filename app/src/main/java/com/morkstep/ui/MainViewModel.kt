@@ -8,8 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.morkstep.AppContainer
 import com.morkstep.MorkApplication
 import com.morkstep.audio.CueSpeaker
-import com.morkstep.data.IntervalConfig
 import com.morkstep.data.WorkoutEntity
+import com.morkstep.data.WorkoutProfile
+import com.morkstep.data.defaultProfile
 import com.morkstep.engine.CueSink
 import com.morkstep.engine.LiveState
 import com.morkstep.engine.SessionEngine
@@ -35,24 +36,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var engine: SessionEngine? = null
     private var tickerJob: Job? = null
 
-    private val _config = MutableStateFlow(IntervalConfig())
-    val config: StateFlow<IntervalConfig> = _config.asStateFlow()
+    private val _profiles = MutableStateFlow(emptyList<WorkoutProfile>())
+    val profiles: StateFlow<List<WorkoutProfile>> = _profiles.asStateFlow()
+
+    private val _activeId = MutableStateFlow(0L)
+    val activeId: StateFlow<Long> = _activeId.asStateFlow()
+
+    /** The currently selected profile (fresh copy each emission). */
+    val activeProfile: StateFlow<WorkoutProfile?>
+        get() = _activeProfile.asStateFlow()
+    private val _activeProfile = MutableStateFlow<WorkoutProfile?>(null)
 
     private val _live = MutableStateFlow(LiveState())
     val live: StateFlow<LiveState> = _live.asStateFlow()
 
     init {
         viewModelScope.launch {
-            container.configStore.config.collect { c ->
-                _config.value = c
-                setupEngine(c)
+            container.configStore.profiles.collect { list ->
+                _profiles.value = list
+                refreshActive()
+            }
+        }
+        viewModelScope.launch {
+            container.configStore.activeId.collect { id ->
+                _activeId.value = id
+                refreshActive()
             }
         }
     }
 
-    private fun setupEngine(c: IntervalConfig) {
+    private fun refreshActive() {
+        val id = _activeId.value
+        _activeProfile.value = _profiles.value.firstOrNull { it.id == id }
+            ?: _profiles.value.firstOrNull()
+            ?: defaultProfile()
+        setupEngine()
+    }
+
+    private fun setupEngine() {
+        val p = _activeProfile.value ?: return
         engine = null
-        val e = SessionEngine(c, sensors, sensors, sink)
+        val e = SessionEngine(p, sensors, sensors, sink)
         e.start(viewModelScope)
         engine = e
         viewModelScope.launch {
@@ -60,12 +84,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun saveConfig(c: IntervalConfig) {
-        viewModelScope.launch { container.configStore.save(c) }
+    /** Select which profile is shown on the home screen and used for the next workout. */
+    fun selectProfile(id: Long) {
+        if (id == _activeId.value) return
+        viewModelScope.launch { container.configStore.setActive(id) }
     }
 
+    /** Replace the currently active profile's settings. */
+    fun saveActiveProfile(updated: WorkoutProfile) {
+        viewModelScope.launch {
+            val list = _profiles.value.map { if (it.id == updated.id) updated else it }
+            container.configStore.saveProfiles(list)
+            if (!list.any { it.id == _activeId.value }) {
+                container.configStore.setActive(updated.id)
+            }
+        }
+    }
+
+    /** Start the active profile as a new workout session. */
     fun startWorkout() {
-        if (engine == null || _config.value.segments.isEmpty()) return
+        val p = _activeProfile.value ?: return
+        if (p.fastSec <= 0 || p.slowSec <= 0) return
         engine?.run()
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
@@ -93,10 +132,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     avgFastPace = ls.pace,
                     avgHeartRate = ls.hr,
                     overCeilingSec = ls.overCeilingSec,
-                    distanceKm = (ls.pace ?: 0f) * ls.totalSeconds / 3600f,
+                    distanceMiles = ls.distanceMiles.toFloat(),
                 )
             )
         }
+    }
+
+    /** End the running session now (ADHOC finish, or early stop for finite modes). */
+    fun endWorkout() {
+        if (engine?.snapshot?.running != true) return
+        engine?.endNow()
+        onFinished()
+        tickerJob?.cancel()
     }
 
     fun discardWorkout() {

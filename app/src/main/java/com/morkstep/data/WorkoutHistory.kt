@@ -7,6 +7,8 @@ import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /** One completed workout session, summarized for history. */
@@ -19,14 +21,14 @@ data class WorkoutEntity(
     val durationSec: Int,
     /** Completed fast (push) segment count. */
     val fastSegments: Int,
-    /** Average push pace over the workout (km/h), or null if none. */
+    /** Average push pace over the workout (mph), or null if none. */
     val avgFastPace: Float?,
     /** Average heart rate over the workout (bpm), or null. */
     val avgHeartRate: Int?,
     /** Seconds spent above the HR ceiling during push segments. */
     val overCeilingSec: Int,
-    /** User-entered or measured distance approximating km walked. */
-    val distanceKm: Float,
+    /** Distance covered, in miles. */
+    val distanceMiles: Float,
 )
 
 @Dao
@@ -44,7 +46,16 @@ interface WorkoutDao {
     suspend fun clear()
 }
 
-@Database(entities = [WorkoutEntity::class], version = 1, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 2, exportSchema = false)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
+
+    companion object {
+        /** v1 stored distance in km (`distanceKm`); v2 renamed to `distanceMiles` in mph. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workouts RENAME COLUMN distanceKm TO distanceMiles")
+            }
+        }
+    }
 }

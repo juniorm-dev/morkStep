@@ -1,8 +1,8 @@
 package com.morkstep.engine
 
-import com.morkstep.data.IntervalConfig
-import com.morkstep.data.IntervalSegment
 import com.morkstep.data.PhaseType
+import com.morkstep.data.WorkoutLength
+import com.morkstep.data.WorkoutProfile
 import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.PaceSource
 import kotlinx.coroutines.CoroutineScope
@@ -23,15 +23,23 @@ data class LiveState(
     val running: Boolean = false,
     val finished: Boolean = false,
     val phase: PhaseType = PhaseType.WARMUP,
-    val phaseIndex: Int = 0,
-    val totalSegments: Int = 1,
+    /** 1 (fast) or 2 (slow) while inside a repeat pair; 1 for warm-up/cooldown. */
+    val phaseOrdinal: Int = 1,
     val secondsInPhase: Int = 0,
     val totalSeconds: Int = 0,
-    val totalPlannedSec: Int = 1,
     val pace: Float? = null,
     val hr: Int? = null,
     val overCeilingSec: Int = 0,
+    /** Completed fast (push) segments. */
     val fastSegmentsDone: Int = 0,
+    /** Distance covered in miles (integrated from pace). */
+    val distanceMiles: Double = 0.0,
+    /** 0..1 completion for finite modes; null for ADHOC. */
+    val progress: Float? = null,
+    /** Number of push rounds in the plan (ROUNDS mode) or null. */
+    val fastRoundsTotal: Int? = null,
+    /** Human length label, e.g. "5 rounds", "35 min", "Adhoc". */
+    val lengthLabel: String = "",
 )
 
 /** Wall-clock abstraction so the ticker is unit-testable. */
@@ -43,53 +51,98 @@ object SystemClock : SessionClock {
     override fun nowMillis(): Long = android.os.SystemClock.elapsedRealtime()
 }
 
-/** Index of the segment covering [totalSec], and seconds elapsed within it. Pure. */
-internal fun segmentIndexFor(totalSec: Int, segments: List<IntervalSegment>): Int {
-    var acc = 0
-    for ((i, seg) in segments.withIndex()) {
-        if (totalSec < acc + seg.seconds) return i
-        acc += seg.seconds
+/** Where the repeating core ends and cool-down starts, and when the workout finishes. Pure. */
+internal data class Plan(val coreEndSec: Long, val finishSec: Long)
+
+internal fun planFor(p: WorkoutProfile): Plan = when (p.lengthMode) {
+    WorkoutLength.ROUNDS -> {
+        val core = p.warmupSec.toLong() + p.rounds.toLong() * (p.fastSec + p.slowSec)
+        Plan(core, core + p.cooldownSec)
     }
-    return segments.lastIndex
+    WorkoutLength.TIME -> {
+        val target = p.timeMinutes.toLong() * 60
+        Plan(maxOf(target - p.cooldownSec, 0L), target)
+    }
+    // DISTANCE latches coreEndSec live once distance is reached; ADHOC never ends.
+    WorkoutLength.DISTANCE, WorkoutLength.ADHOC -> Plan(Long.MAX_VALUE, Long.MAX_VALUE)
 }
 
-internal fun secondsInSegment(totalSec: Int, segments: List<IntervalSegment>): Int {
-    val idx = segmentIndexFor(totalSec, segments)
-    var acc = 0
-    for (i in 0 until idx) acc += segments[i].seconds
-    return totalSec - acc
+/** Count of fully-completed FAST phases by elapsed [t] (plan-relative, tick-cadence independent). */
+internal fun completedFastIn(t: Int, p: WorkoutProfile): Int {
+    val w = p.warmupSec
+    val f = p.fastSec
+    val s = p.slowSec
+    if (t <= w) return 0
+    val pair = f + s
+    val local = t - w
+    return local / pair + (if (local % pair >= f) 1 else 0)
 }
-/** Number of FAST segments fully completed by [totalSec] (plan-relative, tick-cadence independent). */
-internal fun completedFastSegments(totalSec: Int, segments: List<IntervalSegment>): Int {
-    var acc = 0
-    var done = 0
-    for (seg in segments) {
-        acc += seg.seconds
-        if (acc <= totalSec && seg.type == PhaseType.FAST) done++
+
+/** Phase, ordinal, seconds-in-phase, and completed fast count at elapsed time [t]. Pure. */
+internal data class PhaseAt(
+    val phase: PhaseType,
+    val secondsInPhase: Int,
+    val phaseOrdinal: Int,
+    val fastDone: Int,
+)
+
+internal fun phaseAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: Long): PhaseAt {
+    val w = p.warmupSec
+    val f = p.fastSec
+    val s = p.slowSec
+    val pair = f + s
+    fun coreFast(): Int = completedFastIn(coreEndSec.coerceAtMost(Long.MAX_VALUE).toInt(), p)
+    if (t >= finishSec) return PhaseAt(PhaseType.COOLDOWN, 0, 1, coreFast())
+    if (p.cooldownSec > 0 && t >= coreEndSec) {
+        return PhaseAt(PhaseType.COOLDOWN, (t - coreEndSec).toInt(), 1, coreFast())
     }
-    return done
+    if (t < w) return PhaseAt(PhaseType.WARMUP, t, 1, 0)
+    val local = t - w
+    val pairs = local / pair
+    val rem = local % pair
+    return if (rem < f) {
+        PhaseAt(PhaseType.FAST, rem, 1, pairs)
+    } else {
+        PhaseAt(PhaseType.SLOW, rem - f, 2, pairs + 1)
+    }
 }
+
+internal fun progressAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: Long, distanceMiles: Double): Float? =
+    when (p.lengthMode) {
+        WorkoutLength.ROUNDS, WorkoutLength.TIME -> {
+            val total = finishSec.coerceAtMost(1_000_000_000L).toFloat()
+            if (total <= 0f) null else (t.toFloat() / total).coerceIn(0f, 1f)
+        }
+        WorkoutLength.DISTANCE -> if (p.distanceMiles <= 0.0) null else (distanceMiles / p.distanceMiles).toFloat().coerceIn(0f, 1f)
+        WorkoutLength.ADHOC -> null
+    }
 
 /**
- * Interval Walking Training session engine.
+ * Interval Walking Training session engine with pluggable length modes.
  *
- * Advances the configured segment plan on wall-clock time and emits spoken
- * audio cues when pace/HR cross the configured boundaries. Observe sensor
- * values via [start], drive the elapsed clock forward with [tick].
+ * ROUNDS/TIME/DISTANCE run to a natural end; ADHOC runs until [endNow].
+ * Emits phase-change beeps + announcements, pace/HR band cues, quarter
+ * progress cues (finite modes), and every-Nth-push cues (ADHOC).
  */
 class SessionEngine(
-    private val config: IntervalConfig,
+    val profile: WorkoutProfile,
     private val paceSource: PaceSource,
     private val hrSource: HeartRateSource,
     private val cue: CueSink,
     private val clock: SessionClock = SystemClock,
 ) {
-    private val _state = MutableStateFlow(
-        LiveState(totalPlannedSec = config.totalSeconds, totalSegments = config.segments.size)
-    )
+    private val _state = MutableStateFlow(LiveState(lengthLabel = profile.lengthLabel()))
     val state: StateFlow<LiveState> = _state.asStateFlow()
 
     private var launchedAtMs = 0L
+    private var coreEndSec = Long.MAX_VALUE
+    private var finishSec = Long.MAX_VALUE
+    private var lastDistTick = 0
+    private var distance = 0.0
+    private var latched = false
+    private var lastPhase: PhaseType? = null
+    private var lastQuarter = 0
+    private var lastAdhocCueN = 0
     private val lastCueAt = mutableMapOf<String, Long>()
     private val cueCooldownMs = 8_000L
 
@@ -110,41 +163,108 @@ class SessionEngine(
     fun run() {
         if (snapshot.running || snapshot.finished) return
         launchedAtMs = clock.nowMillis()
+        val plan = planFor(profile)
+        coreEndSec = plan.coreEndSec
+        finishSec = plan.finishSec
+        distance = 0.0
+        latched = false
+        lastDistTick = 0
+        lastPhase = null
+        lastQuarter = 0
+        lastAdhocCueN = 0
         _state.value = snapshot.copy(
             running = true, finished = false, totalSeconds = 0, secondsInPhase = 0,
-            phaseIndex = 0, phase = config.segments.first().type, fastSegmentsDone = 0,
-            pace = paceSource.pace.value, hr = hrSource.hr.value,
+            phase = PhaseType.WARMUP,
+            phaseOrdinal = 1, fastSegmentsDone = 0, overCeilingSec = 0, distanceMiles = 0.0,
+            progress = null, pace = paceSource.pace.value, hr = hrSource.hr.value,
+            lengthLabel = profile.lengthLabel(),
         )
+        tick()
     }
 
     /** Advance the session to the current wall-clock time. Call ~1 Hz while running. */
     fun tick() {
         if (!snapshot.running || snapshot.finished) return
-        val nowSec = ((clock.nowMillis() - launchedAtMs) / 1000L).toInt().coerceIn(0, config.totalSeconds)
-        if (nowSec == snapshot.totalSeconds && !snapshot.finished) return
-        val idx = segmentIndexFor(nowSec, config.segments)
-        val secIn = secondsInSegment(nowSec, config.segments)
-        val phase = config.segments[idx].type
-        val entered = nowSec != snapshot.totalSeconds && idx != snapshot.phaseIndex
+        val rawT = ((clock.nowMillis() - launchedAtMs) / 1000L).toInt()
+        val t = if (finishSec < Long.MAX_VALUE) rawT.coerceAtMost(finishSec.toInt()) else rawT
+        if (t < lastDistTick) return
+        // Integrate distance from pace over the elapsed interval.
+        val dt = t - lastDistTick
+        lastDistTick = t
+        val mph = snapshot.pace ?: 0f
+        if (dt > 0) distance += mph * dt / 3600.0
+
+        // DISTANCE: latch cool-down once the target is reached.
+        if (profile.lengthMode == WorkoutLength.DISTANCE && !latched && distance >= profile.distanceMiles) {
+            latched = true
+            coreEndSec = t.toLong()
+            finishSec = coreEndSec + profile.cooldownSec
+        }
+
+        val pa = phaseAt(t, profile, coreEndSec, finishSec)
+        val entered = pa.phase != lastPhase
         if (entered) {
             cue.beep()
-            onPhaseEnter(config.segments[idx])
+            announce(pa.phase)
+            lastPhase = pa.phase
             lastCueAt.clear()
         }
-        val fastDone = completedFastSegments(nowSec, config.segments)
+
+        // Quarter progress cues (finite modes).
+        val prog = progressAt(t, profile, coreEndSec, finishSec, distance)
+        if (prog != null) {
+            val q = when {
+                prog >= 0.75f -> 3
+                prog >= 0.50f -> 2
+                prog >= 0.25f -> 1
+                else -> 0
+            }
+            if (q > lastQuarter) {
+                lastQuarter = q
+                speak(qText(q))
+            }
+        }
+
+        // ADHOC: cue on every Nth completed push round.
+        val n = profile.adhocCueEveryNPush
+        if (profile.lengthMode == WorkoutLength.ADHOC && n > 0 && pa.fastDone > lastAdhocCueN &&
+            pa.fastDone % n == 0
+        ) {
+            lastAdhocCueN = pa.fastDone
+            speak("Push round ${pa.fastDone} complete")
+        }
+
+        val finished = t >= finishSec
+
         _state.value = snapshot.copy(
-            totalSeconds = nowSec,
-            phaseIndex = idx,
-            phase = phase,
-            secondsInPhase = secIn,
-            fastSegmentsDone = fastDone,
-            finished = nowSec >= config.totalSeconds,
+            totalSeconds = t,
+            phase = pa.phase,
+            phaseOrdinal = pa.phaseOrdinal,
+            secondsInPhase = pa.secondsInPhase,
+            fastSegmentsDone = pa.fastDone,
+            distanceMiles = distance,
+            progress = prog,
+            finished = finished,
         )
-        if (!snapshot.finished) ratePhase()
+
+        if (finished) {
+            cue.beep()
+            speak("Workout complete")
+            return
+        }
+
+        ratePhase()
     }
 
-    private fun onPhaseEnter(seg: IntervalSegment) {
-        when (seg.type) {
+    /** Manually end an ADHOC workout (or stop any workout early). */
+    fun endNow() {
+        if (!snapshot.running || snapshot.finished) return
+        _state.value = snapshot.copy(running = false, finished = true)
+    }
+
+    private fun announce(phase: PhaseType) {
+        if (!profile.audioCues) return
+        when (phase) {
             PhaseType.WARMUP -> cue.speak("Begin with an easy warm-up walk")
             PhaseType.FAST -> cue.speak("Push phase. Maintain a brisk pace")
             PhaseType.SLOW -> cue.speak("Recovery walking. Stay relaxed")
@@ -152,24 +272,36 @@ class SessionEngine(
         }
     }
 
+    private fun qText(q: Int): String = when (q) {
+        1 -> "One quarter done"
+        2 -> "Halfway there"
+        else -> "Three quarters done"
+    }
+
+    private fun speak(text: String) {
+        if (!profile.audioCues || text.isBlank()) return
+        cue.speak(text)
+    }
+
     private fun ratePhase() {
         val s = snapshot
         when (s.phase) {
             PhaseType.FAST -> {
-                if (s.pace != null && s.pace < config.paceFloor.toFloat()) cueIf("paceUp", "Speed up a little")
-                if (s.hr != null && s.hr > config.hrCeiling) {
+                if (s.pace != null && s.pace < profile.paceFloorMph.toFloat()) cueIf("paceUp", "Speed up a little")
+                if (s.hr != null && s.hr > profile.hrCeiling) {
                     _state.value = s.copy(overCeilingSec = s.overCeilingSec + 1)
                     cueIf("hrHigh", "That's quite high. Ease off a touch")
                 }
             }
             PhaseType.SLOW -> {
-                if (s.pace != null && s.pace > config.paceFloor.toFloat()) cueIf("paceSlow", "Stand easy now")
+                if (s.pace != null && s.pace > profile.paceFloorMph.toFloat()) cueIf("paceSlow", "Stand easy now")
             }
             else -> Unit
         }
     }
 
     private fun cueIf(key: String, text: String) {
+        if (!profile.audioCues) return
         val now = clock.nowMillis()
         if (now - (lastCueAt[key] ?: 0L) < cueCooldownMs) return
         lastCueAt[key] = now

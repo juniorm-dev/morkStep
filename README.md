@@ -6,11 +6,21 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 
 ## Features
 
-- **Configurable intervals** — warm-up length, push interval, recovery interval, number of push rounds, cool-down length.
-- **Pace band** — a walker-configurable *ceiling* and *floor* (km/h). Push intervals target the band.
+- **Profiles** — save unlimited named workout configurations; pick the active one on the home screen. Defaults to *Adhoc*.
+- **Workout-length modes** — choose how each workout is bounded:
+  - **Rounds** — a fixed number of push/recovery pairs plus warm-up/cool-down.
+  - **Distance** — runs until a target distance (miles) is covered.
+  - **Time** — runs for a target duration (minutes).
+  - **Adhoc** — no preset length; ends when you tap Finish.
+- **Configurable intervals** — warm-up length, push interval, recovery interval, cool-down length (per profile).
+- **Pace band (mph)** — a per-profile *ceiling* and *floor* (miles per hour). Push intervals target the band.
 - **Heart-rate band** — a *ceiling* and *floor* (bpm) that the push phase aims to stay within.
-- **Audio cues** — per-phase spoken announcements plus beeps on transitions, and spoken guidance when pace drops below the floor or HR rises above the ceiling during push.
-- **Workout history** — every completed session is auto-saved (date, duration, push count, average pace, average HR, seconds over ceiling) and listed in a History screen.
+- **Audio cues** —
+  - per-phase spoken announcements plus beeps on transitions,
+  - spoken guidance when pace drops below the floor or HR rises above the ceiling during push,
+  - a cue on **each quarter** of a finite-length workout ("One quarter done", "Halfway there", "Three quarters done"),
+  - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
+- **Workout history** — every completed session is auto-saved (date, duration, push count, average pace *mph*, distance *mi*, average HR, seconds over ceiling) and listed in a History screen.
 
 ## Requirements
 
@@ -45,9 +55,9 @@ All code lives under `app/src/main/java/com/morkstep/`, organised by responsibil
 | Package | Responsibility |
 | ------- | -------------- |
 | `engine/` | Pure interval session state machine and cue logic (no Android deps except a clock) |
-| `sensing/` | Pace & heart-rate *source* abstractions + a simulated implementation |
+| `sensing/` | Pace & heart-rate source abstractions + a simulated implementation |
 | `audio/` | TTS + tone cues |
-| `data/` | Domain models, config persistence (DataStore), workout history (Room) |
+| `data/` | Domain models, profiles + config persistence (DataStore), workout history (Room) |
 | `ui/` | Jetpack Compose screens + ViewModel wiring |
 
 ### Data flow
@@ -69,13 +79,14 @@ ConfigScreen ──save──▶ DataStore (IntervalConfig)
 
 ### Interval engine — `engine/SessionEngine.kt`
 
-The core is a **pure, deterministic state machine** that maps elapsed wall-clock seconds to a position in the configured segment plan. It is deliberately *push-only*: its owner drives time forward with `tick()` and it reads instantaneous pace/HR, then writes an immutable `LiveState` snapshot plus cues.
+The core is a **pure, deterministic state machine** (`phaseAt`, `planFor`, `completedFastIn`, `progressAt`) that maps elapsed wall-clock seconds + accumulated distance to a position in the active profile's plan. It is deliberately *push-only*: its owner drives time forward with `tick()`, it reads instantaneous pace/HR, and writes an immutable `LiveState` snapshot plus cues.
 
-The pure segment-mapping helpers (`segmentIndexFor`, `secondsInSegment`, `completedFastSegments`) have **no Android dependencies**, so they are unit-tested on the JVM without instrumentation. Wall-clock is behind a `SessionClock` interface so tests can fake time and assert exact phase transitions.
+The pure mapping helpers have **no Android dependencies**, so they are unit-tested on the JVM without instrumentation. Wall-clock is behind a `SessionClock` interface so tests can fake time and assert exact transitions.
 
 **Why this shape:**
 
-- **Time is wall-clock, not tick-counted.** The ticker runs at ~1 Hz only to refresh the UI. Elapsed time is recomputed from `SystemClock.elapsedRealtime()`, so a dropped or late tick never corrupts the running total — `completedFastSegments` is derived from the plan, not from counting observed transitions, so progress is accurate even if ticks are skipped.
+- **One engine, every length mode.** `planFor` yields a `(coreEndSec, finishSec)` pair: ROUNDS sums the cycle, TIME targets a fixed duration and reserves cool-down at the end, DISTANCE latches the end live when the distance target is crossed, and ADHOC never finishes on its own. Elapsed time is recomputed from `SystemClock.elapsedRealtime()` each tick, so a dropped or late tick never corrupts the running total; progress and fast-segment counts are plan-derived, not transition-counted.
+- **Distance is integrated, not sampled.** Each tick adds `pace × dt / 3600` miles, so distance tracks the live pace signal smoothly and its accumulation works even with irregular tick cadence (unit-tested).
 - **Pull sensors, push state.** The engine observes pace/HR via `StateFlow` and emits aggregated state downstream. The UI never drives the engine's truth; it only renders `LiveState`.
 
 ### Sensing — `sensing/Sensors.kt`
@@ -86,8 +97,8 @@ A real implementation (Fused Location for pace, a Bluetooth LE health-service cl
 
 ### Storage — `data/`
 
-- **`ConfigStore`** — `IntervalConfig` persisted through Jetpack DataStore (Preferences). Chosen for JSON-free, coroutine-native, atomic reads. A deliberate round-trip rule: a zero-length warm-up/cool-down is real user intent ("none"), so raw seconds are persisted and re-read skips them, rather than silently resurrecting defaults.
-- **`WorkoutHistory.kt`** — Room `@Entity`/`@Dao`. History is a relational, time-ordered list with a stable primary key, which is Room's sweet spot; completed workouts streaming into the History screen via `Flow`.
+- **`ConfigStore`** — the profile list (JSON via kotlinx.serialization) and the active profile id, persisted through Jetpack DataStore (Preferences): coroutine-native, atomic, lock-free. A deliberate round-trip rule: a zero-length warm-up/cool-down is real user intent ("none"), so raw seconds are persisted and re-read skips them, rather than silently resurrecting defaults.
+- **`WorkoutHistory.kt`** — Room `@Entity`/`@Dao` with a v1→v2 migration (`distanceKm` → `distanceMiles`). History is a relational, time-ordered list with a stable primary key; completed workouts stream into the History screen via `Flow`.
 
 ### UI — `ui/`
 
@@ -107,6 +118,7 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 | JDK | 21 (Android Studio JBR) | Gradle 8.x + AGP 8.x require JDK 17+; the Studio-bundled JBR is available offline |
 | Room | 2.6.1 | Type-safe SQLite DAO for workout history |
 | DataStore Preferences | 1.0.0 | Coroutine-backed config persistence |
+| kotlinx-serialization-json | 1.6.3 | Profile-list JSON persistence (with the Kotlin serialization plugin 2.0.21) |
 
 **Language servers (LSP)**
 | Server | Version | Notes |
@@ -123,13 +135,16 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 ## Test plan
 
-`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers:
-- time→segment mapping and within-segment counts
-- phase advance + transition beep + phase announcement
-- finish marking and deterministic fast-segment counting
-- pace-below-floor cue
-- HR-above-ceiling cue + over-ceiling counter
-- cooldown announcement
-- default IWT plan shape (3-min warm-up; 5×3/3; 2-min cool-down)
+`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (14 tests):
+- plan computation for ROUNDS / TIME length modes
+- time→phase mapping, seconds-in-phase, and phase ordinal (fast=1, slow=2)
+- plan-relative fast-segment counting (tick-cadence independent)
+- progress fraction for finite modes; `null` for Adhoc; distance-based for DISTANCE
+- engine behavior: phase advance + beeps + announcements, finish marking
+- TIME mode finishes exactly at the target duration
+- ADHOC runs until `endNow()` and cues every Nth completed push round
+- quarter cues fire at 25% / 50% / 75%
+- pace-below-floor cue, HR-above-ceiling cue + over-ceiling counter
+- distance accumulation from pace (mph → miles)
 
 Run with `./gradlew testDebugUnitTest`.

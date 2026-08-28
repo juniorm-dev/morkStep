@@ -20,6 +20,7 @@ class MorkApplication : Application() {
 class AppContainer(context: Context) {
     val configStore = ConfigStore(context)
     val database: MorkDatabase = Room.databaseBuilder(context, MorkDatabase::class.java, "mork.db")
+        .addMigrations(MorkDatabase.MIGRATION_1_2)
         .build()
     val workoutDao = database.workoutDao()
 }

@@ -34,7 +34,9 @@ fun MorkApp(viewModel: MainViewModel) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    val config by viewModel.config.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val activeId by viewModel.activeId.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val live by viewModel.live.collectAsStateWithLifecycle()
 
     val bottomTabs = listOf(
@@ -72,7 +74,9 @@ fun MorkApp(viewModel: MainViewModel) {
         ) {
             composable(Routes.HOME) {
                 HomeScreen(
-                    config = config,
+                    profiles = profiles,
+                    activeId = activeId,
+                    onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
                         navController.navigate(Routes.WORKOUT)
@@ -82,20 +86,23 @@ fun MorkApp(viewModel: MainViewModel) {
                 )
             }
             composable(Routes.WORKOUT) {
-                WorkoutScreen(
-                    live = live,
-                    config = config,
-                    onStop = {
-                        viewModel.discardWorkout()
-                        navController.popBackStack()
-                    },
-                )
+                if (activeProfile != null) {
+                    WorkoutScreen(
+                        live = live,
+                        profile = activeProfile!!,
+                        onEnd = {
+                            viewModel.endWorkout()
+                            navController.popBackStack()
+                        },
+                        onStop = {
+                            viewModel.discardWorkout()
+                            navController.popBackStack()
+                        },
+                    )
+                }
             }
             composable(Routes.CONFIG) {
-                ConfigScreen(
-                    config = config,
-                    onSave = viewModel::saveConfig,
-                )
+                activeProfile?.let { ConfigScreen(profile = it, onSave = viewModel::saveActiveProfile) }
             }
             composable(Routes.HISTORY) {
                 HistoryScreen()

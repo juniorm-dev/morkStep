@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -23,29 +22,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.morkstep.data.IntervalConfig
-import com.morkstep.data.PhaseType
+import com.morkstep.data.WorkoutLength
+import com.morkstep.data.WorkoutProfile
 import com.morkstep.engine.LiveState
 
-private fun phaseColor(phase: PhaseType): Color = when (phase) {
-    PhaseType.WARMUP -> Color(0xFF58A05C)
-    PhaseType.FAST -> Color(0xFFD1402A)
-    PhaseType.SLOW -> Color(0xFF2E7AC4)
-    PhaseType.COOLDOWN -> Color(0xFF7B8A99)
+private fun phaseColor(phase: com.morkstep.data.PhaseType): Color = when (phase) {
+    com.morkstep.data.PhaseType.WARMUP -> Color(0xFF58A05C)
+    com.morkstep.data.PhaseType.FAST -> Color(0xFFD1402A)
+    com.morkstep.data.PhaseType.SLOW -> Color(0xFF2E7AC4)
+    com.morkstep.data.PhaseType.COOLDOWN -> Color(0xFF7B8A99)
 }
 
 private fun formatClock(sec: Int): String {
-    val m = sec / 60
+    val h = sec / 3600
+    val m = (sec % 3600) / 60
     val s = sec % 60
-    return "%d:%02d".format(m, s)
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 @Composable
 fun WorkoutScreen(
     live: LiveState,
-    config: IntervalConfig,
+    profile: WorkoutProfile,
+    onEnd: () -> Unit,
     onStop: () -> Unit,
 ) {
+    val adhoc = profile.lengthMode == WorkoutLength.ADHOC
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -54,7 +56,11 @@ fun WorkoutScreen(
     ) {
         Spacer(Modifier.height(12.dp))
 
-        // Phase pill
+        Text(profile.name, style = MaterialTheme.typography.titleMedium)
+        Text(live.lengthLabel.ifEmpty { profile.lengthLabel() }, style = MaterialTheme.typography.bodySmall)
+
+        Spacer(Modifier.height(8.dp))
+
         Surface(
             shape = CircleShape,
             color = phaseColor(live.phase),
@@ -71,74 +77,69 @@ fun WorkoutScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Big timer: seconds remaining in current phase
-        val remain = (config.segments.getOrNull(live.phaseIndex)?.seconds ?: 0) - live.secondsInPhase
+        // Remaining in the current phase (or elapsed for adhoc-free display)
+        val remain = if (adhoc) {
+            live.secondsInPhase
+        } else {
+            val segSec = when (live.phase) {
+                com.morkstep.data.PhaseType.FAST -> profile.fastSec
+                com.morkstep.data.PhaseType.SLOW -> profile.slowSec
+                com.morkstep.data.PhaseType.WARMUP -> profile.warmupSec
+                com.morkstep.data.PhaseType.COOLDOWN -> profile.cooldownSec
+            }
+            (segSec - live.secondsInPhase).coerceAtLeast(0)
+        }
         Text(
-            formatClock(remain.coerceAtLeast(0)),
+            formatClock(remain),
             style = MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.Bold,
         )
-        Text(
-            "interval time",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        Text(if (adhoc) "seconds in phase" else "time left in phase", style = MaterialTheme.typography.bodySmall)
 
         Spacer(Modifier.height(4.dp))
 
-        // Overall progress
-        val progress = if (live.totalPlannedSec > 0) {
-            live.totalSeconds.toFloat() / live.totalPlannedSec
-        } else 0f
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp),
-        )
-        Text(
-            "seg ${live.phaseIndex + 1}/${live.totalSegments} · ${formatClock(live.totalSeconds)} elapsed",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        // Overall progress: finite modes only
+        if (live.progress != null) {
+            LinearProgressIndicator(
+                progress = { live.progress ?: 0f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp),
+            )
+            Text(
+                "${formatClock(live.totalSeconds)} elapsed",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            Text(
+                "${formatClock(live.totalSeconds)} elapsed",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
 
         // Sensor cards
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SensorCard("PACE", live.pace?.let { "%.1f".format(it) + " km/h" } ?: "–", Modifier.weight(1f))
+            SensorCard("PACE", live.pace?.let { "%.1f".format(it) + " mph" } ?: "–", Modifier.weight(1f))
             SensorCard("HEART", live.hr?.let { "$it bpm" } ?: "–", Modifier.weight(1f))
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SensorCard("PUSH", "${live.fastSegmentsDone}", Modifier.weight(1f))
+            SensorCard("DIST (mi)", "%.2f".format(live.distanceMiles), Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(20.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Card(modifier = Modifier.weight(1f)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("Push done", style = MaterialTheme.typography.labelMedium)
-                    Text("${live.fastSegmentsDone}", style = MaterialTheme.typography.titleLarge)
-                }
-            }
-            Card(modifier = Modifier.weight(1f)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("Over ceiling", style = MaterialTheme.typography.labelMedium)
-                    Text("${live.overCeilingSec}s", style = MaterialTheme.typography.titleLarge)
-                }
-            }
-        }
-
-        Spacer(Modifier.weight(1f))
-
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onStop) {
-                Text("End")
+            OutlinedButton(onClick = onStop, modifier = Modifier.weight(1f)) {
+                Text("Discard")
             }
-            Button(
-                onClick = onStop,
-                enabled = live.finished,
-            ) {
-                Text(if (live.finished) "Done" else "Finish early")
+            Button(onClick = onEnd, modifier = Modifier.weight(1f)) {
+                Text(if (adhoc) "Finish" else if (live.finished) "Done" else "Finish early")
             }
         }
 
@@ -168,9 +169,9 @@ private fun SensorCard(label: String, value: String, modifier: Modifier = Modifi
     }
 }
 
-private fun PhaseType.label(): String = when (this) {
-    PhaseType.WARMUP -> "WARM UP"
-    PhaseType.FAST -> "PUSH"
-    PhaseType.SLOW -> "RECOVERY"
-    PhaseType.COOLDOWN -> "COOL DOWN"
+private fun com.morkstep.data.PhaseType.label(): String = when (this) {
+    com.morkstep.data.PhaseType.WARMUP -> "WARM UP"
+    com.morkstep.data.PhaseType.FAST -> "PUSH"
+    com.morkstep.data.PhaseType.SLOW -> "RECOVERY"
+    com.morkstep.data.PhaseType.COOLDOWN -> "COOL DOWN"
 }

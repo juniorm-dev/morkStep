@@ -2,7 +2,6 @@ package com.morkstep.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,11 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,28 +68,25 @@ fun HistoryScreen() {
 @Composable
 private fun WorkoutRow(w: WorkoutEntity) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Column(
             Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(formatDate(w.startTime), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${formatDuration(w.durationSec)} · ${w.fastSegments} push intervals",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                val stats = buildList {
-                    w.avgFastPace?.let { add("avg pace %.1f km/h".format(it)) }
-                    w.avgHeartRate?.let { add("avg HR $it bpm") }
-                    if (w.overCeilingSec > 0) add("above ceiling ${w.overCeilingSec}s")
-                }
-                if (stats.isNotEmpty()) {
-                    Text(stats.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                }
+            Text(formatDate(w.startTime), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${formatDuration(w.durationSec)} · ${w.fastSegments} push intervals",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            val stats = buildList {
+                w.avgFastPace?.let { add("avg pace %.1f mph".format(it)) }
+                w.avgHeartRate?.let { add("avg HR $it bpm") }
+                if (w.distanceMiles > 0f) add("%.2f mi".format(w.distanceMiles))
+                if (w.overCeilingSec > 0) add("above ceiling ${w.overCeilingSec}s")
+            }
+            if (stats.isNotEmpty()) {
+                Text(stats.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
             }
         }
     }

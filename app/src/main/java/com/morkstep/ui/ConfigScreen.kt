@@ -9,25 +9,35 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.morkstep.data.IntervalConfig
+import com.morkstep.data.WorkoutLength
+import com.morkstep.data.WorkoutProfile
 
-/** Generic labeled slider row. */
+private val LENGTH_MODES = listOf(
+    WorkoutLength.ROUNDS to "Rounds",
+    WorkoutLength.DISTANCE to "Distance",
+    WorkoutLength.TIME to "Time",
+    WorkoutLength.ADHOC to "Adhoc",
+)
+
 @Composable
 private fun SliderRow(
     label: String,
@@ -56,19 +66,24 @@ private fun SliderRow(
 
 @Composable
 fun ConfigScreen(
-    config: IntervalConfig,
-    onSave: (IntervalConfig) -> Unit,
+    profile: WorkoutProfile,
+    onSave: (WorkoutProfile) -> Unit,
 ) {
-    var fastSec by rememberSaveable { mutableStateOf(config.fastSeconds()) }
-    var slowSec by rememberSaveable { mutableStateOf(config.slowSeconds()) }
-    var warmSec by rememberSaveable { mutableStateOf(config.warmSeconds()) }
-    var coolSec by rememberSaveable { mutableStateOf(config.coolSeconds()) }
-    var count by rememberSaveable { mutableStateOf(config.fastCount()) }
-    var paceCeil by rememberSaveable { mutableStateOf(config.paceCeiling.toFloat()) }
-    var paceFloor by rememberSaveable { mutableStateOf(config.paceFloor.toFloat()) }
-    var hrCeil by rememberSaveable { mutableStateOf(config.hrCeiling.toFloat()) }
-    var hrFloor by rememberSaveable { mutableStateOf(config.hrFloor.toFloat()) }
-    var audio by rememberSaveable { mutableStateOf(config.audioCues) }
+    var name by rememberSaveable(profile.id) { mutableStateOf(profile.name) }
+    var lengthMode by rememberSaveable(profile.id) { mutableStateOf(profile.lengthMode) }
+    var rounds by rememberSaveable(profile.id) { mutableIntStateOf(profile.rounds) }
+    var distanceMiles by rememberSaveable(profile.id) { mutableFloatStateOf(profile.distanceMiles.toFloat()) }
+    var timeMinutes by rememberSaveable(profile.id) { mutableIntStateOf(profile.timeMinutes) }
+    var adhocCueEveryNPush by rememberSaveable(profile.id) { mutableIntStateOf(profile.adhocCueEveryNPush) }
+    var fastSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.fastSec) }
+    var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
+    var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
+    var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
+    var paceCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceCeilingMph.toFloat()) }
+    var paceFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceFloorMph.toFloat()) }
+    var hrCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrCeiling) }
+    var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
+    var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
 
     Column(
         modifier = Modifier
@@ -76,48 +91,77 @@ fun ConfigScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text("Interval settings", style = MaterialTheme.typography.titleLarge)
+        Text("Profile settings", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
-
         Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SliderRow(
-                    "Push interval", "${fastSec}s",
-                    fastSec.toFloat(), 30f..600f, 18,
-                ) { fastSec = it.toInt() }
-                SliderRow(
-                    "Recovery interval", "${slowSec}s",
-                    slowSec.toFloat(), 30f..600f, 18,
-                ) { slowSec = it.toInt() }
-                SliderRow(
-                    "Push rounds", "$count",
-                    count.toFloat(), 1f..10f, 9,
-                ) { count = it.toInt() }
-                SliderRow(
-                    "Warm-up", "${warmSec}s",
-                    warmSec.toFloat(), 0f..600f, 12,
-                ) { warmSec = it.toInt() }
-                SliderRow(
-                    "Cool-down", "${coolSec}s",
-                    coolSec.toFloat(), 0f..600f, 12,
-                ) { coolSec = it.toInt() }
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Name", style = MaterialTheme.typography.bodyLarge)
+                androidx.compose.material3.OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Pace band (km/h)", style = MaterialTheme.typography.titleMedium)
+        Text("Workout length", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp)) {
+                LENGTH_MODES.forEach { (mode, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = lengthMode == mode, onClick = { lengthMode = mode })
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = lengthMode == mode, onClick = { lengthMode = mode })
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                when (lengthMode) {
+                    WorkoutLength.ROUNDS -> SliderRow(
+                        "Push rounds", "$rounds",
+                        rounds.toFloat(), 1f..20f, 19,
+                    ) { rounds = it.toInt() }
+                    WorkoutLength.DISTANCE -> SliderRow(
+                        "Distance (mi)", "%.1f".format(distanceMiles),
+                        distanceMiles, 0.5f..20f, 20,
+                    ) { distanceMiles = it }
+                    WorkoutLength.TIME -> SliderRow(
+                        "Duration (min)", "$timeMinutes min",
+                        timeMinutes.toFloat(), 5f..120f, 46,
+                    ) { timeMinutes = it.toInt() }
+                    WorkoutLength.ADHOC -> SliderRow(
+                        "Cue every N push rounds (0 = off)", "$adhocCueEveryNPush",
+                        adhocCueEveryNPush.toFloat(), 0f..10f, 10,
+                    ) { adhocCueEveryNPush = it.toInt() }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Intervals (seconds)", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SliderRow("Push interval", "${fastSec}s", fastSec.toFloat(), 15f..600f, 50) { fastSec = it.toInt() }
+                SliderRow("Recovery interval", "${slowSec}s", slowSec.toFloat(), 15f..600f, 50) { slowSec = it.toInt() }
+                SliderRow("Warm-up (0 = none)", "${warmupSec}s", warmupSec.toFloat(), 0f..600f, 50) { warmupSec = it.toInt() }
+                SliderRow("Cool-down (0 = none)", "${cooldownSec}s", cooldownSec.toFloat(), 0f..600f, 50) { cooldownSec = it.toInt() }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Pace band (mph)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow(
-                    "Pace ceiling", "%.1f".format(paceCeil),
-                    paceCeil, 3f..12f, 18,
-                ) { paceCeil = it }
-                SliderRow(
-                    "Pace floor", "%.1f".format(paceFloor),
-                    paceFloor, 2f..11f, 18,
-                ) { paceFloor = it }
+                SliderRow("Pace ceiling", "%.1f".format(paceCeil), paceCeil, 2f..8f, 24) { paceCeil = it }
+                SliderRow("Pace floor", "%.1f".format(paceFloor), paceFloor, 1.5f..7f, 24) { paceFloor = it }
                 Text(
-                    "Push phase targets between floor and ceiling.",
+                    "Push phase targets between floor and ceiling (mph).",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -127,18 +171,8 @@ fun ConfigScreen(
         Text("Heart-rate band (bpm)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow(
-                    "HR ceiling", "${hrCeil.toInt()}",
-                    hrCeil, 90f..200f, 22,
-                ) { hrCeil = it }
-                SliderRow(
-                    "HR floor", "${hrFloor.toInt()}",
-                    hrFloor, 70f..190f, 24,
-                ) { hrFloor = it }
-                Text(
-                    "Cued when HR exceeds ceiling during push, or pace drops below floor.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                SliderRow("HR ceiling", "$hrCeil", hrCeil.toFloat(), 90f..200f, 22) { hrCeil = it.toInt() }
+                SliderRow("HR floor", "$hrFloor", hrFloor.toFloat(), 70f..190f, 24) { hrFloor = it.toInt() }
             }
         }
 
@@ -156,32 +190,28 @@ fun ConfigScreen(
         Button(
             onClick = {
                 onSave(
-                    IntervalConfig(
-                        segments = buildList {
-                            if (warmSec > 0) add(com.morkstep.data.IntervalSegment(com.morkstep.data.PhaseType.WARMUP, warmSec))
-                            repeat(count) {
-                                add(com.morkstep.data.IntervalSegment(com.morkstep.data.PhaseType.FAST, fastSec))
-                                add(com.morkstep.data.IntervalSegment(com.morkstep.data.PhaseType.SLOW, slowSec))
-                            }
-                            if (coolSec > 0) add(com.morkstep.data.IntervalSegment(com.morkstep.data.PhaseType.COOLDOWN, coolSec))
-                        },
-                        paceCeiling = paceCeil.toDouble(),
-                        paceFloor = paceFloor.toDouble(),
-                        hrCeiling = hrCeil.toInt(),
-                        hrFloor = hrFloor.toInt(),
+                    profile.copy(
+                        name = name.ifBlank { "Profile" },
+                        lengthMode = lengthMode,
+                        rounds = rounds,
+                        distanceMiles = distanceMiles.toDouble(),
+                        timeMinutes = timeMinutes,
+                        adhocCueEveryNPush = adhocCueEveryNPush,
+                        fastSec = fastSec,
+                        slowSec = slowSec,
+                        warmupSec = warmupSec,
+                        cooldownSec = cooldownSec,
+                        paceCeilingMph = Math.round(paceCeil * 10) / 10.0,
+                        paceFloorMph = Math.round(paceFloor * 10) / 10.0,
+                        hrCeiling = hrCeil,
+                        hrFloor = hrFloor,
                         audioCues = audio,
                     )
                 )
             },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Save settings")
+            Text("Save profile")
         }
     }
 }
-
-private fun IntervalConfig.fastSeconds(): Int = segments.firstOrNull { it.type == com.morkstep.data.PhaseType.FAST }?.seconds ?: 180
-private fun IntervalConfig.slowSeconds(): Int = segments.firstOrNull { it.type == com.morkstep.data.PhaseType.SLOW }?.seconds ?: 180
-private fun IntervalConfig.warmSeconds(): Int = segments.firstOrNull { it.type == com.morkstep.data.PhaseType.WARMUP }?.seconds ?: 0
-private fun IntervalConfig.coolSeconds(): Int = segments.firstOrNull { it.type == com.morkstep.data.PhaseType.COOLDOWN }?.seconds ?: 0
-private fun IntervalConfig.fastCount(): Int = segments.count { it.type == com.morkstep.data.PhaseType.FAST }
