@@ -77,9 +77,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _live = MutableStateFlow(LiveState())
     val live: StateFlow<LiveState> = _live.asStateFlow()
 
-    /** One-shot: flips true when a profile is saved; consumed back by the UI. */
-    private val _savedProfile = MutableStateFlow(false)
-    val savedProfile: StateFlow<Boolean> = _savedProfile.asStateFlow()
+    /** One-shot: name of the just-saved profile; null when no save happened. Consumed back by the UI. */
+    private val _savedProfileName = MutableStateFlow<String?>(null)
+    val savedProfileName: StateFlow<String?> = _savedProfileName.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -197,13 +197,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val list = _profiles.value.map { if (it.id == updated.id) updated else it }
             container.configStore.saveProfiles(list)
-            _savedProfile.value = true
+            _savedProfileName.value = updated.name
         }
     }
 
-    /** Clear the save-confirmation flag after the UI has acted on it. */
+    /** Clear the save-confirmation event after the UI has acted on it. */
     fun consumeSavedProfile() {
-        _savedProfile.value = false
+        _savedProfileName.value = null
     }
     /** Clone the active profile under a fresh id and make it active. */
     fun newProfileFromActive() {

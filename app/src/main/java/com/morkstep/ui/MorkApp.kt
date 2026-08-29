@@ -54,19 +54,18 @@ fun MorkApp(viewModel: MainViewModel) {
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
     val locationGranted by viewModel.locationGranted.collectAsStateWithLifecycle()
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
-    val savedProfile by viewModel.savedProfile.collectAsStateWithLifecycle()
+    val savedProfileName by viewModel.savedProfileName.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // After saving a profile: confirm with a snackbar and return to Home.
-    LaunchedEffect(savedProfile) {
-        if (savedProfile) {
-            navController.navigate(Routes.HOME) {
-                popUpTo(navController.graph.id) { inclusive = true }
-                launchSingleTop = true
-            }
-            snackbarHostState.showSnackbar("Profile saved")
-            viewModel.consumeSavedProfile()
+    LaunchedEffect(savedProfileName) {
+        val name = savedProfileName ?: return@LaunchedEffect
+        navController.navigate(Routes.HOME) {
+            popUpTo(navController.graph.id) { inclusive = true }
+            launchSingleTop = true
         }
+        snackbarHostState.showSnackbar("Profile \"$name\" saved")
+        viewModel.consumeSavedProfile()
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
