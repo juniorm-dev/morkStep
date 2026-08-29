@@ -239,7 +239,7 @@ class SessionEngineTest {
     }
 
     @Test
-    fun slowPaceBelowFloor_cues() {
+    fun fastPaceBelowFloor_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(roundsProfile, clock, cue, pace = 2.8f, hr = 128)
@@ -250,7 +250,7 @@ class SessionEngineTest {
     }
 
     @Test
-    fun highHr_countsOverCeilingAndCues() {
+    fun fastHighHr_countsOverCeilingNoCue() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 165)
@@ -258,7 +258,58 @@ class SessionEngineTest {
         clock.advance(61_000)
         eng.tick()
         assertTrue(eng.snapshot.overCeilingSec >= 1)
+        assertFalse(cue.spoken.any { it.contains("high") })
+    }
+
+    @Test
+    fun fastLowHr_cues() {
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrFloor 120
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Heart rate low") })
+    }
+
+    @Test
+    fun slowHighHr_cues() {
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 165) // > hrCeiling 150
+        eng.run()
+        clock.advance(121_000)
+        eng.tick()
         assertTrue(cue.spoken.any { it.contains("high") })
+    }
+
+    @Test
+    fun slowHighPace_cues() {
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 128) // > paceCeiling 4.5
+        eng.run()
+        clock.advance(121_000)
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Stand easy") })
+    }
+
+    @Test
+    fun warningThreshold_controlsRepeatCadence() {
+        val p = roundsProfile.copy(warningThresholdSec = 5)
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue, pace = 2.8f, hr = 128) // below pace floor
+        eng.run()
+        clock.advance(60_001) // t=60 → FAST entry
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
+        clock.advance(3_000) // t=63: 3 s < 5 s threshold → no repeat
+        eng.tick()
+        assertEquals(1, cue.spoken.count { it.contains("Speed up") })
+        clock.advance(3_000) // t=66: 6 s ≥ 5 s threshold → repeat
+        eng.tick()
+        assertEquals(2, cue.spoken.count { it.contains("Speed up") })
     }
 
     @Test

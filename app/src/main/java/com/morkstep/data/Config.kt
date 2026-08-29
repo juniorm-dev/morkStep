@@ -38,6 +38,12 @@ data class WorkoutProfile(
     /** Heart-rate band (bpm) targeted during push intervals. */
     val hrCeiling: Int = 150,
     val hrFloor: Int = 120,
+    /**
+     * Seconds between repeats of the same pace/HR band warning, shared by push
+     * and recovery cues. A cue repeats at most once per interval while the
+     * condition holds.
+     */
+    val warningThresholdSec: Int = 8,
     /** Audio cues enabled on/off. */
     val audioCues: Boolean = true,
 ) {

@@ -143,6 +143,7 @@ fun ConfigScreen(
         var paceFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceFloorMph.toFloat()) }
         var hrCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrCeiling) }
         var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
+        var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
 
         Spacer(Modifier.height(16.dp))
@@ -230,6 +231,19 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        Text("Warning cues", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
+                Text(
+                    "Push warns when pace or HR drops below the floor; recovery warns when pace or HR " +
+                        "exceeds the ceiling. A cue repeats at most once per this interval while out of band.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         Text("Sensors", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -289,6 +303,7 @@ fun ConfigScreen(
                         paceFloorMph = Math.round(paceFloor * 10) / 10.0,
                         hrCeiling = hrCeil,
                         hrFloor = hrFloor,
+                        warningThresholdSec = warnSec,
                         audioCues = audio,
                     )
                 )

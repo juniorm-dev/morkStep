@@ -16,9 +16,9 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 - **Pace band (mph)** — a per-profile *ceiling* and *floor* (miles per hour). Push intervals target the band.
 - **Heart-rate band** — a *ceiling* and *floor* (bpm) that the push phase aims to stay within.
 - **Audio cues** —
-  - per-phase spoken announcements plus beeps on transitions,
-  - spoken guidance when pace drops below the floor or HR rises above the ceiling during push,
-  - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
+    - per-phase spoken announcements plus beeps on transitions,
+    - spoken band warnings — during **push** when pace or HR drops *below* the floor, during **recovery** when pace or HR rises *above* the ceiling; a warning repeats at most once per a configurable threshold in seconds, shared by push and recovery,
+    - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
 - **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds over ceiling) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
 
@@ -140,7 +140,7 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 ## Test plan
 
-`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (14 tests):
+`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (21 tests):
 - plan computation for ROUNDS / TIME length modes
 - time→phase mapping, seconds-in-phase, and phase ordinal (fast=1, slow=2)
 - plan-relative fast-segment counting (tick-cadence independent)
@@ -149,7 +149,9 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 - TIME mode finishes exactly at the target duration
 - ADHOC runs until `endNow()` and cues every Nth completed push round
 - quarter cues fire at 25% / 50% / 75%
-- pace-below-floor cue, HR-above-ceiling cue + over-ceiling counter
+- push band warnings: pace- and HR-below-floor cues; over-ceiling counter (push) without a push cue
+- recovery band warnings: pace- and HR-above-ceiling cues
+- warning-repeat threshold in seconds shared by push and recovery
 - distance accumulation from pace (mph → miles)
 - per-phase average accumulation: push/recovery/overall pace & HR bucketed from 1 Hz samples
 

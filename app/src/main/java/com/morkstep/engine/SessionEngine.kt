@@ -153,7 +153,12 @@ class SessionEngine(
     private var lastQuarter = 0
     private var lastAdhocCueN = 0
     private val lastCueAt = mutableMapOf<String, Long>()
-    private val cueCooldownMs = 8_000L
+    /**
+     * Min gap between repeats of the same band warning, in millis. Driven by the
+     * profile's shared warning threshold (seconds) so push and recovery cue cadence
+     * is user-configurable.
+     */
+    private val cueCooldownMs: Long get() = profile.warningThresholdSec.coerceAtLeast(1) * 1000L
 
     // Phase-average accumulators (pace in mph, HR in bpm).
     private var fastPaceSum = 0.0
@@ -364,11 +369,12 @@ class SessionEngine(
                 if (s.pace != null && s.pace < profile.paceFloorMph.toFloat()) cueIf("paceUp", "Speed up a little")
                 if (s.hr != null && s.hr > profile.hrCeiling) {
                     _state.value = s.copy(overCeilingSec = s.overCeilingSec + 1)
-                    cueIf("hrHigh", "That's quite high. Ease off a touch")
                 }
+                if (s.hr != null && s.hr < profile.hrFloor) cueIf("hrLow", "Heart rate low. Push a little harder")
             }
             PhaseType.SLOW -> {
-                if (s.pace != null && s.pace > profile.paceFloorMph.toFloat()) cueIf("paceSlow", "Stand easy now")
+                if (s.pace != null && s.pace > profile.paceCeilingMph.toFloat()) cueIf("paceSlow", "Stand easy now")
+                if (s.hr != null && s.hr > profile.hrCeiling) cueIf("hrHigh", "That's quite high. Ease off a touch")
             }
             else -> Unit
         }
