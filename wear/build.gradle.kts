@@ -23,7 +23,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 strips the unused Guava/health-services classes that dominate
+            // the unminified APK; keep only the app's own tiny package intact.
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            // Shrink the installable debug APK too (R8); slower builds, much
+            // smaller APKs for emulator installs.
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
