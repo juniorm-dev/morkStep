@@ -190,16 +190,36 @@ fun ConfigScreen(
         Text("Workout length", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp)) {
-                LENGTH_MODES.forEach { (mode, label) ->
-                    Row(
-                        Modifier
+                var lengthExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = lengthExpanded,
+                    onExpandedChange = { lengthExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = LENGTH_MODES.first { it.first == lengthMode }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Length mode") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = lengthExpanded)
+                        },
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .selectable(selected = lengthMode == mode, onClick = { lengthMode = mode })
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = lengthExpanded,
+                        onDismissRequest = { lengthExpanded = false },
                     ) {
-                        RadioButton(selected = lengthMode == mode, onClick = { lengthMode = mode })
-                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                        LENGTH_MODES.forEach { (mode, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    lengthMode = mode
+                                    lengthExpanded = false
+                                },
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
