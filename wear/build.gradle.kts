@@ -1,8 +1,13 @@
+import org.gradle.api.plugins.BasePluginExtension
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Name the Wear APK artifact after the app: morkStep-wear-debug.apk.
+the<BasePluginExtension>().archivesName = "morkStep-wear"
 
 android {
     namespace = "com.morkstep.wear"
