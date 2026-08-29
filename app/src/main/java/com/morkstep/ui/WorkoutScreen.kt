@@ -14,9 +14,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,6 +52,7 @@ fun WorkoutScreen(
     simulated: Boolean,
     onEnd: () -> Unit,
     onStop: () -> Unit,
+    onTogglePause: () -> Unit,
 ) {
     val adhoc = profile.lengthMode == WorkoutLength.ADHOC
     Column(
@@ -71,11 +77,11 @@ fun WorkoutScreen(
 
         Surface(
             shape = CircleShape,
-            color = phaseColor(live.phase),
+            color = if (live.paused) Color(0xFF9E9E9E) else phaseColor(live.phase),
             modifier = Modifier.padding(4.dp),
         ) {
             Text(
-                live.phase.label(),
+                if (live.paused) "PAUSED" else live.phase.label(),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
@@ -85,24 +91,32 @@ fun WorkoutScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Remaining in the current phase (or elapsed for adhoc-free display)
-        val remain = if (adhoc) {
-            live.secondsInPhase
-        } else {
-            val segSec = when (live.phase) {
-                com.morkstep.data.PhaseType.FAST -> profile.fastSec
-                com.morkstep.data.PhaseType.SLOW -> profile.slowSec
-                com.morkstep.data.PhaseType.WARMUP -> profile.warmupSec
-                com.morkstep.data.PhaseType.COOLDOWN -> profile.cooldownSec
-            }
-            (segSec - live.secondsInPhase).coerceAtLeast(0)
+        // Timer display: count down (time left in phase) or count up (seconds
+        // elapsed in phase). Adhoc phases have fixed lengths too — only the
+        // overall workout end is open — so the toggle applies to every mode.
+        var countUp by rememberSaveable { mutableStateOf(false) }
+        val segSec = when (live.phase) {
+            com.morkstep.data.PhaseType.FAST -> profile.fastSec
+            com.morkstep.data.PhaseType.SLOW -> profile.slowSec
+            com.morkstep.data.PhaseType.WARMUP -> profile.warmupSec
+            com.morkstep.data.PhaseType.COOLDOWN -> profile.cooldownSec
         }
+        val showCountdown = !countUp
+        val bigSeconds = if (showCountdown) (segSec - live.secondsInPhase).coerceAtLeast(0)
+        else live.secondsInPhase
         Text(
-            formatClock(remain),
+            formatClock(bigSeconds),
             style = MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.Bold,
         )
-        Text(if (adhoc) "seconds in phase" else "time left in phase", style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (showCountdown) "time left in phase" else "seconds in phase",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = countUp, onCheckedChange = { countUp = it })
+            Text(if (countUp) "Count up" else "Count down", style = MaterialTheme.typography.bodySmall)
+        }
 
         Spacer(Modifier.height(4.dp))
 
@@ -145,6 +159,13 @@ fun WorkoutScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onStop, modifier = Modifier.weight(1f)) {
                 Text("Discard")
+            }
+            Button(
+                onClick = onTogglePause,
+                modifier = Modifier.weight(1f),
+                enabled = !live.finished,
+            ) {
+                Text(if (live.paused) "Resume" else "Pause")
             }
             Button(onClick = onEnd, modifier = Modifier.weight(1f)) {
                 Text(if (adhoc) "Finish" else if (live.finished) "Done" else "Finish early")

@@ -12,12 +12,13 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
   - **Distance** — runs until a target distance (miles) is covered.
   - **Time** — runs for a target duration (minutes).
   - **Adhoc** — no preset length; ends when you tap Finish.
-- **Configurable intervals** — warm-up length, push interval, recovery interval, cool-down length (per profile).
+- **Configurable intervals** — warm-up length, push interval, recovery interval, cool-down length (per profile), adjustable in **15-second** steps (e.g. 30 s is selectable).
+- **Pause / resume** — freeze a workout mid-session (elapsed time, distance and audio cues stop) and continue where you left off; paused wall-clock time is excluded from the recorded duration. Discard and Finish still work while paused, and pausing never alters the length plan.
 - **Pace band (mph)** — a per-profile *ceiling* and *floor* (miles per hour). Push intervals target the band.
 - **Heart-rate band** — a *ceiling* and *floor* (bpm) that the push phase aims to stay within.
 - **Audio cues** —
     - per-phase spoken announcements plus beeps on transitions,
-    - spoken band warnings — during **push** when pace or HR drops *below* the floor, during **recovery** when pace or HR rises *above* the ceiling; a warning repeats at most once per a configurable threshold in seconds, shared by push and recovery,
+    - spoken band warnings — during **push** when pace or HR drops *below* the floor, during **recovery** when pace or HR rises *above* the ceiling; a warning repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
     - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
 - **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds over ceiling) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
@@ -128,7 +129,17 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 **Language servers (LSP)**
 | Server | Version | Notes |
 | ------ | ------- | ----- |
-| `kotlin-lsp` (fwcd/kotlin-language-server) | 1.3.13 | Served Kotlin `.kt`/`.kts` — navigation, symbols, refactors, diagnostics. Downloaded to `.tools/`, launched with the Android Studio JBR 21 via `<project>/.omp/lsp.json`. Reports expectations (outer unresolved Android/Compose references until Gradle classpath is loaded) but is live and issuing diagnostics for the source tree. |
+| `kotlin-lsp` (fwcd/kotlin-language-server) | 1.3.13 | Navigation, symbols, references, refactors, diagnostics. Downloaded to `.tools/`, launched with the Android Studio JBR 21 via `<project>/.omp/lsp.json`. See classpath note below. |
+
+> **LSP classpath note (setup decision).** This kotlin-lsp build cannot load the Android
+> `com.android.application` compile classpath: it only bundles a JVM `GradleClassPathResolver`
+> (queries standard `sourceSets.main`/`compileClasspath`, which AGP does not expose), and no
+> `bspInstall` task exists for `com.android.application` (KGP ships BSP for KMP only). It is
+> therefore intentionally run in **sources-only** mode: workspace **references / symbols are
+> reliable**, but per-file **diagnostics** will report `Unresolved reference: androidx/kotlinx`
+> for any Compose/Android/coroutine API. Treat the **Gradle build** (`assembleDebug`,
+> `testDebugUnitTest`) as the authority on actual type errors — do not "fix" the false-positive
+> LSP diagnostics.
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 

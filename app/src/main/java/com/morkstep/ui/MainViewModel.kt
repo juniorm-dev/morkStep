@@ -38,6 +38,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var engine: SessionEngine? = null
     private var tickerJob: Job? = null
+    /** Collects sensor + live-state for the current engine; cancelled when it is replaced. */
+    private var engineJob: Job? = null
 
     // Real sources (only live while simulated mode is OFF).
     private var gps: GpsPaceSource? = null
@@ -140,10 +142,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val p = _activeProfile.value ?: return
         val paceSrc: PaceSource = sim ?: gps ?: return
         val hrSrc: HeartRateSource = if (_simulated.value) sim!! else ble ?: return
+        engineJob?.cancel()
         val e = SessionEngine(p, paceSrc, hrSrc, sink)
-        e.start(viewModelScope)
         engine = e
-        viewModelScope.launch {
+        engineJob = viewModelScope.launch {
+            // Sensor observation and live-state fan-out share one job so a
+            // replaced/discarded engine is fully torn down (no stale updates).
+            e.start(this)
             e.state.collect { _live.value = it }
         }
     }
@@ -183,6 +188,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startWorkout() {
         val p = _activeProfile.value ?: return
         if (p.fastSec <= 0 || p.slowSec <= 0) return
+        // A discarded engine is gone and a finished engine refuses to re-run;
+        // every workout must start from a fresh one.
+        if (engine == null || engine?.snapshot?.finished == true) setupEngine()
         engine?.run()
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
@@ -230,10 +238,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         onFinished()
         tickerJob?.cancel()
     }
+    /** Pause or resume the running session (toggles on the live paused flag). */
+    fun togglePause() {
+        val s = engine?.snapshot ?: return
+        if (s.paused) engine?.resume() else engine?.pause()
+    }
 
     fun discardWorkout() {
         tickerJob?.cancel()
-        engine = null
+        // Fully reset: replace the engine so the next Start begins a clean
+        // session, and live state returns to its idle snapshot.
+        setupEngine()
     }
 
     override fun onCleared() {

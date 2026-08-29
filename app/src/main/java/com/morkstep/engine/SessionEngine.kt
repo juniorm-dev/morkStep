@@ -23,6 +23,8 @@ interface CueSink {
 data class LiveState(
     val running: Boolean = false,
     val finished: Boolean = false,
+    /** True while the session is frozen by [SessionEngine.pause]; elapsed time, distance and cues are stopped. */
+    val paused: Boolean = false,
     val phase: PhaseType = PhaseType.WARMUP,
     /** 1 (fast) or 2 (slow) while inside a repeat pair; 1 for warm-up/cooldown. */
     val phaseOrdinal: Int = 1,
@@ -144,12 +146,15 @@ class SessionEngine(
     val state: StateFlow<LiveState> = _state.asStateFlow()
 
     private var launchedAtMs = 0L
+    private var pausedAtMs = 0L
     private var coreEndSec = Long.MAX_VALUE
     private var finishSec = Long.MAX_VALUE
     private var lastDistTick = 0
     private var distance = 0.0
     private var latched = false
     private var lastPhase: PhaseType? = null
+    /** Suppresses the first band warning in a newly-entered phase (sensor value from the previous phase is stale). */
+    private var firstBandWarningPending = false
     private var lastQuarter = 0
     private var lastAdhocCueN = 0
     private val lastCueAt = mutableMapOf<String, Long>()
@@ -207,7 +212,7 @@ class SessionEngine(
         slowHrSum = 0L; slowHrCnt = 0
         allHrSum = 0L; allHrCnt = 0
         _state.value = snapshot.copy(
-            running = true, finished = false, totalSeconds = 0, secondsInPhase = 0,
+            running = true, finished = false, paused = false, totalSeconds = 0, secondsInPhase = 0,
             phase = PhaseType.WARMUP,
             phaseOrdinal = 1, fastSegmentsDone = 0, overCeilingSec = 0, distanceMiles = 0.0,
             progress = null, pace = paceSource.pace.value, hr = hrSource.hr.value,
@@ -218,7 +223,7 @@ class SessionEngine(
 
     /** Advance the session to the current wall-clock time. Call ~1 Hz while running. */
     fun tick() {
-        if (!snapshot.running || snapshot.finished) return
+        if (!snapshot.running || snapshot.finished || snapshot.paused) return
         val rawT = ((clock.nowMillis() - launchedAtMs) / 1000L).toInt()
         val t = if (finishSec < Long.MAX_VALUE) rawT.coerceAtMost(finishSec.toInt()) else rawT
         if (t < lastDistTick) return
@@ -239,9 +244,10 @@ class SessionEngine(
         val entered = pa.phase != lastPhase
         if (entered) {
             cue.beep()
-            announce(pa.phase)
+            announce(pa.phase, pa.fastDone + 1)
             lastPhase = pa.phase
             lastCueAt.clear()
+            firstBandWarningPending = true
         }
 
         // Sample pace/HR once per tick into phase buckets (1 Hz averages).
@@ -332,20 +338,36 @@ class SessionEngine(
             return
         }
 
-        ratePhase()
+        if (!entered) ratePhase()
     }
 
     /** Manually end an ADHOC workout (or stop any workout early). */
     fun endNow() {
         if (!snapshot.running || snapshot.finished) return
-        _state.value = snapshot.copy(running = false, finished = true)
+        _state.value = snapshot.copy(running = false, finished = true, paused = false)
     }
 
-    private fun announce(phase: PhaseType) {
+    /** Freeze the session at the current instant: elapsed time, distance and cues stop until [resume]. */
+    fun pause() {
+        val s = snapshot
+        if (!s.running || s.finished || s.paused) return
+        pausedAtMs = clock.nowMillis()
+        _state.value = s.copy(paused = true)
+    }
+
+    /** Continue a paused session; elapsed time resumes where it froze, paused wall-clock is excluded. */
+    fun resume() {
+        val s = snapshot
+        if (!s.running || s.finished || !s.paused) return
+        launchedAtMs += clock.nowMillis() - pausedAtMs
+        _state.value = s.copy(paused = false)
+    }
+
+    private fun announce(phase: PhaseType, pushNumber: Int = 0) {
         if (!profile.audioCues) return
         when (phase) {
             PhaseType.WARMUP -> cue.speak("Begin with an easy warm-up walk")
-            PhaseType.FAST -> cue.speak("Push phase. Maintain a brisk pace")
+            PhaseType.FAST -> cue.speak("Push phase $pushNumber. Maintain a brisk pace")
             PhaseType.SLOW -> cue.speak("Recovery walking. Stay relaxed")
             PhaseType.COOLDOWN -> cue.speak("Cooldown. Ease down")
         }
@@ -366,15 +388,21 @@ class SessionEngine(
         val s = snapshot
         when (s.phase) {
             PhaseType.FAST -> {
-                if (s.pace != null && s.pace < profile.paceFloorMph.toFloat()) cueIf("paceUp", "Speed up a little")
                 if (s.hr != null && s.hr > profile.hrCeiling) {
                     _state.value = s.copy(overCeilingSec = s.overCeilingSec + 1)
                 }
-                if (s.hr != null && s.hr < profile.hrFloor) cueIf("hrLow", "Heart rate low. Push a little harder")
+                // The first band warning after a phase transition is suppressed:
+                // the sensor value carried over from the previous phase is stale.
+                if (firstBandWarningPending) { firstBandWarningPending = false } else {
+                    if (s.pace != null && s.pace < profile.paceFloorMph.toFloat()) cueIf("paceUp", "Speed up a little")
+                    if (s.hr != null && s.hr < profile.hrFloor) cueIf("hrLow", "Heart rate low. Push a little harder")
+                }
             }
             PhaseType.SLOW -> {
-                if (s.pace != null && s.pace > profile.paceCeilingMph.toFloat()) cueIf("paceSlow", "Stand easy now")
-                if (s.hr != null && s.hr > profile.hrCeiling) cueIf("hrHigh", "That's quite high. Ease off a touch")
+                if (firstBandWarningPending) { firstBandWarningPending = false } else {
+                    if (s.pace != null && s.pace > profile.paceCeilingMph.toFloat()) cueIf("paceSlow", "Stand easy now")
+                    if (s.hr != null && s.hr > profile.hrCeiling) cueIf("hrHigh", "That's quite high. Ease off a touch")
+                }
             }
             else -> Unit
         }

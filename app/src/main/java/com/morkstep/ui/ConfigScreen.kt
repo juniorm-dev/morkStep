@@ -40,6 +40,10 @@ private val LENGTH_MODES = listOf(
     WorkoutLength.ADHOC to "Adhoc",
 )
 
+/** Material `Slider` `steps` count giving [step] granularity across [range] (interval count minus the two endpoints). */
+private fun sliderSteps(range: ClosedFloatingPointRange<Float>, step: Float): Int =
+    ((range.endInclusive - range.start) / step).toInt() - 1
+
 @Composable
 private fun SliderRow(
     label: String,
@@ -201,10 +205,10 @@ fun ConfigScreen(
         Text("Intervals (seconds)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SliderRow("Push interval", "${fastSec}s", fastSec.toFloat(), 15f..600f, 50) { fastSec = it.toInt() }
-                SliderRow("Recovery interval", "${slowSec}s", slowSec.toFloat(), 15f..600f, 50) { slowSec = it.toInt() }
-                SliderRow("Warm-up (0 = none)", "${warmupSec}s", warmupSec.toFloat(), 0f..600f, 50) { warmupSec = it.toInt() }
-                SliderRow("Cool-down (0 = none)", "${cooldownSec}s", cooldownSec.toFloat(), 0f..600f, 50) { cooldownSec = it.toInt() }
+                SliderRow("Push interval", "${fastSec}s", fastSec.toFloat(), 15f..600f, sliderSteps(15f..600f, 5f)) { fastSec = it.toInt() }
+                SliderRow("Recovery interval", "${slowSec}s", slowSec.toFloat(), 15f..600f, sliderSteps(15f..600f, 5f)) { slowSec = it.toInt() }
+                SliderRow("Warm-up (0 = none)", "${warmupSec}s", warmupSec.toFloat(), 0f..600f, sliderSteps(0f..600f, 5f)) { warmupSec = it.toInt() }
+                SliderRow("Cool-down (0 = none)", "${cooldownSec}s", cooldownSec.toFloat(), 0f..600f, sliderSteps(0f..600f, 5f)) { cooldownSec = it.toInt() }
             }
         }
 

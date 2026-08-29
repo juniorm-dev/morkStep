@@ -124,6 +124,7 @@ fun MorkApp(viewModel: MainViewModel) {
                             viewModel.discardWorkout()
                             navController.popBackStack()
                         },
+                        onTogglePause = viewModel::togglePause,
                     )
                 }
             }
