@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "morkStep"
 include(":app")
+include(":wear")

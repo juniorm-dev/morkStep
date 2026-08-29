@@ -84,6 +84,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // Receive live heart rate relayed from the morkStep Wear companion app.
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

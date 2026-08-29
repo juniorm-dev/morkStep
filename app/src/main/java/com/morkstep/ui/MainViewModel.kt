@@ -14,11 +14,12 @@ import com.morkstep.data.defaultProfile
 import com.morkstep.engine.CueSink
 import com.morkstep.engine.LiveState
 import com.morkstep.engine.SessionEngine
-import com.morkstep.sensing.BleHeartRateSource
 import com.morkstep.sensing.GpsPaceSource
+import com.morkstep.sensing.BleHeartRateSource
 import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.SimulatedSensors
+import com.morkstep.sensing.WearHeartRateSource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +45,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // Real sources (only live while simulated mode is OFF).
     private var gps: GpsPaceSource? = null
     private var ble: BleHeartRateSource? = null
+    private var wear: WearHeartRateSource? = null
     private var sim: SimulatedSensors? = null
 
     private val _profiles = MutableStateFlow(emptyList<WorkoutProfile>())
@@ -57,6 +59,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _simulated = MutableStateFlow(false)
     val simulated: StateFlow<Boolean> = _simulated.asStateFlow()
+    /** When true, heart rate comes from the paired Wear companion (message relay) instead of BLE. */
+    private val _useWearHr = MutableStateFlow(false)
+    val useWearHr: StateFlow<Boolean> = _useWearHr.asStateFlow()
 
     /** Human-readable note about which sensor sources are in use. */
     private val _sensorNote = MutableStateFlow("")
@@ -75,6 +80,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             container.configStore.simulatedSensors.collect { simOn ->
                 _simulated.value = simOn
+                rebuildSources()
+            }
+        }
+        viewModelScope.launch {
+            container.configStore.wearHr.collect { on ->
+                _useWearHr.value = on
                 rebuildSources()
             }
         }
@@ -102,7 +113,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             gps = GpsPaceSource(getApplication())
             ble = BleHeartRateSource(getApplication())
-            _sensorNote.value = "GPS pace · BLE heart rate"
+            if (_useWearHr.value) {
+                wear = WearHeartRateSource(getApplication())
+            }
+            _sensorNote.value =
+                if (_useWearHr.value) "GPS pace · Wear companion heart rate" else "GPS pace · BLE heart rate"
         }
         setupEngine()
     }
@@ -125,8 +140,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun stopSources() {
         gps?.stop()
         ble?.stop()
+        wear?.stop()
         gps = null
         ble = null
+        wear = null
         sim = null
     }
 
@@ -141,7 +158,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun setupEngine() {
         val p = _activeProfile.value ?: return
         val paceSrc: PaceSource = sim ?: gps ?: return
-        val hrSrc: HeartRateSource = if (_simulated.value) sim!! else ble ?: return
+        val hrSrc: HeartRateSource =
+            if (_simulated.value) sim!!
+            else if (_useWearHr.value) wear ?: ble ?: return
+            else ble ?: return
         engineJob?.cancel()
         val e = SessionEngine(p, paceSrc, hrSrc, sink)
         engine = e
@@ -157,6 +177,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { container.configStore.setSimulatedSensors(on) }
     }
 
+    /** Choose heart rate source: paired Wear companion (relay) instead of BLE. */
+    fun setWearHr(on: Boolean) {
+        viewModelScope.launch { container.configStore.setWearHr(on) }
+    }
     /** Select which profile is shown on the home screen and used for the next workout. */
     fun selectProfile(id: Long) {
         if (id == _activeId.value) return

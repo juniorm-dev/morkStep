@@ -23,6 +23,7 @@ class ConfigStore(private val context: Context) {
         private val PROFILES_JSON = stringPreferencesKey("profilesJson")
         private val ACTIVE_ID = longPreferencesKey("activeProfileId")
         private val SIMULATED = booleanPreferencesKey("simulatedSensors")
+        private val WEAR_HR = booleanPreferencesKey("wearHeartRate")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -32,6 +33,12 @@ class ConfigStore(private val context: Context) {
         p[SIMULATED] = value
     }
 
+    /** Whether to take heart rate from the paired Wear companion instead of BLE. Default OFF. */
+    val wearHr: Flow<Boolean> = context.dataStore.data.map { it[WEAR_HR] ?: false }
+
+    suspend fun setWearHr(value: Boolean) = context.dataStore.edit { p ->
+        p[WEAR_HR] = value
+    }
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]
         if (raw.isNullOrBlank()) listOf(defaultProfile()) else runCatching {

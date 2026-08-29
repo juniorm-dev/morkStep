@@ -25,6 +25,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.morkStep">
 
+        <!-- Associate the paired Wear companion (com.morkstep.wear) with this app. -->
+        <meta-data
+            android:name="com.google.android.wearable.beta.app"
+            android:value="com.morkstep.wear" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

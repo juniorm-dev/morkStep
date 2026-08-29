@@ -83,6 +83,8 @@ fun ConfigScreen(
     simulated: Boolean,
     sensorNote: String,
     onSimulatedChange: (Boolean) -> Unit,
+    wearHr: Boolean,
+    onWearHrChange: (Boolean) -> Unit,
     onRequestPermissions: () -> Unit,
     locationGranted: Boolean,
     bluetoothGranted: Boolean,
@@ -268,6 +270,14 @@ fun ConfigScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (!simulated) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Heart rate from Wear companion", style = MaterialTheme.typography.bodyLarge)
+                        Switch(checked = wearHr, onCheckedChange = onWearHrChange)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
                             onClick = onRequestPermissions,

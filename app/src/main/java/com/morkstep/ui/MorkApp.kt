@@ -46,6 +46,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val live by viewModel.live.collectAsStateWithLifecycle()
     val simulated by viewModel.simulated.collectAsStateWithLifecycle()
+    val useWearHr by viewModel.useWearHr.collectAsStateWithLifecycle()
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
     val locationGranted by viewModel.locationGranted.collectAsStateWithLifecycle()
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
@@ -138,6 +139,8 @@ fun MorkApp(viewModel: MainViewModel) {
                     simulated = simulated,
                     sensorNote = sensorNote,
                     onSimulatedChange = viewModel::setSimulatedSensors,
+                    wearHr = useWearHr,
+                    onWearHrChange = viewModel::setWearHr,
                     onRequestPermissions = requestPermissions,
                     locationGranted = locationGranted,
                     bluetoothGranted = bluetoothGranted,
