@@ -1,5 +1,7 @@
 import java.util.Properties
 
+import org.gradle.api.plugins.BasePluginExtension
+
 // Read release signing credentials from the gitignored keystore.properties
 // (storeFile, storePassword, keyAlias, keyPassword). If it is missing or
 // incomplete the release stays unsigned, so builds never hard-fail on a secret.
@@ -18,6 +20,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
+
+// Name the APK artifacts after the app: morkStep-debug.apk / morkStep-release.apk.
+the<BasePluginExtension>().archivesName = "morkStep"
 
 android {
     val (signProps, haveSigning) = releaseSigning()

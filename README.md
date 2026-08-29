@@ -41,14 +41,14 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/morkStep-debug.apk
 ```
 
 ### Release (signed) build
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/app-release.apk
+adb install -r app/build/outputs/apk/release/morkStep-release.apk
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -68,7 +68,7 @@ keytool -genkeypair -v -keystore release.keystore -alias morkstep \
   -dname "CN=morkStep Dev, OU=morkStep, O=morkStep, L=, ST=, C=US"
 ```
 
-If `keystore.properties` is absent/incomplete, `assembleRelease` still succeeds but produces an **unsigned** `app-release-unsigned.apk` (cannot be installed on a device) — the build never hard-fails on a missing secret. Present credentials → a signed, sideloadable `app-release.apk`. Keep the keystore and its password safe and private: they are the app's release identity and are **not** backed up or committed.
+If `keystore.properties` is absent/incomplete, `assembleRelease` still succeeds but produces an **unsigned** `morkStep-release-unsigned.apk` (cannot be installed on a device) — the build never hard-fails on a missing secret. Present credentials → a signed, sideloadable `morkStep-release.apk`. Keep the keystore and its password safe and private: they are the app's release identity and are **not** backed up or committed.
 
 ---
 ## Architecture
