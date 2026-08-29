@@ -6,7 +6,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 
 ## Features
 
-- **Profiles** — save unlimited named workout configurations; pick the active one on the **home screen** or in **Settings** (which also lists all saved profiles and can clone a new one). Defaults to *Adhoc*.
+- **Profiles** — save unlimited named workout configurations; pick the active one on the **home screen** or in **Settings**, which also lists every saved profile and can **clone** or **delete** any of them. Defaults to *Adhoc*.
 - **Workout-length modes** — choose how each workout is bounded:
   - **Rounds** — a fixed number of push/recovery pairs plus warm-up/cool-down.
   - **Distance** — runs until a target distance (miles) is covered.
@@ -23,6 +23,8 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
 - **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds over ceiling) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
 - **Runs with the screen locked** — a running session starts a foreground service (`WorkoutService`) that holds a partial wake lock so the 1 Hz ticker keeps firing on schedule (audio cues stay on time) and posts an ongoing notification, so the session survives backgrounding and process pressure. The service stops on finish, discard, or profile change tear-down. Saving a profile in Settings confirms with a "Profile saved" snackbar and returns to Home.
+- **Workout plan at a glance** — the home screen shows the active profile's push/recovery and warm-up/cool-down durations as `m:ss` (plain seconds under a minute) instead of rounded minutes, plus the configured vibration mode.
+- **Vibration** — per-profile haptics chosen in Settings: **Off**, **On phase change** (warm-up, push, recovery, cool-down, finish), or **All cues** (also quarter, push-round, and band-warning cues, mirroring audio). The watch can mirror them too: turn on **Vibrate watch** and the paired Wear companion buzzes alongside the phone.
 
 ## Requirements
 
@@ -85,6 +87,7 @@ All code lives under `app/src/main/java/com/morkstep/`, organised by responsibil
 | `audio/` | TTS + tone cues |
 | `data/` | Domain models, profiles + config persistence (DataStore), workout history (Room) |
 | `ui/` | Jetpack Compose screens + ViewModel wiring |
+| `wear/` | Wear OS companion app: live heart-rate relay (Wear Health Services → phone) + vibration relay (phone → watch) |
 
 ### Data flow
 
@@ -122,8 +125,11 @@ Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returnin
 - **`GpsPaceSource`** — real pace via the **Fused Location Provider** (Play Services), `Location.getSpeed()` m/s → mph (×2.23694), 1 s updates.
 - **`BleHeartRateSource`** — real HR via a **Bluetooth LE heart-rate strap** (Heart Rate Service `0x180D` / measurement `0x2A37`): scans for the service, connects, subscribes to notifications, parses 8/16-bit HR payloads. Disconnects re-scan automatically; gives up after 60 s.
 - **`SimulatedSensors`** — developer-only. Random-walks toward phase targets so cue/history paths can be exercised **when explicitly toggled on** in Settings. It is **never an automatic fallback**: when off, a missing signal simply reads blank (`–`), so real workouts can never be silently polluted by fake readings.
+- **`WearHeartRateSource`** — heart rate relayed from the paired **morkStep Wear** companion over the Wearable message layer (path `/morkstep/hr`); the watch reads HR via Wear Health Services and streams each beat-per-minute value on demand. Selected in Settings with the "Heart rate from Wear companion" switch (used instead of BLE when on).
 
 The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
+
+**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value on-screen.
 
 ### Storage — `data/`
 
@@ -140,8 +146,8 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 
 | Tool | Version | Why |
 | ---- | ------- | --- |
-| Gradle 8.11.1 (wrapper) | 8.11.1 | Chili supports AGP 8.7.2; pinned via the wrapper for reproducible builds |
-| Android Gradle Plugin | 8.7.2 | Stable release compatible with Gradle 8.11.1 and Compose BOM 2024.10.01 |
+| Gradle 8.11.1 (wrapper) | 8.11.1 | Pinned via the wrapper for reproducible builds |
+| Android Gradle Plugin | 8.10.1 | Matches the root build; compatible with Gradle 8.11.1 and Compose BOM 2024.10.01 |
 | Kotlin | 2.0.21 | Compose compiler now ships with Kotlin (the `compose` compiler Gradle plugin), so build and toolchain stay in lockstep |
 | Jetpack Compose BOM | 2024.10.01 | Bundles Compose material/UI versions together |
 | KSP | 2.0.21-1.0.28 | Room compile-time codegen |
@@ -175,7 +181,7 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 ## Test plan
 
-`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (21 tests):
+`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (25 tests):
 - plan computation for ROUNDS / TIME length modes
 - time→phase mapping, seconds-in-phase, and phase ordinal (fast=1, slow=2)
 - plan-relative fast-segment counting (tick-cadence independent)
@@ -185,6 +191,7 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 - ADHOC runs until `endNow()` and cues every Nth completed push round
 - quarter cues fire at 25% / 50% / 75%
 - push band warnings: pace- and HR-below-floor cues; over-ceiling counter (push) without a push cue
+- haptic vibration cues: `TRANSITION` on phase entry and finish; `GUIDANCE` on quarter and band-warning cues
 - recovery band warnings: pace- and HR-above-ceiling cues
 - warning-repeat threshold in seconds shared by push and recovery
 - distance accumulation from pace (mph → miles)

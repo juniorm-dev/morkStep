@@ -29,8 +29,10 @@ class FakeSensors(initPace: Float?, initHr: Int?) : PaceSource, HeartRateSource 
 class RecordingCue : CueSink {
     val spoken = mutableListOf<String>()
     var beeps = 0
+    val vibrations = mutableListOf<CueVibration>()
     override fun beep() { beeps++ }
     override fun speak(text: String) { spoken.add(text) }
+    override fun vibrate(kind: CueVibration) { vibrations.add(kind) }
 }
 
 class SessionEngineTest {
@@ -523,4 +525,66 @@ class SessionEngineTest {
         eng2.tick()
         assertTrue(cue2.spoken.any { it.contains("high") })
     }
+    // ---- haptic vibration cues ----
+
+    @Test
+    fun phaseChange_vibratesTransition() {
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue)
+        eng.run() // t=0 → WARMUP
+        clock.advance(60_001) // t=60 → FAST entry
+        eng.tick()
+        assertTrue(cue.vibrations.contains(CueVibration.TRANSITION))
+    }
+
+    @Test
+    fun finish_vibratesTransition() {
+        val p = WorkoutProfile(
+            id = 9, name = "T1", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
+            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+        )
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue)
+        eng.run()
+        clock.advance(60_001) // TIME finishes exactly at the target
+        eng.tick()
+        assertTrue(eng.snapshot.finished)
+        assertTrue(cue.vibrations.contains(CueVibration.TRANSITION))
+        assertTrue(cue.spoken.any { it.contains("Workout complete") })
+    }
+
+    @Test
+    fun quarter_vibratesGuidance() {
+        val p = WorkoutProfile(
+            id = 10, name = "T2", lengthMode = WorkoutLength.TIME, timeMinutes = 2,
+            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+        )
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue)
+        eng.run()
+        clock.advance(30_001) // t=30 = 25% of 120 s
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("One quarter done") })
+        assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
+    }
+
+    @Test
+    fun bandWarning_vibratesGuidance() {
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrFloor 120
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first band warning after entry suppressed
+        eng.tick()
+        clock.advance(1_000) // then it fires
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Heart rate low") })
+        assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
+    }
+
 }

@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
 
@@ -41,6 +42,13 @@ private val LENGTH_MODES = listOf(
     WorkoutLength.DISTANCE to "Distance",
     WorkoutLength.TIME to "Time",
     WorkoutLength.ADHOC to "Adhoc",
+)
+
+/** Vibration-mode radio options (labels mirror the user-facing setting names). */
+private val VIBRATION_MODES = listOf(
+    VibrationMode.OFF to "Off",
+    VibrationMode.PHASE_CHANGE to "On phase change",
+    VibrationMode.ALL to "All cues",
 )
 
 /** Material `Slider` `steps` count giving [step] granularity across [range] (interval count minus the two endpoints). */
@@ -85,6 +93,9 @@ fun ConfigScreen(
     onSimulatedChange: (Boolean) -> Unit,
     wearHr: Boolean,
     onWearHrChange: (Boolean) -> Unit,
+    wearVibrate: Boolean,
+    onWearVibrateChange: (Boolean) -> Unit,
+    onDelete: (Long) -> Unit,
     onRequestPermissions: () -> Unit,
     locationGranted: Boolean,
     bluetoothGranted: Boolean,
@@ -110,7 +121,7 @@ fun ConfigScreen(
                 ) {
                     Text("Profiles", style = MaterialTheme.typography.titleMedium)
                     OutlinedButton(onClick = onNewProfile) {
-                        Text("New")
+                        Text("Clone")
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -154,6 +165,7 @@ fun ConfigScreen(
         var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
         var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
+        var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
 
         Spacer(Modifier.height(16.dp))
         Card {
@@ -253,6 +265,30 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        Text("Vibration", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                VIBRATION_MODES.forEach { (mode, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = vibration == mode, onClick = { vibration = mode })
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = vibration == mode, onClick = { vibration = mode })
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Text(
+                    "Off: no haptics. On phase change: buzz at warm-up, push, recovery, cooldown and finish. " +
+                        "All cues: also buzz on quarter, push-round and band-warning cues.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         Text("Sensors", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -277,6 +313,14 @@ fun ConfigScreen(
                     ) {
                         Text("Heart rate from Wear companion", style = MaterialTheme.typography.bodyLarge)
                         Switch(checked = wearHr, onCheckedChange = onWearHrChange)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Vibrate watch", style = MaterialTheme.typography.bodyLarge)
+                        Switch(checked = wearVibrate, onCheckedChange = onWearVibrateChange)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
@@ -323,12 +367,22 @@ fun ConfigScreen(
                         hrFloor = hrFloor,
                         warningThresholdSec = warnSec,
                         audioCues = audio,
+                        vibrationMode = vibration,
                     )
                 )
             },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Save profile")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = { onDelete(profile.id) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Delete profile")
         }
 
         Spacer(Modifier.height(24.dp))

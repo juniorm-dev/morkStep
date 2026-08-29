@@ -1,6 +1,11 @@
 package com.morkstep.ui
 
 import android.app.Application
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -10,9 +15,11 @@ import com.morkstep.MorkApplication
 import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
 import com.morkstep.data.WorkoutEntity
+import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutProfile
 import com.morkstep.data.defaultProfile
 import com.morkstep.engine.CueSink
+import com.morkstep.engine.CueVibration
 import com.morkstep.engine.LiveState
 import com.morkstep.engine.SessionEngine
 import com.morkstep.sensing.GpsPaceSource
@@ -21,6 +28,11 @@ import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.SimulatedSensors
 import com.morkstep.sensing.WearHeartRateSource
+import com.google.android.gms.tasks.Task
+import com.google.android.gms.wearable.MessageClient
+import com.google.android.gms.wearable.Node
+import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,15 +40,72 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-private class SpeakerSink(private val speaker: CueSpeaker) : CueSink {
+private class SpeakerSink(
+    private val speaker: CueSpeaker,
+    private val app: Application,
+    private val scope: CoroutineScope,
+    /** Live vibration mode from the active profile (gates phone + watch haptics). */
+    private val vibrationMode: StateFlow<VibrationMode>,
+    /** Live toggle: also relay cues to the paired Wear companion for watch haptics. */
+    private val wearVibrate: StateFlow<Boolean>,
+) : CueSink {
     override fun beep() = speaker.beep()
     override fun speak(text: String) = speaker.speak(text)
+
+    /** Phone vibrates when the active profile's mode permits; watch follows if enabled. */
+    override fun vibrate(kind: CueVibration) {
+        val mode = vibrationMode.value
+        val allowed = mode == VibrationMode.ALL ||
+            (mode == VibrationMode.PHASE_CHANGE && kind == CueVibration.TRANSITION)
+        if (!allowed) return
+        vibratePhone()
+        if (wearVibrate.value) scope.launch { sendWatchVibrate(kind) }
+    }
+
+    private fun vibratePhone() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            app.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(120)
+        }
+    }
+
+    /** Tell the paired watch to buzz; payload distinguishes transition (1) from guidance (2). */
+    private suspend fun sendWatchVibrate(kind: CueVibration) {
+        val nodes: List<Node> = Wearable.getNodeClient(app).connectedNodes.await()
+        val messageClient: MessageClient = Wearable.getMessageClient(app)
+        val payload = byteArrayOf(if (kind == CueVibration.TRANSITION) 1 else 2)
+        nodes.forEach { node ->
+            runCatching { messageClient.sendMessage(node.id, VIBRATE_PATH, payload).await() }
+        }
+    }
+
+    companion object {
+        /** Path cue vibrations are relayed on to the Wear companion. Must match the wear app. */
+        const val VIBRATE_PATH = "/morkstep/vibrate"
+    }
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val container: AppContainer = (app as MorkApplication).container
     private val speaker = CueSpeaker(app)
-    private val sink = SpeakerSink(speaker)
+
+    /** Vibration mode from the active profile's settings; gates phone + watch haptics. */
+    private val _vibrationMode = MutableStateFlow(VibrationMode.OFF)
+    val vibrationMode: StateFlow<VibrationMode> = _vibrationMode.asStateFlow()
+
+    /** Relay gated cue vibrations to the paired Wear companion for watch haptics. */
+    private val _wearVibrate = MutableStateFlow(false)
+    val wearVibrate: StateFlow<Boolean> = _wearVibrate.asStateFlow()
+
+    private val sink = SpeakerSink(speaker, app, viewModelScope, _vibrationMode, _wearVibrate)
 
     private var engine: SessionEngine? = null
     private var tickerJob: Job? = null
@@ -92,6 +161,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             container.configStore.wearHr.collect { on ->
                 _useWearHr.value = on
                 rebuildSources()
+            }
+        }
+        viewModelScope.launch {
+            container.configStore.wearVibrate.collect { on ->
+                _wearVibrate.value = on
             }
         }
         viewModelScope.launch {
@@ -157,6 +231,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _activeProfile.value = _profiles.value.firstOrNull { it.id == id }
             ?: _profiles.value.firstOrNull()
             ?: defaultProfile()
+        _vibrationMode.value = _activeProfile.value?.vibrationMode ?: VibrationMode.OFF
         setupEngine()
     }
 
@@ -186,6 +261,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setWearHr(on: Boolean) {
         viewModelScope.launch { container.configStore.setWearHr(on) }
     }
+    /** Relay gated cue vibrations to the paired Wear companion for watch haptics. */
+    fun setWearVibrate(on: Boolean) {
+        viewModelScope.launch { container.configStore.setWearVibrate(on) }
+    }
     /** Select which profile is shown on the home screen and used for the next workout. */
     fun selectProfile(id: Long) {
         if (id == _activeId.value) return
@@ -205,17 +284,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeSavedProfile() {
         _savedProfileName.value = null
     }
+    /** First free "Profile N" name (skips names already in use after deletions). */
+    private fun nextFreeProfileName(): String {
+        val used = _profiles.value.map { it.name }.toSet()
+        var n = 1
+        while ("Profile $n" in used) n++
+        return "Profile $n"
+    }
+
     /** Clone the active profile under a fresh id and make it active. */
     fun newProfileFromActive() {
         val src = _activeProfile.value ?: return
         val fresh = src.copy(
             id = System.currentTimeMillis(),
-            name = "Profile ${_profiles.value.size + 1}",
+            name = nextFreeProfileName(),
         )
         viewModelScope.launch {
             val list = _profiles.value + fresh
             container.configStore.saveProfiles(list)
             container.configStore.setActive(fresh.id)
+        }
+    }
+
+    /** Delete a profile; if it was active, activate another (or the default). */
+    fun deleteProfile(id: Long) {
+        val remaining = _profiles.value.filterNot { it.id == id }
+        if (remaining.isEmpty()) {
+            viewModelScope.launch {
+                container.configStore.saveProfiles(listOf(defaultProfile()))
+                container.configStore.setActive(defaultProfile().id)
+            }
+            return
+        }
+        val newActive = if (_activeId.value == id) {
+            remaining.first().id
+        } else _activeId.value
+        viewModelScope.launch {
+            container.configStore.saveProfiles(remaining)
+            container.configStore.setActive(newActive)
         }
     }
 
@@ -306,3 +412,7 @@ class MainViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         MainViewModel(app) as T
 }
+
+/** Await a Google Play Services [Task] as a suspend result (mirrors the wear app). */
+private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T =
+    com.google.android.gms.tasks.Tasks.await(this)

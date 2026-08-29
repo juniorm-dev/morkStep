@@ -32,7 +32,12 @@ import androidx.health.services.client.data.DataPointContainer
 import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.DeltaDataType
 import androidx.health.services.client.data.Availability
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import com.google.android.gms.wearable.MessageClient
+import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +52,7 @@ class MainActivity : ComponentActivity() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var relay: HrRelay? = null
+    private var vibrateRelay: VibrateRelay? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,7 +75,13 @@ class MainActivity : ComponentActivity() {
                 val relay = HrRelay(context, scope) { value, s -> hr = value; s?.let { status = it } }
                 this@MainActivity.relay = relay
                 if (granted) relay.start() else launcher.launch(Manifest.permission.BODY_SENSORS)
-                onDispose { relay.stop() }
+                val vibrateRelay = VibrateRelay(context)
+                this@MainActivity.vibrateRelay = vibrateRelay
+                vibrateRelay.start()
+                onDispose {
+                    relay.stop()
+                    vibrateRelay.stop()
+                }
             }
 
             Surface(modifier = Modifier.fillMaxSize()) {
@@ -97,6 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         relay?.stop()
+        vibrateRelay?.stop()
         scope.cancel()
         super.onDestroy()
     }
@@ -171,7 +184,52 @@ class MainActivity : ComponentActivity() {
             const val HR_PATH = "/morkstep/hr"
         }
     }
+
+    /** Buzzes when the phone relays a cue (path "/morkstep/vibrate"). */
+    private class VibrateRelay(private val context: android.content.Context) {
+        private val messageClient: MessageClient = Wearable.getMessageClient(context)
+        private var registered = false
+
+        private val listener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
+            if (event.path == VIBRATE_PATH) vibrate()
+        }
+
+        fun start() {
+            if (registered) return
+            registered = true
+            try {
+                messageClient.addListener(listener)
+            } catch (_: Exception) {
+            }
+        }
+
+        fun stop() {
+            if (!registered) return
+            registered = false
+            try {
+                messageClient.removeListener(listener)
+            } catch (_: Exception) {
+            }
+        }
+
+        private fun vibrate() {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE)
+                    as VibratorManager).defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
+        }
+
+        companion object {
+            /** Path the phone relays gated cue vibrations on. Must match the phone app. */
+            const val VIBRATE_PATH = "/morkstep/vibrate"
+        }
+    }
 }
+
 
 /** Await a Google Play Services [com.google.android.gms.tasks.Task] as a suspend result. */
 private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T =

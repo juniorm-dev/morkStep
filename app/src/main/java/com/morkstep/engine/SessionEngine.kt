@@ -13,10 +13,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 
+/** Haptic class of a cue: phase transitions, or any guidance cue. */
+enum class CueVibration { TRANSITION, GUIDANCE }
+
 /** Receives audio cues from the session engine (abstracted for testability). */
 interface CueSink {
     fun beep()
     fun speak(text: String)
+    /** Haptic mirror of a cue. Default no-op so sinks without haptics are unaffected. */
+    fun vibrate(kind: CueVibration) = Unit
 }
 
 /** Live snapshot of the running interval session. */
@@ -244,6 +249,7 @@ class SessionEngine(
         val entered = pa.phase != lastPhase
         if (entered) {
             cue.beep()
+            cue.vibrate(CueVibration.TRANSITION)
             announce(pa.phase, pa.fastDone + 1)
             lastPhase = pa.phase
             lastCueAt.clear()
@@ -302,6 +308,7 @@ class SessionEngine(
         if (q > lastQuarter) {
             lastQuarter = q
             speak(qText(q))
+            cue.vibrate(CueVibration.GUIDANCE)
         }
 
         // ADHOC: cue on every Nth completed push round.
@@ -311,6 +318,7 @@ class SessionEngine(
         ) {
             lastAdhocCueN = pa.fastDone
             speak("Push round ${pa.fastDone} complete")
+            cue.vibrate(CueVibration.GUIDANCE)
         }
 
         val finished = t >= finishSec
@@ -334,6 +342,7 @@ class SessionEngine(
 
         if (finished) {
             cue.beep()
+            cue.vibrate(CueVibration.TRANSITION)
             speak("Workout complete")
             return
         }
@@ -414,5 +423,6 @@ class SessionEngine(
         if (now - (lastCueAt[key] ?: 0L) < cueCooldownMs) return
         lastCueAt[key] = now
         cue.speak(text)
+        cue.vibrate(CueVibration.GUIDANCE)
     }
 }

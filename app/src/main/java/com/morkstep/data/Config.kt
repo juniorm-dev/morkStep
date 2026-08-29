@@ -8,6 +8,9 @@ enum class PhaseType { WARMUP, FAST, SLOW, COOLDOWN }
 /** How the length of a workout is determined. */
 enum class WorkoutLength { ROUNDS, DISTANCE, TIME, ADHOC }
 
+/** Device haptics for workout cues: none, phase transitions only, or every cue. */
+enum class VibrationMode { OFF, PHASE_CHANGE, ALL }
+
 /**
  * One named workout configuration (profile).
  *
@@ -46,6 +49,8 @@ data class WorkoutProfile(
     val warningThresholdSec: Int = 8,
     /** Audio cues enabled on/off. */
     val audioCues: Boolean = true,
+    /** When to vibrate the phone (and the paired watch, if enabled): phase changes only, or all cues. */
+    val vibrationMode: VibrationMode = VibrationMode.OFF,
 ) {
     val totalSeconds: Long
         get() = when (lengthMode) {

@@ -20,7 +20,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutProfile
+
+/** Format a duration in seconds as "m:ss"; under a minute, just "Ns". */
+private fun formatSeconds(sec: Int): String =
+    if (sec < 60) "${sec}s" else "%d:%02d".format(sec / 60, sec % 60)
 
 @Composable
 fun HomeScreen(
@@ -80,13 +85,25 @@ fun HomeScreen(
                     Text("Workout plan · ${p.name}", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${p.lengthLabel()} · ${p.fastSec / 60} min push / ${p.slowSec / 60} min recovery",
+                        "${p.lengthLabel()} · ${formatSeconds(p.fastSec)} push / ${formatSeconds(p.slowSec)} recovery",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "Warm-up ${p.warmupSec / 60} min · cool-down ${p.cooldownSec / 60} min",
+                        "Warm-up ${formatSeconds(p.warmupSec)} · cool-down ${formatSeconds(p.cooldownSec)}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    if (p.vibrationMode != VibrationMode.OFF) {
+                        Text(
+                            "Vibration: ${
+                                when (p.vibrationMode) {
+                                    VibrationMode.PHASE_CHANGE -> "phase changes"
+                                    VibrationMode.ALL -> "all cues"
+                                    VibrationMode.OFF -> "off"
+                                }
+                            }",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(24.dp))

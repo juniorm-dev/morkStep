@@ -24,6 +24,7 @@ class ConfigStore(private val context: Context) {
         private val ACTIVE_ID = longPreferencesKey("activeProfileId")
         private val SIMULATED = booleanPreferencesKey("simulatedSensors")
         private val WEAR_HR = booleanPreferencesKey("wearHeartRate")
+        private val WEAR_VIBRATE = booleanPreferencesKey("wearVibrate")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -38,6 +39,13 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setWearHr(value: Boolean) = context.dataStore.edit { p ->
         p[WEAR_HR] = value
+    }
+
+    /** Whether cue vibrations should also be sent to the paired Wear companion. Default OFF. */
+    val wearVibrate: Flow<Boolean> = context.dataStore.data.map { it[WEAR_VIBRATE] ?: false }
+
+    suspend fun setWearVibrate(value: Boolean) = context.dataStore.edit { p ->
+        p[WEAR_VIBRATE] = value
     }
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]
