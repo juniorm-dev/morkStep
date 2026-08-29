@@ -37,6 +37,15 @@ android {
     buildFeatures {
         compose = true
     }
+    // Name APK artifacts with the app version: morkStep-wear-$versionName-$buildType.apk.
+    applicationVariants.all {
+        val v = versionName
+        val t = buildType.name
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "morkStep-wear-$v-$t.apk"
+        }
+    }
 }
 
 dependencies {

@@ -21,6 +21,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,6 +86,7 @@ private fun SliderRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfigScreen(
     profiles: List<WorkoutProfile>,
@@ -268,16 +274,36 @@ fun ConfigScreen(
         Text("Vibration", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                VIBRATION_MODES.forEach { (mode, label) ->
-                    Row(
-                        Modifier
+                var vibrationExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = vibrationExpanded,
+                    onExpandedChange = { vibrationExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = VIBRATION_MODES.first { it.first == vibration }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Vibration mode") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = vibrationExpanded)
+                        },
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .selectable(selected = vibration == mode, onClick = { vibration = mode })
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = vibrationExpanded,
+                        onDismissRequest = { vibrationExpanded = false },
                     ) {
-                        RadioButton(selected = vibration == mode, onClick = { vibration = mode })
-                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                        VIBRATION_MODES.forEach { (mode, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    vibration = mode
+                                    vibrationExpanded = false
+                                },
+                            )
+                        }
                     }
                 }
                 Text(

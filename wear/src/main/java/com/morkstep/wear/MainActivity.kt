@@ -58,6 +58,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val context = LocalContext.current
+            val appVersion = remember {
+                runCatching {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                }.getOrNull() ?: "?"
+            }
             var granted by remember {
                 mutableStateOf(
                     ContextCompat.checkSelfPermission(context, Manifest.permission.BODY_SENSORS)
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text("morkStep Wear", style = MaterialTheme.typography.titleMedium)
+                    Text("v$appVersion", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     Text(
                         "HR: ${hr?.toString() ?: "--"} bpm",
                         style = MaterialTheme.typography.displayLarge,
