@@ -1,5 +1,8 @@
 package com.morkstep.ui
 
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -289,6 +292,7 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+
         Button(
             onClick = {
                 onSave(
@@ -316,5 +320,21 @@ fun ConfigScreen(
         ) {
             Text("Save profile")
         }
+
+        Spacer(Modifier.height(24.dp))
+
+        val context = LocalContext.current
+        val version = remember {
+            runCatching {
+                val info = context.packageManager.getPackageInfo(context.packageName, 0)
+                info.versionName ?: info.longVersionCode.toString()
+            }.getOrNull() ?: "?"
+        }
+        Text(
+            "morkStep  v$version",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
     }
 }
