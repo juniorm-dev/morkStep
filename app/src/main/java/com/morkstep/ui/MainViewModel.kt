@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.morkstep.AppContainer
 import com.morkstep.MorkApplication
+import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
 import com.morkstep.data.WorkoutEntity
 import com.morkstep.data.WorkoutProfile
@@ -75,6 +76,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _live = MutableStateFlow(LiveState())
     val live: StateFlow<LiveState> = _live.asStateFlow()
+
+    /** One-shot: flips true when a profile is saved; consumed back by the UI. */
+    private val _savedProfile = MutableStateFlow(false)
+    val savedProfile: StateFlow<Boolean> = _savedProfile.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -192,9 +197,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val list = _profiles.value.map { if (it.id == updated.id) updated else it }
             container.configStore.saveProfiles(list)
+            _savedProfile.value = true
         }
     }
 
+    /** Clear the save-confirmation flag after the UI has acted on it. */
+    fun consumeSavedProfile() {
+        _savedProfile.value = false
+    }
     /** Clone the active profile under a fresh id and make it active. */
     fun newProfileFromActive() {
         val src = _activeProfile.value ?: return
@@ -216,12 +226,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // every workout must start from a fresh one.
         if (engine == null || engine?.snapshot?.finished == true) setupEngine()
         engine?.run()
+        // Foreground keep-alive: wake lock + notification while the screen is
+        // locked or the app is backgrounded, so ticks and cues stay on time.
+        WorkoutService.start(getApplication(), _simulated.value)
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
             while (engine?.snapshot?.finished != true) {
                 delay(1000)
                 engine?.tick()
                 val ls = engine?.state?.value ?: break
+                WorkoutService.update(getApplication(), ls)
                 // Drive simulated values only when simulated mode is on.
                 if (_simulated.value) sim?.setPhase(ls.phase)
                 if (ls.finished) onFinished()
@@ -231,6 +245,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun onFinished() {
         val ls = engine?.state?.value ?: return
+        WorkoutService.stop(getApplication())
         val ended = System.currentTimeMillis()
         val started = ended - ls.totalSeconds * 1000L
         viewModelScope.launch {
@@ -270,6 +285,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun discardWorkout() {
         tickerJob?.cancel()
+        WorkoutService.stop(getApplication())
         // Fully reset: replace the engine so the next Start begins a clean
         // session, and live state returns to its idle snapshot.
         setupEngine()
@@ -277,6 +293,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        WorkoutService.stop(getApplication())
         stopSources()
         speaker.shutdown()
     }
