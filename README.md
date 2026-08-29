@@ -44,10 +44,33 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`./gradlew` is the wrapper (Gradle 8.11.1). Set `JAVA_HOME` to your JDK 21 if it is not already on PATH.
+### Release (signed) build
+
+```bash
+./gradlew assembleRelease        # build a signed release APK
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+Release signing reads a **gitignored** `keystore.properties` at the repo root:
+
+```
+storeFile=release.keystore
+storePassword=<your store password>
+keyAlias=morkstep
+keyPassword=<your key password>
+```
+
+It points at the `release.keystore` in the repo root (also gitignored). To create it once:
+
+```bash
+keytool -genkeypair -v -keystore release.keystore -alias morkstep \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=morkStep Dev, OU=morkStep, O=morkStep, L=, ST=, C=US"
+```
+
+If `keystore.properties` is absent/incomplete, `assembleRelease` still succeeds but produces an **unsigned** `app-release-unsigned.apk` (cannot be installed on a device) — the build never hard-fails on a missing secret. Present credentials → a signed, sideloadable `app-release.apk`. Keep the keystore and its password safe and private: they are the app's release identity and are **not** backed up or committed.
 
 ---
-
 ## Architecture
 
 All code lives under `app/src/main/java/com/morkstep/`, organised by responsibility.

@@ -6,6 +6,9 @@ build/
 
 # Local config
 local.properties
+keystore.properties
+release.keystore
+*.jks
 .idea/
 *.iml
 .vscode/

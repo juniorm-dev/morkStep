@@ -1,3 +1,16 @@
+import java.util.Properties
+
+// Read release signing credentials from the gitignored keystore.properties
+// (storeFile, storePassword, keyAlias, keyPassword). If it is missing or
+// incomplete the release stays unsigned, so builds never hard-fail on a secret.
+fun releaseSigning(): Pair<Properties, Boolean> {
+    val props = Properties()
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { props.load(it) }
+    val ok = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+        .all { props.getProperty(it).orEmpty().isNotBlank() }
+    return props to ok
+}
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,8 +20,20 @@ plugins {
 }
 
 android {
+    val (signProps, haveSigning) = releaseSigning()
+
     namespace = "com.morkstep"
     compileSdk = 36
+    signingConfigs {
+        create("release") {
+            if (haveSigning) {
+                storeFile = rootProject.file(signProps.getProperty("storeFile"))
+                storePassword = signProps.getProperty("storePassword")
+                keyAlias = signProps.getProperty("keyAlias")
+                keyPassword = signProps.getProperty("keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.morkstep"
@@ -23,6 +48,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (haveSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
