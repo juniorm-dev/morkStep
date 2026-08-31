@@ -2,7 +2,7 @@
 
 Modern Android fitness app for **Interval Walking Training** (IWT / "Japanese walking").
 
-IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep guides a session through a configurable plan, gives live pace and heart-rate feedback, plays audio cues when you drift out of your target bands, and records every completed workout to a history log.
+IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep guides a session through a configurable plan, gives live pace and heart-rate feedback, plays audio cues when you drift from your pace or heart-rate targets, and records every completed workout to a history log.
 
 ## Features
 
@@ -14,17 +14,17 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
   - **Adhoc** — no preset length; ends when you tap Finish.
 - **Configurable intervals** — warm-up length, push interval, recovery interval, cool-down length (per profile), adjustable in **15-second** steps (e.g. 30 s is selectable).
 - **Pause / resume** — freeze a workout mid-session (elapsed time, distance and audio cues stop) and continue where you left off; paused wall-clock time is excluded from the recorded duration. Discard and Finish still work while paused, and pausing never alters the length plan.
-- **Pace band (mph)** — a per-profile *ceiling* and *floor* (miles per hour). Push intervals target the band.
-- **Heart-rate band** — a *ceiling* and *floor* (bpm) that the push phase aims to stay within.
+- **Pace limits (mph)** — a per-profile *ceiling* and *floor* (miles per hour). Push targets the ceiling; recovery targets the floor.
+- **Heart rate** — a *ceiling* and *floor* (bpm). Push cues "Speed up" while HR is below the ceiling; recovery cues "Slow down" while HR is above the floor.
 - **Audio cues** —
     - per-phase spoken announcements plus beeps on transitions,
-    - spoken band warnings — during **push** when pace or HR drops *below* the floor, during **recovery** when pace or HR rises *above* the ceiling; a warning repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
+    - spoken warning cues — during **push**, "Speed up" when pace or HR is below the push *ceiling*; during **recovery**, "Slow down" when pace or HR is above the recovery *floor*. Pace and HR share one cue per phase so they never double-fire, and a 0 reading (no signal — 0 BPM or 0 MPH) never triggers a cue. A cue repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
     - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
 - **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds over ceiling) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
 - **Runs with the screen locked** — a running session starts a foreground service (`WorkoutService`) that holds a partial wake lock so the 1 Hz ticker keeps firing on schedule (audio cues stay on time) and posts an ongoing notification, so the session survives backgrounding and process pressure. The service stops on finish, discard, or profile change tear-down. Saving a profile in Settings confirms with a "Profile saved" snackbar and returns to Home.
 - **Workout plan at a glance** — the home screen shows the active profile's push/recovery and warm-up/cool-down durations as `m:ss` (plain seconds under a minute) instead of rounded minutes, plus the configured vibration mode.
-- **Vibration** — per-profile haptics chosen in Settings: **Off**, **On phase change** (warm-up, push, recovery, cool-down, finish), or **All cues** (also quarter, push-round, and band-warning cues, mirroring audio). The watch can mirror them too: turn on **Vibrate watch** and the paired Wear companion buzzes alongside the phone.
+- **Vibration** — per-profile haptics chosen in Settings: **Off**, **On phase change** (warm-up, push, recovery, cool-down, finish), or **All cues** (also quarter, push-round, and warning cues, mirroring audio). The watch can mirror them too: turn on **Vibrate watch** and the paired Wear companion buzzes alongside the phone.
 
 ## Requirements
 
@@ -44,14 +44,14 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-0.4.0-debug.apk # APK name includes the app version
+adb install -r app/build/outputs/apk/debug/morkStep-0.5.0-debug.apk # APK name includes the app version
 ```
 
 ### Release (signed) build
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-0.4.0-release.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-0.5.0-release.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -161,15 +161,32 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 | ------ | ------- | ----- |
 | `kotlin-lsp` (fwcd/kotlin-language-server) | 1.3.13 | Navigation, symbols, references, refactors, diagnostics. Downloaded to `.tools/`, launched with the Android Studio JBR 21 via `<project>/.omp/lsp.json`. See classpath note below. |
 
-> **LSP classpath note (setup decision).** This kotlin-lsp build cannot load the Android
-> `com.android.application` compile classpath: it only bundles a JVM `GradleClassPathResolver`
-> (queries standard `sourceSets.main`/`compileClasspath`, which AGP does not expose), and no
-> `bspInstall` task exists for `com.android.application` (KGP ships BSP for KMP only). It is
-> therefore intentionally run in **sources-only** mode: workspace **references / symbols are
-> reliable**, but per-file **diagnostics** will report `Unresolved reference: androidx/kotlinx`
-> for any Compose/Android/coroutine API. Treat the **Gradle build** (`assembleDebug`,
-> `testDebugUnitTest`) as the authority on actual type errors — do not "fix" the false-positive
-> LSP diagnostics.
+> **LSP classpath (setup).** kotlin-lsp cannot discover the Android compile classpath itself —
+> its bundled resolver understands plain JVM Gradle projects only, and BSP is unavailable for
+> `com.android.application`. The repo ships `:app:exportLspClasspath` (`app/build.gradle.kts`),
+> which writes `.classpath.absolute` at the repo root: the app compile classpath
+> (`debugCompileClasspath` full library jars), the unit-test classpath
+> (`compileDebugUnitTestKotlin.libraries`), and the `android-36/android.jar` platform jar.
+> Restart kotlin-lsp after running it and diagnostics resolve AndroidX/Compose/coroutines/
+> junit. The file is machine-specific (absolute paths) and gitignored — rerun
+> `./gradlew :app:exportLspClasspath` after dependency changes or on a fresh checkout. The
+> Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type errors.
+
+## Upgrade caveats
+
+- **Kotlin Gradle Plugin API drift.** `exportLspClasspath` reads the compile classpath from
+  `KotlinCompile.libraries` (a `ConfigurableFileCollection` in KGP 2.0.21). Other KGP versions
+  name the same property `classpath` — if the task fails with `Unresolved reference: classpath`
+  after a Kotlin upgrade, swap `libraries` → `classpath` (confirm against the plugin jar:
+  `javap -cp kotlin-gradle-plugin-<version>.jar org.jetbrains.kotlin.gradle.tasks.KotlinCompile`).
+  The main-app classpath deliberately comes from AGP's `debugCompileClasspath` configuration
+  rather than the Kotlin task: AGP resolves full library jars there, while the Kotlin task
+  resolves `-api.jar` variants for main compilation and is used here only for the unit-test
+  extras (junit, coroutines-test).
+- **Versioned APK artifacts.** `android.applicationVariants.all` renames outputs to
+  `morkStep-$versionName-$buildType.apk`. Bump `versionCode` and `versionName` together in
+  `app/build.gradle.kts` — and keep the `adb install` paths in this README's Build & run
+  section in sync.
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 
@@ -181,7 +198,7 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 ## Test plan
 
-`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (25 tests):
+`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (37 tests):
 - plan computation for ROUNDS / TIME length modes
 - time→phase mapping, seconds-in-phase, and phase ordinal (fast=1, slow=2)
 - plan-relative fast-segment counting (tick-cadence independent)
@@ -190,10 +207,13 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 - TIME mode finishes exactly at the target duration
 - ADHOC runs until `endNow()` and cues every Nth completed push round
 - quarter cues fire at 25% / 50% / 75%
-- push band warnings: pace- and HR-below-floor cues; over-ceiling counter (push) without a push cue
-- haptic vibration cues: `TRANSITION` on phase entry and finish; `GUIDANCE` on quarter and band-warning cues
-- recovery band warnings: pace- and HR-above-ceiling cues
+- push warning cues: "Speed up" when pace or HR is below the push ceiling (incl. HR inside the old band); over-ceiling counter (push) without a push cue
+- haptic vibration cues: `TRANSITION` on phase entry and finish; `GUIDANCE` on quarter and warning cues
+- recovery warning cues: "Slow down" when pace or HR is above the recovery floor (incl. HR inside the old band)
 - warning-repeat threshold in seconds shared by push and recovery
+- single shared cue (one speech + one vibration) when both HR and pace trigger
+- zero-readout suppression: 0 BPM / 0 MPH never cue, on push and recovery
+- first warning cue after each phase transition suppressed (FAST and SLOW)
 - distance accumulation from pace (mph → miles)
 - per-phase average accumulation: push/recovery/overall pace & HR bucketed from 1 Hz samples
 
