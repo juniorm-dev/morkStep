@@ -168,16 +168,18 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 | ------ | ------- | ----- |
 | `kotlin-lsp` (JetBrains `intellij-server`) | 2026.2 EAP | Official Kotlin LSP, IntelliJ-based; resolves Gradle/AGP projects itself. Launched from `$PATH`; configured once globally in `~/.omp/agent/lsp.json`. See note below. |
 
-> **LSP setup (standard config, no machine paths committed).** The JetBrains Kotlin Language
-> Server (`intellij-server`, on `$PATH`) does its own Gradle/AGP project resolution — no
-> exported classpath, no `exportLspClasspath` task. The global LSP config
-> (`~/.omp/agent/lsp.json`) wires `kotlin-lsp` to the `intellij-server` binary by name;
-> this project's `.omp/lsp.json` mirrors that entry, so no machine-specific paths appear
-> anywhere. The server's own Gradle import needs a JDK ≤ the Gradle ceiling registered where
-> IntelliJ finds JDKs (`~/.jdks/` on Windows — `JAVA_HOME` is *not* consulted); keep that copy
-> in sync with the build JDK. Known quirk: the **first** diagnostics request after a reload can
-> report cascading `Unresolved reference` false positives while the index warms — simply
-> re-request; subsequent checks are clean.
+> **LSP setup (committed, machine-independent).** The JetBrains Kotlin Language Server
+> (`intellij-server`, on `$PATH`) does its own Gradle/AGP project resolution — no exported
+> classpath, no `exportLspClasspath` task. This is a personal repo, so `.omp/` is **committed**
+> (gitignored only for the transient `ui_home.xml` dump) and carries `lsp.json` — the
+> `kotlin-lsp` wiring (`command: kotlin-lsp.cmd`, no machine paths) — plus `AGENTS.md`, the
+> project context that directs the coding agent to use the LSP server for Kotlin code
+> intelligence. The only machine-level pieces are the `kotlin-lsp.cmd` wrapper and its
+> `intellij-server` install on `$PATH`, and a JDK ≤ the Gradle ceiling registered where IntelliJ
+> finds JDKs (`~/.jdks/` on Windows — `JAVA_HOME` is *not* consulted); keep that copy in sync
+> with the build JDK. Known quirk: the **first** diagnostics request after a reload can report
+> cascading `Unresolved reference` false positives while the index warms — simply re-request;
+> subsequent checks are clean.
 > The Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type
 > errors.
 
