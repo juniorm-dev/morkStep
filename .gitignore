@@ -9,6 +9,8 @@ local.properties
 keystore.properties
 release.keystore
 *.jks
+.classpath
+.classpath.absolute
 .idea/
 *.iml
 .vscode/

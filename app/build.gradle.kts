@@ -1,6 +1,20 @@
 import java.util.Properties
 
 import org.gradle.api.plugins.BasePluginExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+// Android SDK root (local.properties is machine-specific and gitignored). Used
+// by exportLspClasspath to put the platform jar on the language-server classpath.
+private val sdkDir: String? = run {
+    val f = rootProject.file("local.properties")
+    if (!f.exists()) {
+        null
+    } else {
+        val props = Properties()
+        f.inputStream().use { props.load(it) }
+        props.getProperty("sdk.dir")?.replace('\\', '/')
+    }
+}
 
 // Read release signing credentials from the gitignored keystore.properties
 // (storeFile, storePassword, keyAlias, keyPassword). If it is missing or
@@ -13,6 +27,7 @@ fun releaseSigning(): Pair<Properties, Boolean> {
         .all { props.getProperty(it).orEmpty().isNotBlank() }
     return props to ok
 }
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -74,6 +89,28 @@ android {
             (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
                 "morkStep-$v-$t.apk"
         }
+    }
+}
+
+// kotlin-language-server project config: export the app + unit-test compile
+// classpath (plus the Android platform jar) to $ROOT/.classpath.absolute, the
+// file org.javacs.kt.MainKt reads at startup. Rerun after dependency changes;
+// the file itself is machine-specific and gitignored.
+tasks.register("exportLspClasspath") {
+    doLast {
+        val androidJar = sdkDir?.let { "$it/platforms/android-${android.compileSdk ?: 36}/android.jar" }
+        // AGP's compile classpath carries the full library jars; the unit-test
+        // Kotlin task adds junit/coroutines-test on top for test sources.
+        val mainCp = configurations.getByName("debugCompileClasspath")
+        val testCp = tasks.named<KotlinCompile>("compileDebugUnitTestKotlin").get().libraries
+        val entries = (mainCp.files + testCp.files)
+            .map { it.absolutePath }
+            .plus(listOfNotNull(androidJar))
+            .distinct()
+            .sorted()
+        rootProject.file(".classpath.absolute").writeText(
+            "morkstep-app\n${entries.joinToString("\n")}\n"
+        )
     }
 }
 
