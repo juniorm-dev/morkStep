@@ -137,7 +137,7 @@ internal fun progressAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: 
  * Interval Walking Training session engine with pluggable length modes.
  *
  * ROUNDS/TIME/DISTANCE run to a natural end; ADHOC runs until [endNow].
- * Emits phase-change beeps + announcements, pace/HR band cues, quarter
+ * Emits phase-change beeps + announcements, pace/HR warning cues, quarter
  * progress cues (finite modes), and every-Nth-push cues (ADHOC).
  */
 class SessionEngine(
@@ -158,13 +158,13 @@ class SessionEngine(
     private var distance = 0.0
     private var latched = false
     private var lastPhase: PhaseType? = null
-    /** Suppresses the first band warning in a newly-entered phase (sensor value from the previous phase is stale). */
-    private var firstBandWarningPending = false
+    /** Suppresses the first warning cue in a newly-entered phase (sensor value from the previous phase is stale). */
+    private var firstWarningCuePending = false
     private var lastQuarter = 0
     private var lastAdhocCueN = 0
     private val lastCueAt = mutableMapOf<String, Long>()
     /**
-     * Min gap between repeats of the same band warning, in millis. Driven by the
+     * Min gap between repeats of the same warning cue, in millis. Driven by the
      * profile's shared warning threshold (seconds) so push and recovery cue cadence
      * is user-configurable.
      */
@@ -253,7 +253,7 @@ class SessionEngine(
             announce(pa.phase, pa.fastDone + 1)
             lastPhase = pa.phase
             lastCueAt.clear()
-            firstBandWarningPending = true
+            firstWarningCuePending = true
         }
 
         // Sample pace/HR once per tick into phase buckets (1 Hz averages).
@@ -400,17 +400,23 @@ class SessionEngine(
                 if (s.hr != null && s.hr > profile.hrCeiling) {
                     _state.value = s.copy(overCeilingSec = s.overCeilingSec + 1)
                 }
-                // The first band warning after a phase transition is suppressed:
+                // The first warning cue after a phase transition is suppressed:
                 // the sensor value carried over from the previous phase is stale.
-                if (firstBandWarningPending) { firstBandWarningPending = false } else {
-                    if (s.pace != null && s.pace < profile.paceFloorMph.toFloat()) cueIf("paceUp", "Speed up a little")
-                    if (s.hr != null && s.hr < profile.hrFloor) cueIf("hrLow", "Heart rate low. Push a little harder")
+                if (firstWarningCuePending) { firstWarningCuePending = false } else {
+                    // Speed up while the push target (HR/pace ceiling) is unmet.
+                    // HR and pace share one cue so they never double-fire, and a
+                    // 0 reading (no signal) never triggers a cue.
+                    val hrBelow = s.hr != null && s.hr > 0 && s.hr < profile.hrCeiling
+                    val paceBelow = s.pace != null && s.pace > 0f && s.pace < profile.paceCeilingMph.toFloat()
+                    if (hrBelow || paceBelow) cueIf("speedUp", "Speed up")
                 }
             }
             PhaseType.SLOW -> {
-                if (firstBandWarningPending) { firstBandWarningPending = false } else {
-                    if (s.pace != null && s.pace > profile.paceCeilingMph.toFloat()) cueIf("paceSlow", "Stand easy now")
-                    if (s.hr != null && s.hr > profile.hrCeiling) cueIf("hrHigh", "That's quite high. Ease off a touch")
+                if (firstWarningCuePending) { firstWarningCuePending = false } else {
+                    // Slow down while the recovery target (HR/pace floor) is unmet.
+                    val hrAbove = s.hr != null && s.hr > 0 && s.hr > profile.hrFloor
+                    val paceAbove = s.pace != null && s.pace > 0f && s.pace > profile.paceFloorMph.toFloat()
+                    if (hrAbove || paceAbove) cueIf("slowDown", "Slow down")
                 }
             }
             else -> Unit

@@ -31,6 +31,8 @@ private fun formatSeconds(sec: Int): String =
 fun HomeScreen(
     profiles: List<WorkoutProfile>,
     activeId: Long,
+    /** True while a workout session is running (or paused) — the start button turns into a status label. */
+    workoutActive: Boolean = false,
     onSelectProfile: (Long) -> Unit,
     onStart: () -> Unit,
     onConfig: () -> Unit,
@@ -114,7 +116,10 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .height(56.dp),
             ) {
-                Text("Start workout", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (workoutActive) "Active workout" else "Start workout",
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
 
             Spacer(Modifier.height(12.dp))

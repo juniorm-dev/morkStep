@@ -241,14 +241,14 @@ class SessionEngineTest {
     }
 
     @Test
-    fun fastPaceBelowFloor_cues() {
+    fun fastPaceBelowCeiling_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(roundsProfile, clock, cue, pace = 2.8f, hr = 128)
         eng.run()
         clock.advance(61_000)
         eng.tick()
-        clock.advance(1_000) // first band warning after entry suppressed
+        clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
         clock.advance(1_000) // then it fires
         eng.tick()
@@ -259,59 +259,59 @@ class SessionEngineTest {
     fun fastHighHr_countsOverCeilingNoCue() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 165)
+        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 165) // at/over ceiling: no push cue
         eng.run()
         clock.advance(61_000)
         eng.tick()
         clock.advance(1_000) // over-ceiling counts on ticks after phase entry
         eng.tick()
         assertTrue(eng.snapshot.overCeilingSec >= 1)
-        assertFalse(cue.spoken.any { it.contains("high") })
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
     }
 
     @Test
-    fun fastLowHr_cues() {
+    fun fastHrBelowCeiling_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrFloor 120
+        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrCeiling 150
         eng.run()
         clock.advance(61_000)
         eng.tick()
-        clock.advance(1_000) // first band warning after entry suppressed
+        clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
         clock.advance(1_000) // then it fires
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Heart rate low") })
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
     @Test
-    fun slowHighHr_cues() {
+    fun slowHrAboveFloor_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 165) // > hrCeiling 150
+        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 165) // > hrFloor 120
         eng.run()
         clock.advance(121_000)
         eng.tick()
-        clock.advance(1_000) // first band warning after entry suppressed
+        clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
         clock.advance(1_000) // then it fires
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("high") })
+        assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
     @Test
-    fun slowHighPace_cues() {
+    fun slowPaceAboveFloor_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 128) // > paceCeiling 4.5
+        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 128) // > paceFloor 3.2
         eng.run()
         clock.advance(121_000)
         eng.tick()
-        clock.advance(1_000) // first band warning after entry suppressed
+        clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
         clock.advance(1_000) // then it fires
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Stand easy") })
+        assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
     @Test
@@ -319,11 +319,11 @@ class SessionEngineTest {
         val p = roundsProfile.copy(warningThresholdSec = 5)
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(p, clock, cue, pace = 2.8f, hr = 128) // below pace floor
+        val eng = engineWith(p, clock, cue, pace = 2.8f, hr = 128) // below pace ceiling
         eng.run()
         clock.advance(60_001) // t=60 → FAST entry
         eng.tick()
-        clock.advance(1_000) // t=61: first band warning → suppressed
+        clock.advance(1_000) // t=61: first warning cue → suppressed
         eng.tick()
         clock.advance(3_000) // t=64: first warning fires
         eng.tick()
@@ -473,8 +473,8 @@ class SessionEngineTest {
     }
 
     @Test
-    fun pushStart_takesPrecedenceOverBandWarningsOnEntryTick() {
-        // HR below floor (120): the HR-low warning must NOT clobber the push
+    fun pushStart_takesPrecedenceOverWarningCuesOnEntryTick() {
+        // HR below the ceiling (150): the warning must NOT clobber the push
         // announcement on the same entry tick.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -483,47 +483,46 @@ class SessionEngineTest {
         clock.advance(60_001) // t=60 → first FAST
         eng.tick()
         assertTrue(cue.spoken.any { it.contains("Push phase 1") })
-        assertFalse(cue.spoken.any { it.contains("Heart rate low") })
-        // Band warnings still fire on subsequent ticks.
-        clock.advance(1_000) // t=61: first band warning suppressed
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        // Warnings still fire on subsequent ticks.
+        clock.advance(1_000) // t=61: first warning cue suppressed
         eng.tick()
         clock.advance(1_000) // t=62: warning fires
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Heart rate low") })
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
     @Test
-    fun phaseTransition_suppressesFirstBandWarning() {
-        // FAST with HR below floor (120): neither the entry tick nor the first
-        // band-warning tick may cue; the warning appears one tick later.
+    fun phaseTransition_suppressesFirstWarningCue() {
+        // FAST with HR below the ceiling (150): neither the entry tick nor the
+        // first warning tick may cue; the warning appears one tick later.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(roundsProfile, clock, cue, hr = 100)
         eng.run()
         clock.advance(60_001) // t=60 → entry into FAST (only the announcement)
         eng.tick()
-        assertFalse(cue.spoken.any { it.contains("Heart rate low") })
-        clock.advance(1_000) // t=61 → first band-warning tick, suppressed
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        clock.advance(1_000) // t=61 → first warning tick, suppressed
         eng.tick()
-        assertFalse(cue.spoken.any { it.contains("Heart rate low") })
         assertFalse(cue.spoken.any { it.contains("Speed up") })
         clock.advance(1_000) // t=62 → warning fires
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Heart rate low") })
-        // Same for recovery: entering SLOW suppresses the first high warning.
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
+        // Same for recovery: entering SLOW suppresses the first warning.
         val clock2 = FakeClock(1_000)
         val cue2 = RecordingCue()
-        val eng2 = engineWith(roundsProfile, clock2, cue2, pace = 2.0f, hr = 165) // > hrCeiling 150
+        val eng2 = engineWith(roundsProfile, clock2, cue2, pace = 2.0f, hr = 165) // > hrFloor 120
         eng2.run()
         clock2.advance(121_000) // t=121 → entry into SLOW
         eng2.tick()
-        assertFalse(cue2.spoken.any { it.contains("high") })
-        clock2.advance(1_000) // t=122 → first band-warning tick, suppressed
+        assertFalse(cue2.spoken.any { it.contains("Slow down") })
+        clock2.advance(1_000) // t=122 → first warning tick, suppressed
         eng2.tick()
-        assertFalse(cue2.spoken.any { it.contains("high") })
+        assertFalse(cue2.spoken.any { it.contains("Slow down") })
         clock2.advance(1_000) // t=123 → warning fires
         eng2.tick()
-        assertTrue(cue2.spoken.any { it.contains("high") })
+        assertTrue(cue2.spoken.any { it.contains("Slow down") })
     }
     // ---- haptic vibration cues ----
 
@@ -572,19 +571,117 @@ class SessionEngineTest {
     }
 
     @Test
-    fun bandWarning_vibratesGuidance() {
+    fun warningCue_vibratesGuidance() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrFloor 120
+        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrCeiling 150
         eng.run()
         clock.advance(61_000)
         eng.tick()
-        clock.advance(1_000) // first band warning after entry suppressed
+        clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
         clock.advance(1_000) // then it fires
         eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Heart rate low") })
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
         assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
+    }
+
+    @Test
+    fun fastHrBetweenFloorAndCeiling_cuesSpeedUp() {
+        // The ceiling is the push target: HR inside the old band (120–150) is
+        // still below the ceiling and must cue.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 130)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000) // then it fires
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
+    }
+
+    @Test
+    fun slowHrBetweenFloorAndCeiling_cuesSlowDown() {
+        // The floor is the recovery target: HR inside the old band (120–150)
+        // is still above the floor and must cue.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 130)
+        eng.run()
+        clock.advance(121_000) // t=121 → SLOW
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000) // then it fires
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Slow down") })
+    }
+
+    @Test
+    fun zeroHr_suppressesHrCue() {
+        // HR 0 (no signal) must not cue even though it is far below the ceiling.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 0)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+    }
+
+    @Test
+    fun zeroPace_suppressesPaceCue() {
+        // Pace 0 (GPS not reporting) must not cue even though HR is below the ceiling.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 0f, hr = 160)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+    }
+
+    @Test
+    fun zeroReadings_neverCueOnRecovery() {
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 0f, hr = 0)
+        eng.run()
+        clock.advance(121_000) // t=121 → SLOW
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Slow down") })
+    }
+
+    @Test
+    fun bothHrAndPaceTrigger_singleCue() {
+        // Both sensors below the push ceiling: exactly one cue and one vibration.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 100)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000) // then it fires
+        eng.tick()
+        assertEquals(1, cue.spoken.count { it.contains("Speed up") })
+        assertEquals(1, cue.vibrations.count { it == CueVibration.GUIDANCE })
     }
 
 }

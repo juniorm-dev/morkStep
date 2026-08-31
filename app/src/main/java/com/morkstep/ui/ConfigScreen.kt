@@ -262,14 +262,14 @@ fun ConfigScreen(
                 SliderRow("Pace ceiling", "%.1f".format(paceCeil), paceCeil, 2f..8f, 24) { paceCeil = it }
                 SliderRow("Pace floor", "%.1f".format(paceFloor), paceFloor, 1.5f..7f, 24) { paceFloor = it }
                 Text(
-                    "Push phase targets between floor and ceiling (mph).",
+                    "Push cues \"Speed up\" until pace reaches the ceiling; recovery cues \"Slow down\" until pace drops to the floor.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Heart-rate band (bpm)", style = MaterialTheme.typography.titleMedium)
+        Text("Heart-rate (bpm)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("HR ceiling", "$hrCeil", hrCeil.toFloat(), 90f..200f, 22) { hrCeil = it.toInt() }
@@ -283,8 +283,9 @@ fun ConfigScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
                 Text(
-                    "Push warns when pace or HR drops below the floor; recovery warns when pace or HR " +
-                        "exceeds the ceiling. A cue repeats at most once per this interval while out of band.",
+                    "Push cues \"Speed up\" while pace or heart rate is below the ceiling; recovery cues " +
+                        "\"Slow down\" while pace or heart rate is above the floor. A cue repeats at most once " +
+                        "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -328,7 +329,7 @@ fun ConfigScreen(
                 }
                 Text(
                     "Off: no haptics. On phase change: buzz at warm-up, push, recovery, cooldown and finish. " +
-                        "All cues: also buzz on quarter, push-round and band-warning cues.",
+                        "All cues: also buzz on quarter, push-round and warning cues.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

@@ -35,14 +35,16 @@ data class WorkoutProfile(
     val fastSec: Int = 180,
     val slowSec: Int = 180,
     val cooldownSec: Int = 120,
-    /** Target walking-pace band (mph). Push intervals aim within this band. */
+    /** Push cues "Speed up" while pace is below this; recovery uses [paceFloorMph]. */
     val paceCeilingMph: Double = 4.5,
+    /** Recovery cues "Slow down" while pace is above this. */
     val paceFloorMph: Double = 3.2,
-    /** Heart-rate band (bpm) targeted during push intervals. */
+    /** Heart rate (bpm): push cues "Speed up" while HR is below this. */
     val hrCeiling: Int = 150,
+    /** Heart rate (bpm): recovery cues "Slow down" while HR is above this. */
     val hrFloor: Int = 120,
     /**
-     * Seconds between repeats of the same pace/HR band warning, shared by push
+     * Seconds between repeats of the same pace/HR warning cue, shared by push
      * and recovery cues. A cue repeats at most once per interval while the
      * condition holds.
      */

@@ -121,6 +121,7 @@ fun MorkApp(viewModel: MainViewModel) {
                 HomeScreen(
                     profiles = profiles,
                     activeId = activeId,
+                    workoutActive = live.running,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
