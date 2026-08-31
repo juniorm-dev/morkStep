@@ -32,26 +32,25 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 | ---- | ------- |
 | Android Studio JBR (JDK) | 21 |
 | Android SDK | compileSdk 36 (Android 16), targetSdk 36, minSdk 26 |
-| Gradle | 8.11.1 (wrapper) |
-| Android Gradle Plugin | 8.10.1 |
-| Kotlin | 2.0.21 (Compose compiler plugin 2.0.21) |
+| Gradle | 9.4.0 (wrapper) |
+| Android Gradle Plugin | 9.0.1 |
+| Kotlin | 2.2.10 (Compose compiler plugin 2.2.10) |
+| KSP | 2.2.10-2.0.2 |
+| Room | 2.7.2 |
 | Play Services (Fused Location) | play-services-location 21.3.0 |
 
 `local.properties` must set `sdk.dir` to your SDK path.
 
-## Build & run
-
-```bash
-./gradlew assembleDebug          # build debug APK
-./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-0.5.0-debug.apk # APK name includes the app version
-```
+> Gradle 9.4 runs on JDK 17–26, but KSP 2.2.10 cannot read JDK 26 class files yet
+> (`unexpected jvm signature V`), so point `JAVA_HOME` at the Android Studio JBR
+> (JDK 21) before running `gradlew` — e.g. on Windows:
+> `set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"`.
 
 ### Release (signed) build
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-0.5.0-release.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release.apk
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -129,7 +128,7 @@ Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returnin
 
 The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
-**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-<version>-debug.apk`, e.g. `morkStep-wear-0.2.0-debug.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
+**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
 
 ### Storage — `data/`
 
@@ -146,15 +145,15 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 
 | Tool | Version | Why |
 | ---- | ------- | --- |
-| Gradle 8.11.1 (wrapper) | 8.11.1 | Pinned via the wrapper for reproducible builds |
-| Android Gradle Plugin | 8.10.1 | Matches the root build; compatible with Gradle 8.11.1 and Compose BOM 2024.10.01 |
-| Kotlin | 2.0.21 | Compose compiler now ships with Kotlin (the `compose` compiler Gradle plugin), so build and toolchain stay in lockstep |
+| Gradle 9.4.0 (wrapper) | 9.4.0 | Pinned via the wrapper; runs on JDK 17–26 |
+| Android Gradle Plugin | 9.0.1 | New DSL + built-in Kotlin (KGP 2.2.10); no `kotlin-android` plugin needed |
+| Kotlin | 2.2.10 | Built-in Kotlin target; Compose compiler ships with Kotlin, so build and toolchain stay in lockstep |
 | Jetpack Compose BOM | 2024.10.01 | Bundles Compose material/UI versions together |
-| KSP | 2.0.21-1.0.28 | Room compile-time codegen |
-| JDK | 21 (Android Studio JBR) | Gradle 8.x + AGP 8.x require JDK 17+; the Studio-bundled JBR is available offline |
-| Room | 2.6.1 | Type-safe SQLite DAO for workout history |
+| KSP | 2.2.10-2.0.2 | Room compile-time codegen (KSP2) |
+| JDK | 21 (Android Studio JBR) | Gradle 9.4 accepts up to JDK 26, but KSP 2.2.10 can't read JDK 26 class files yet — build on the JBR 21 |
+| Room | 2.7.2 | Type-safe SQLite DAO for workout history (KSP2/Kotlin 2.2-compatible) |
 | DataStore Preferences | 1.0.0 | Coroutine-backed config persistence |
-| kotlinx-serialization-json | 1.6.3 | Profile-list JSON persistence (with the Kotlin serialization plugin 2.0.21) |
+| kotlinx-serialization-json | 1.6.3 | Profile-list JSON persistence (with the Kotlin serialization plugin 2.2.10) |
 
 **Language servers (LSP)**
 | Server | Version | Notes |
@@ -166,9 +165,11 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 > exported classpath, no `exportLspClasspath` task. The global LSP config
 > (`~/.omp/agent/lsp.json`) wires `kotlin-lsp` to the `intellij-server` binary by name;
 > this project's `.omp/lsp.json` mirrors that entry, so no machine-specific paths appear
-> anywhere. Known quirk: the **first** diagnostics request after a reload can report
-> cascading `Unresolved reference` false positives while the index warms — simply re-request;
-> subsequent checks are clean.
+> anywhere. The server's own Gradle import needs a JDK ≤ the Gradle ceiling registered where
+> IntelliJ finds JDKs (`~/.jdks/` on Windows — `JAVA_HOME` is *not* consulted); keep that copy
+> in sync with the build JDK. Known quirk: the **first** diagnostics request after a reload can
+> report cascading `Unresolved reference` false positives while the index warms — simply
+> re-request; subsequent checks are clean.
 > The Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type
 > errors.
 
@@ -178,10 +179,12 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
   `.classpath.absolute` and machine-specific `.omp/lsp.json`. The JetBrains Kotlin Language
   Server resolves Gradle/AGP projects itself; config is the machine-independent
   `~/.omp/agent/lsp.json` (global) plus the matching `.omp/lsp.json` in this repo.
-- **Versioned APK artifacts.** `android.applicationVariants.all` renames outputs to
-  `morkStep-$versionName-$buildType.apk`. Bump `versionCode` and `versionName` together in
-  `app/build.gradle.kts` — and keep the `adb install` paths in this README's Build & run
-  section in sync.
+- **APK artifact names.** AGP 9 removed `applicationVariants`/`BaseVariantOutputImpl` and the
+  public per-output rename (`SingleArtifact.APK` is now a `ContainsMany` directory artifact),
+  so the version-numbered `morkStep-<version>-<type>.apk` names are gone. `archivesName`
+  still produces `morkStep-{debug,release}.apk` / `morkStep-wear-{debug,release}.apk`; pick up
+  the current version from `defaultConfig.versionName` instead of the filename. Keep the
+  `adb install` paths in this README's Build & run section in sync.
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 

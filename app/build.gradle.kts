@@ -1,6 +1,12 @@
 import java.util.Properties
 
+import com.android.build.api.artifact.SingleArtifact
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.plugins.BasePluginExtension
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputFiles
+import org.gradle.api.tasks.TaskAction
 
 // Read release signing credentials from the gitignored keystore.properties
 // (storeFile, storePassword, keyAlias, keyPassword). If it is missing or
