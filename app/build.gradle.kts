@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.zip.ZipFile
 
 import org.gradle.api.plugins.BasePluginExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -92,10 +93,18 @@ android {
     }
 }
 
-// kotlin-language-server project config: export the app + unit-test compile
-// classpath (plus the Android platform jar) to $ROOT/.classpath.absolute, the
-// file org.javacs.kt.MainKt reads at startup. Rerun after dependency changes;
-// the file itself is machine-specific and gitignored.
+// kotlin-language-server project config. `exportLspClasspath` regenerates both
+// machine-local files the server needs without committing machine paths:
+//   - $ROOT/.classpath.absolute — the app + unit-test compile classpath (plus
+//     the Android platform jar) that org.javacs.kt.MainKt reads at startup;
+//   - $ROOT/.omp/lsp.json — harness wiring that spawns java.exe directly with
+//     that classpath (a .bat cannot inherit a pipe stdin on Windows, so a
+//     script launcher would exit instantly). Both are gitignored; rerun the
+//     task after dependency changes or on a fresh checkout.
+//
+// AAR entries cannot be indexed by kotlin-lsp (it reads jars/class dirs only),
+// so each .aar's classes.jar is extracted into app/build/lsp — deterministic,
+// regenerable output that keeps the exported classpath self-contained.
 tasks.register("exportLspClasspath") {
     doLast {
         val androidJar = sdkDir?.let { "$it/platforms/android-${android.compileSdk ?: 36}/android.jar" }
@@ -103,14 +112,57 @@ tasks.register("exportLspClasspath") {
         // Kotlin task adds junit/coroutines-test on top for test sources.
         val mainCp = configurations.getByName("debugCompileClasspath")
         val testCp = tasks.named<KotlinCompile>("compileDebugUnitTestKotlin").get().libraries
+        val aarOut = layout.buildDirectory.dir("lsp").get().asFile.apply { mkdirs() }
+
+        fun entryFor(f: File): String = when {
+            f.extension == "aar" -> {
+                val target = File(aarOut, f.nameWithoutExtension + ".jar")
+                if (!target.exists() || f.lastModified() > target.lastModified()) {
+                    ZipFile(f).use { zf ->
+                        val e = zf.getEntry("classes.jar") ?: return@use
+                        zf.getInputStream(e).use { ins ->
+                            target.outputStream().use { out -> ins.copyTo(out) }
+                        }
+                    }
+                }
+                target.absolutePath
+            }
+            else -> f.absolutePath
+        }
+
         val entries = (mainCp.files + testCp.files)
-            .map { it.absolutePath }
+            .map { entryFor(it) }
             .plus(listOfNotNull(androidJar))
             .distinct()
             .sorted()
         rootProject.file(".classpath.absolute").writeText(
             "morkstep-app\n${entries.joinToString("\n")}\n"
         )
+
+        // Harness wiring: spawn java.exe directly (a .bat cannot inherit a pipe
+        // stdin on Windows — the server would exit instantly). The path and
+        // classpath are machine-specific, so lsp.json is regenerated here
+        // (gitignored under .omp/) rather than committed.
+        val javaHome = (System.getenv("JAVA_HOME")?.takeIf { File(it, "bin/java.exe").exists() }
+            ?: File("C:/Program Files/Android/Android Studio/jbr").takeIf {
+                File(it, "bin/java.exe").exists()
+            }?.absolutePath
+            ?: "")
+        val javaCmd = when {
+            javaHome.isNotBlank() -> "${javaHome.replace('\\', '/')}/bin/java.exe"
+            else -> "java"
+        }
+        // Server class needs its own lib first (org.javacs.kt.MainKt), then the
+        // project classpath so the compiler pipeline resolves app dependencies.
+        val serverLib = rootProject.file(".tools/kotlin-ls/server/lib").absolutePath
+            .replace('\\', '/') + "/*"
+        val classpathArg = (listOf(serverLib) + entries).joinToString(";")
+        // Values: javaCmd is already forward-slash (no backslashes); classpath
+        // needs backslashes doubled for JSON.
+        val json = """
+            {"servers":{"kotlin-lsp":{"command":"$javaCmd","args":["-Xmx1g","-classpath","${classpathArg.replace("\\", "\\\\")}","org.javacs.kt.MainKt"],"fileTypes":[".kt",".kts"],"rootMarkers":["settings.gradle.kts",".git"]}}}
+        """.trimIndent()
+        rootProject.file(".omp/lsp.json").writeText(json)
     }
 }
 
