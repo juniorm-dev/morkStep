@@ -2,7 +2,6 @@ import org.gradle.api.plugins.BasePluginExtension
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -39,20 +38,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
-    // Name APK artifacts with the app version: morkStep-wear-$versionName-$buildType.apk.
-    applicationVariants.all {
-        val v = versionName
-        val t = buildType.name
-        outputs.all {
-            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
-                "morkStep-wear-$v-$t.apk"
-        }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
