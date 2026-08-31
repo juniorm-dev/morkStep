@@ -46,11 +46,19 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 > (JDK 21) before running `gradlew` — e.g. on Windows:
 > `set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"`.
 
+## Build & run
+
+```bash
+./gradlew assembleDebug          # build debug APK
+./gradlew testDebugUnitTest      # run unit tests
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.5.0.apk # versioned APK name
+```
+
 ### Release (signed) build
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release.apk
+adb install -r app/build/outputs/apk/release/morkStep-release-0.5.0.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -128,7 +136,7 @@ Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returnin
 
 The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
-**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
+**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-0.2.0-debug.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
 
 ### Storage — `data/`
 
@@ -179,12 +187,14 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
   `.classpath.absolute` and machine-specific `.omp/lsp.json`. The JetBrains Kotlin Language
   Server resolves Gradle/AGP projects itself; config is the machine-independent
   `~/.omp/agent/lsp.json` (global) plus the matching `.omp/lsp.json` in this repo.
-- **APK artifact names.** AGP 9 removed `applicationVariants`/`BaseVariantOutputImpl` and the
-  public per-output rename (`SingleArtifact.APK` is now a `ContainsMany` directory artifact),
-  so the version-numbered `morkStep-<version>-<type>.apk` names are gone. `archivesName`
-  still produces `morkStep-{debug,release}.apk` / `morkStep-wear-{debug,release}.apk`; pick up
-  the current version from `defaultConfig.versionName` instead of the filename. Keep the
-  `adb install` paths in this README's Build & run section in sync.
+- **Versioned APK artifact names.** AGP 9 removed `applicationVariants`/`BaseVariantOutputImpl`
+  and the public per-output rename (`SingleArtifact.APK` is now a `ContainsMany` directory
+  artifact), so both modules add a `versioned` post-packaging task (`rename<Variant>Apk`,
+  finalizedBy `package<Variant>`) that renames the packaged APK to
+  `morkStep-<versionName>-<buildType>.apk` / `morkStep-wear-<versionName>-<buildType>.apk`,
+  preserving a `-unsigned` suffix for the unsigned wear release. Bump `versionCode`/`versionName`
+  together in the module's `build.gradle.kts` — and keep the `adb install` paths in this
+  README's Build & run section in sync.
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 

@@ -1,4 +1,41 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.plugins.BasePluginExtension
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputFiles
+import org.gradle.api.tasks.TaskAction
+
+// Renames every packaged APK to a version-numbered name, preserving a
+// "-unsigned"/"-signed" suffix. Input is globbed so it also matches the
+// unsigned release artifact (morkStep-release-unsigned.apk).
+abstract class VersionApk : DefaultTask() {
+    @get:Input
+    abstract val version: Property<String>
+
+    @get:InputFiles
+    abstract val apkFiles: ConfigurableFileCollection
+
+    @TaskAction
+    fun run() {
+        val v = version.get()
+        apkFiles.files.forEach { src ->
+            val suffix = when {
+                src.name.endsWith("-unsigned.apk") -> "-unsigned.apk"
+                src.name.endsWith("-signed.apk") -> "-signed.apk"
+                else -> ".apk"
+            }
+            val base = src.name.removeSuffix(suffix)
+            val dst = src.parentFile.resolve("$base-$v$suffix")
+            if (dst.exists()) dst.delete()
+            if (!src.renameTo(dst)) {
+                src.copyTo(dst, overwrite = true)
+                src.delete()
+            }
+        }
+    }
+}
 
 plugins {
     id("com.android.application")
@@ -46,6 +83,24 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+androidComponents {
+    onVariants { variant ->
+        val base = the<BasePluginExtension>().archivesName.get()
+        val pkgName = variant.name.replaceFirstChar { it.uppercase() }
+        val apkDir = layout.buildDirectory.dir("outputs/apk/${variant.name}")
+        val version = variant.outputs.first().versionName.orNull ?: "0"
+        val rename = project.tasks.register("rename${pkgName}Apk", VersionApk::class.java) {
+            apkFiles.from(apkDir.map { it.asFileTree.matching { include("*.apk") } })
+            this.version.set(version)
+        }
+        tasks.matching { it.name == "package$pkgName" }.configureEach {
+            finalizedBy(rename)
+        }
+        tasks.matching { it.name == "create${pkgName}ApkListingFileRedirect" }.configureEach {
+            mustRunAfter(rename)
+        }
     }
 }
 
