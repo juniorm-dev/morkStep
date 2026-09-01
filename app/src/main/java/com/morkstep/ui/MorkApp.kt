@@ -38,6 +38,7 @@ object Routes {
     const val HISTORY = "history"
 }
 
+@Suppress("FunctionName")
 @Composable
 fun MorkApp(viewModel: MainViewModel) {
     val context = LocalContext.current.applicationContext

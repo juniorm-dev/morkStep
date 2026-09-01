@@ -26,6 +26,7 @@ private val DarkColors = darkColorScheme(
     error = MorkRed,
 )
 
+@Suppress("FunctionName")
 @Composable
 fun MorkTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

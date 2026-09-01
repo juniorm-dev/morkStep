@@ -45,6 +45,7 @@ private fun formatClock(sec: Int): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
+@Suppress("FunctionName")
 @Composable
 fun WorkoutScreen(
     live: LiveState,
@@ -123,7 +124,7 @@ fun WorkoutScreen(
         // Overall progress: finite modes only
         if (live.progress != null) {
             LinearProgressIndicator(
-                progress = { live.progress ?: 0f },
+                progress = { live.progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp),
@@ -183,6 +184,7 @@ fun WorkoutScreen(
     }
 }
 
+@Suppress("FunctionName")
 @Composable
 private fun SensorCard(label: String, value: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {

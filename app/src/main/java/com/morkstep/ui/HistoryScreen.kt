@@ -30,9 +30,10 @@ private fun formatDate(millis: Long): String =
 private fun formatDuration(sec: Int): String {
     val h = sec / 3600
     val m = (sec % 3600) / 60
-    return if (h > 0) "${h}h ${m}m" else "${m} min"
+    return if (h > 0) "${h}h ${m}m" else "$m min"
 }
 
+@Suppress("FunctionName")
 @Composable
 fun HistoryScreen() {
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MorkApplication
@@ -65,6 +66,7 @@ fun HistoryScreen() {
     }
 }
 
+@Suppress("FunctionName")
 @Composable
 private fun WorkoutRow(w: WorkoutEntity) {
     Card(modifier = Modifier.fillMaxWidth()) {

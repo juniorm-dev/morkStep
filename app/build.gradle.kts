@@ -22,6 +22,12 @@ abstract class VersionApk : DefaultTask() {
     @TaskAction
     fun run() {
         val v = version.get()
+        // "-0.5.0" (or stacked "-0.5.0-0.5.0", or an older version) marks an APK
+        // already versioned by an earlier run. Never touch it — re-renaming stacks
+        // the suffix every build, and deleting it breaks AGP's up-to-date check
+        // (packageDebug would not regenerate it). Only the pristine package
+        // output gets moved to the versioned name.
+        val versionedTail = Regex("(-\\d+(\\.\\d+)*)+$")
         apkFiles.files.forEach { src ->
             val suffix = when {
                 src.name.endsWith("-unsigned.apk") -> "-unsigned.apk"
@@ -29,12 +35,24 @@ abstract class VersionApk : DefaultTask() {
                 else -> ".apk"
             }
             val base = src.name.removeSuffix(suffix)
+            if (versionedTail.containsMatchIn(base)) return@forEach
             val dst = src.parentFile.resolve("$base-$v$suffix")
-            if (dst.exists()) dst.delete()
-            if (!src.renameTo(dst)) {
-                src.copyTo(dst, overwrite = true)
-                src.delete()
+            // Purge stale outputs for this base (older versions, stacked names)
+            // so only the current version remains. Only runs when a pristine base
+            // is present, i.e. whenever packageDebug actually re-packaged.
+            src.parentFile.listFiles()?.forEach { stale ->
+                val n = stale.name
+                if (n == src.name || n == dst.name) return@forEach
+                val sameKind = when {
+                    suffix == ".apk" -> n.endsWith(".apk") &&
+                        !n.endsWith("-unsigned.apk") && !n.endsWith("-signed.apk")
+                    else -> n.endsWith(suffix)
+                }
+                if (sameKind && n.startsWith("$base-")) stale.delete()
             }
+            // Copy, never move: AGP and connected tests consume the pristine
+            // package output by its unversioned path, so it must stay in place.
+            src.copyTo(dst, overwrite = true)
         }
     }
 }
@@ -81,9 +99,17 @@ android {
         applicationId = "com.morkstep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Instrumented (emulator) tests start from a clean app state: no leftover
+        // profiles or history, so assertions are deterministic. These tests are
+        // explicitly excluded from assemble/test — run them on demand only.
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
+    }
+    testOptions {
+        // Disable system animations so Compose UI assertions aren't racing transitions.
+        animationsDisabled = true
     }
 
     buildTypes {
@@ -150,7 +176,15 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.2")
     ksp("androidx.room:room-compiler:2.7.2")
 
-    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Compose ui-test 1.7.x pulls espresso-core 3.5.1, which crashes on
+    // Android 15/16 images (InputManager.getInstance NoSuchMethodException).
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

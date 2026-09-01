@@ -30,7 +30,7 @@ class WearHeartRateSource(context: Context) : HeartRateSource {
 
     private val messageListener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
         if (event.path == HR_PATH) {
-            event.data?.takeIf { it.isNotEmpty() }?.let { _hr.value = it[0].toInt() and 0xff }
+            event.data.takeIf { it.isNotEmpty() }?.let { _hr.value = it[0].toInt() and 0xff }
         }
     }
 
