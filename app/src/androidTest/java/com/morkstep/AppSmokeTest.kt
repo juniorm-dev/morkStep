@@ -60,4 +60,21 @@ class AppSmokeTest {
         rule.onNodeWithText("Profile settings").assertExists()
         rule.onNodeWithText("morkStep  v$versionName").assertExists()
     }
+
+    @Test
+    fun configShowsVibrationIntensitySlider() {
+        // The seeded default profile vibrates at 50% intensity.
+        rule.onAllNodesWithText("Settings").onFirst().performClick()
+        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Intensity").assertExists()
+        rule.onNodeWithText("50%").assertExists()
+    }
+
+    @Test
+    fun historyShowsExportAndImportButtons() {
+        rule.onAllNodesWithText("History").onFirst().performClick()
+        rule.onNodeWithText("No workouts yet").assertExists()
+        rule.onNodeWithText("Export history").assertExists()
+        rule.onNodeWithText("Import history").assertExists()
+    }
 }

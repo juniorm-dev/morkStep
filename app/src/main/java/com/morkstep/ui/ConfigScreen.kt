@@ -108,6 +108,8 @@ fun ConfigScreen(
     onRequestPermissions: () -> Unit,
     locationGranted: Boolean,
     bluetoothGranted: Boolean,
+    onExportProfiles: () -> Unit,
+    onImportProfiles: () -> Unit,
 ) {
     val profile = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
 
@@ -175,6 +177,7 @@ fun ConfigScreen(
         var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
         var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
+        var vibrationIntensity by rememberSaveable(profile.id) { mutableFloatStateOf(profile.vibrationIntensity) }
 
         Spacer(Modifier.height(16.dp))
         Card {
@@ -335,6 +338,10 @@ fun ConfigScreen(
                         "All cues: also buzz on quarter, push-round and warning cues.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                SliderRow(
+                    "Intensity", "%.0f%%".format(vibrationIntensity * 100),
+                    vibrationIntensity, 0f..1f, 9,
+                ) { vibrationIntensity = it }
             }
         }
 
@@ -395,6 +402,25 @@ fun ConfigScreen(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+        Text("Backup", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Export saves the current profiles or workout history to a file you pick; import restores it.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = onExportProfiles, modifier = Modifier.weight(1f)) {
+                        Text("Export profiles")
+                    }
+                    OutlinedButton(onClick = onImportProfiles, modifier = Modifier.weight(1f)) {
+                        Text("Import profiles")
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
 
         Button(
@@ -418,6 +444,7 @@ fun ConfigScreen(
                         warningThresholdSec = warnSec,
                         audioCues = audio,
                         vibrationMode = vibration,
+                        vibrationIntensity = vibrationIntensity,
                     )
                 )
             },

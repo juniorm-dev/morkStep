@@ -53,6 +53,8 @@ data class WorkoutProfile(
     val audioCues: Boolean = true,
     /** When to vibrate the phone (and the paired watch, if enabled): phase changes only, or all cues. */
     val vibrationMode: VibrationMode = VibrationMode.OFF,
+    /** Cue vibration strength 0..1 (scales the amplitude of phone/watch haptics). */
+    val vibrationIntensity: Float = 0.5f,
 ) {
     val totalSeconds: Long
         get() = when (lengthMode) {
