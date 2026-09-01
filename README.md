@@ -230,7 +230,7 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 ## Test plan
 
-`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (37 tests):
+`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (39 tests):
 - plan computation for ROUNDS / TIME length modes
 - time→phase mapping, seconds-in-phase, and phase ordinal (fast=1, slow=2)
 - plan-relative fast-segment counting (tick-cadence independent)
