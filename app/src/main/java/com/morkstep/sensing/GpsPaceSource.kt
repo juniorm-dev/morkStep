@@ -12,6 +12,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.morkstep.Constants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +37,9 @@ class GpsPaceSource(context: Context) : PaceSource {
         override fun onLocationResult(result: LocationResult) {
             val loc = result.lastLocation ?: return
             val mps = if (loc.hasSpeed()) loc.speed else 0f
-            val mph = mps * MPH_PER_MPS
+            val mph = mps * Constants.MPH_PER_MPS
+            // Strictly-positive junk filter: reject zero/negative speed reads
+            // (GPS standing-still noise) but keep showing real slow walking.
             if (mph > 0f) _pace.value = mph
         }
     }
@@ -48,9 +51,9 @@ class GpsPaceSource(context: Context) : PaceSource {
     @SuppressLint("MissingPermission")
     fun start() {
         client ?: return
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-            .setMinUpdateIntervalMillis(1000L)
-            .setMaxUpdateDelayMillis(2000L)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, Constants.GPS_UPDATE_INTERVAL_MS)
+            .setMinUpdateIntervalMillis(Constants.GPS_MIN_UPDATE_INTERVAL_MS)
+            .setMaxUpdateDelayMillis(Constants.GPS_MAX_UPDATE_DELAY_MS)
             .build()
         client.requestLocationUpdates(request, callback, android.os.Looper.getMainLooper())
     }
@@ -62,8 +65,4 @@ class GpsPaceSource(context: Context) : PaceSource {
     private fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
-
-    companion object {
-        const val MPH_PER_MPS = 2.23694f
-    }
 }

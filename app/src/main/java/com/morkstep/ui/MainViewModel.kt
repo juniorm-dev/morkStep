@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.morkstep.AppContainer
+import com.morkstep.Constants
 import com.morkstep.MorkApplication
 import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
@@ -78,13 +79,14 @@ private class SpeakerSink(
             @Suppress("DEPRECATION")
             app.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-        // A longer, distinct cue buzz (up from 120 ms); amplitude scales with
-        // the profile's intensity slider. 0 intensity still emits the effect —
-        // gating happens in vibrate() via the mode.
+        // A long, distinct cue buzz; amplitude scales with the profile's
+        // intensity slider. 0 intensity still emits the effect — gating happens
+        // in vibrate() via the mode.
         vibrator.vibrate(
             VibrationEffect.createOneShot(
-                VIBRATE_MS,
-                (intensity * 255).roundToInt().coerceIn(1, 255),
+                Constants.PHONE_VIBRATE_MS,
+                (intensity * Constants.HAPTIC_AMPLITUDE_MAX).roundToInt()
+                    .coerceIn(Constants.PHONE_AMPLITUDE_MIN, Constants.HAPTIC_AMPLITUDE_MAX),
             )
         )
     }
@@ -95,19 +97,13 @@ private class SpeakerSink(
         val nodes: List<Node> = Wearable.getNodeClient(app).connectedNodes.await()
         val messageClient: MessageClient = Wearable.getMessageClient(app)
         val payload = byteArrayOf(
-            (if (kind == CueVibration.TRANSITION) 1 else 2).toByte(),
-            (intensity * 255).roundToInt().coerceIn(0, 255).toByte(),
+            (if (kind == CueVibration.TRANSITION) Constants.WATCH_VIBRATE_TRANSITION else Constants.WATCH_VIBRATE_GUIDANCE).toByte(),
+            (intensity * Constants.HAPTIC_AMPLITUDE_MAX).roundToInt()
+                .coerceIn(Constants.WATCH_AMPLITUDE_MIN, Constants.HAPTIC_AMPLITUDE_MAX).toByte(),
         )
         nodes.forEach { node ->
-            runCatching { messageClient.sendMessage(node.id, VIBRATE_PATH, payload).await() }
+            runCatching { messageClient.sendMessage(node.id, Constants.VIBRATE_PATH, payload).await() }
         }
-    }
-
-    companion object {
-        /** Path cue vibrations are relayed on to the Wear companion. Must match the wear app. */
-        const val VIBRATE_PATH = "/morkstep/vibrate"
-        /** Phone cue haptic length in ms: a clearly tactile buzz for transitions and cues. */
-        const val VIBRATE_MS = 300L
     }
 }
 

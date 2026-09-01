@@ -68,10 +68,10 @@ enum class WearPhase(val label: String) {
 }
 
 private fun wearPhaseColor(phase: WearPhase): Color = when (phase) {
-    WearPhase.WARMUP -> Color(0xFF58A05C)
-    WearPhase.FAST -> Color(0xFFD1402A)
-    WearPhase.SLOW -> Color(0xFF2E7AC4)
-    WearPhase.COOLDOWN -> Color(0xFF7B8A99)
+    WearPhase.WARMUP -> Constants.PHASE_WARMUP_COLOR
+    WearPhase.FAST -> Constants.PHASE_FAST_COLOR
+    WearPhase.SLOW -> Constants.PHASE_SLOW_COLOR
+    WearPhase.COOLDOWN -> Constants.PHASE_COOLDOWN_COLOR
 }
 
 /** Live heart-rate relay: reads HR on the watch (Wear Health Services) and pushes
@@ -138,12 +138,12 @@ class MainActivity : ComponentActivity() {
             }
 
             val sendPause = { pause: Boolean ->
-                val payload = byteArrayOf((if (pause) 1 else 0).toByte())
+                val payload = byteArrayOf((if (pause) Constants.PAUSE_ON else Constants.PAUSE_OFF).toByte())
                 val nodes = runCatching { Wearable.getNodeClient(context).connectedNodes.await() }.getOrNull()
                 if (nodes != null) {
                     val messageClient = Wearable.getMessageClient(context)
                     nodes.forEach { node ->
-                        runCatching { messageClient.sendMessage(node.id, PauseSender.PAUSE_PATH, payload).await() }
+                        runCatching { messageClient.sendMessage(node.id, Constants.PAUSE_PATH, payload).await() }
                     }
                 }
             }
@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
                         // Phase indicator: what the workout is doing right now.
                         Surface(
                             shape = CircleShape,
-                            color = if (paused) Color(0xFF9E9E9E) else phase?.let { wearPhaseColor(it) } ?: Color(0xFF9E9E9E),
+                            color = if (paused) Constants.PHASE_PAUSED_COLOR else phase?.let { wearPhaseColor(it) } ?: Constants.PHASE_PAUSED_COLOR,
                         ) {
                             Text(
                                 if (paused) "PAUSED" else phase?.label ?: "…",
@@ -285,12 +285,8 @@ class MainActivity : ComponentActivity() {
             val messageClient: MessageClient = Wearable.getMessageClient(context)
             val payload = byteArrayOf(bpm.toByte())
             nodes.forEach { node ->
-                runCatching { messageClient.sendMessage(node.id, HR_PATH, payload).await() }
+                runCatching { messageClient.sendMessage(node.id, Constants.HR_PATH, payload).await() }
             }
-        }
-
-        companion object {
-            const val HR_PATH = "/morkstep/hr"
         }
     }
 
@@ -303,7 +299,7 @@ class MainActivity : ComponentActivity() {
         private var registered = false
 
         private val listener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
-            if (event.path == VIBRATE_PATH && !suppressed()) vibrate(event.data)
+            if (event.path == Constants.VIBRATE_PATH && !suppressed()) vibrate(event.data)
         }
 
         fun start() {
@@ -332,20 +328,19 @@ class MainActivity : ComponentActivity() {
                 @Suppress("DEPRECATION")
                 context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
             }
-            // payload: [kind, intensity 0..255] (intensity 0 = watch default
-            // strength, used when the phone sent the legacy 1-byte payload).
+            // payload: [kind, intensity 0..255] (intensity below the floor = watch
+            // default strength, used when the phone sent the legacy 1-byte payload).
             val intensity = eventIntensity(data)
-            val amplitude = if (intensity in 1..255) intensity else VibrationEffect.DEFAULT_AMPLITUDE
-            vibrator.vibrate(VibrationEffect.createOneShot(300L, amplitude))
+            val amplitude = if (intensity in Constants.HAPTIC_AMPLITUDE_MIN..Constants.HAPTIC_AMPLITUDE_MAX) {
+                intensity
+            } else {
+                VibrationEffect.DEFAULT_AMPLITUDE
+            }
+            vibrator.vibrate(VibrationEffect.createOneShot(Constants.WATCH_VIBRATE_MS, amplitude))
         }
 
         private fun eventIntensity(data: ByteArray): Int =
             data.getOrNull(1)?.toInt()?.and(0xFF) ?: 0
-
-        companion object {
-            /** Path the phone relays gated cue vibrations on. Must match the phone app. */
-            const val VIBRATE_PATH = "/morkstep/vibrate"
-        }
     }
 
     /** Receives the phone's workout session state (path "/morkstep/state"). */
@@ -357,7 +352,7 @@ class MainActivity : ComponentActivity() {
         private var registered = false
 
         private val listener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
-            if (event.path == STATE_PATH && event.data.size >= 3) {
+            if (event.path == Constants.STATE_PATH && event.data.size >= Constants.STATE_MIN_PAYLOAD_BYTES) {
                 onState(decodeWearSessionState(event.data))
             }
         }
@@ -380,16 +375,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        companion object {
-            /** Path the phone streams its live session state on. Must match the phone app. */
-            const val STATE_PATH = "/morkstep/state"
-        }
-    }
-
-    /** Sends pause/resume commands back to the phone (path "/morkstep/pause"). */
-    private object PauseSender {
-        /** Path the phone listens on for pause/resume commands. Must match the phone app. */
-        const val PAUSE_PATH = "/morkstep/pause"
     }
 }
 
