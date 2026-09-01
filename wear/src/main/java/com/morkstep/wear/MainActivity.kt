@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -102,6 +104,9 @@ class MainActivity : ComponentActivity() {
             var phase by remember { mutableStateOf<WearPhase?>(null) }
             var paused by remember { mutableStateOf(false) }
             var workoutActive by remember { mutableStateOf(false) }
+            // Full session data for the graphics panel (pace, progress, targets).
+            var session by remember { mutableStateOf(WearSessionState()) }
+            var graphicsView by rememberSaveable { mutableStateOf(WearGraphicsView.BARS) }
             // Watch-local haptics mute: the phone keeps sending its vibrations,
             // this toggle just stops the watch from acting on them.
             var suppressVibrations by rememberSaveable { mutableStateOf(false) }
@@ -117,10 +122,11 @@ class MainActivity : ComponentActivity() {
                 val vibrateRelay = VibrateRelay(context) { suppressVibrations }
                 this@MainActivity.vibrateRelay = vibrateRelay
                 vibrateRelay.start()
-                val stateRelay = StateRelay(context) { ordinal, p, running ->
-                    phase = WearPhase.from(ordinal)
-                    paused = p
-                    workoutActive = running
+                val stateRelay = StateRelay(context) { st ->
+                    session = st
+                    phase = WearPhase.from(st.phaseOrd)
+                    paused = st.paused
+                    workoutActive = st.running
                 }
                 this@MainActivity.stateRelay = stateRelay
                 stateRelay.start()
@@ -146,6 +152,7 @@ class MainActivity : ComponentActivity() {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -178,14 +185,21 @@ class MainActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.titleSmall,
                             )
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
                         Button(
                             onClick = { sendPause(!paused) },
                             modifier = Modifier.padding(horizontal = 8.dp),
                         ) {
                             Text(if (paused) "Resume" else "Pause")
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
+                        // Graphics options for the session (mirrors the phone tracker).
+                        WearWorkoutGraphicsPanel(
+                            session = session,
+                            view = graphicsView,
+                            onViewChange = { graphicsView = it },
+                        )
+                        Spacer(Modifier.height(4.dp))
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -336,19 +350,15 @@ class MainActivity : ComponentActivity() {
 
     /** Receives the phone's workout session state (path "/morkstep/state"). */
     private class StateRelay(
-        private val context: android.content.Context,
-        private val onState: (phaseOrdinal: Int, paused: Boolean, running: Boolean) -> Unit,
+        context: android.content.Context,
+        private val onState: (WearSessionState) -> Unit,
     ) {
         private val messageClient: MessageClient = Wearable.getMessageClient(context)
         private var registered = false
 
         private val listener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
             if (event.path == STATE_PATH && event.data.size >= 3) {
-                onState(
-                    event.data[0].toInt(),
-                    event.data[1].toInt() == 1,
-                    event.data[2].toInt() == 1,
-                )
+                onState(decodeWearSessionState(event.data))
             }
         }
 

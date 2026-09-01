@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -68,6 +69,16 @@ class AppSmokeTest {
         rule.onNodeWithText("Profile settings").assertExists()
         rule.onNodeWithText("Intensity").assertExists()
         rule.onNodeWithText("50%").assertExists()
+    }
+
+    @Test
+    fun configShowsDarkModeToggle() {
+        // Profile settings exposes a Dark mode switch (default off = follow system).
+        rule.onAllNodesWithText("Settings").onFirst().performClick()
+        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Dark mode").performScrollTo().assertExists()
+        rule.onNodeWithText("On forces the dark theme; off follows the system setting.")
+            .performScrollTo().assertExists()
     }
 
     @Test

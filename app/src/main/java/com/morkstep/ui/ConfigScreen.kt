@@ -178,6 +178,7 @@ fun ConfigScreen(
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
         var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
         var vibrationIntensity by rememberSaveable(profile.id) { mutableFloatStateOf(profile.vibrationIntensity) }
+        var darkMode by rememberSaveable(profile.id) { mutableStateOf(profile.darkMode) }
 
         Spacer(Modifier.height(16.dp))
         Card {
@@ -188,6 +189,28 @@ fun ConfigScreen(
                     onValueChange = { name = it },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Appearance", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Dark mode", style = MaterialTheme.typography.bodyLarge)
+                    Switch(
+                        checked = darkMode == true,
+                        onCheckedChange = { darkMode = if (it) true else null },
+                    )
+                }
+                Text(
+                    "On forces the dark theme; off follows the system setting.",
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
@@ -445,6 +468,7 @@ fun ConfigScreen(
                         audioCues = audio,
                         vibrationMode = vibration,
                         vibrationIntensity = vibrationIntensity,
+                        darkMode = darkMode,
                     )
                 )
             },

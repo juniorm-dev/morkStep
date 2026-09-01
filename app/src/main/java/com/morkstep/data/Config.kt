@@ -55,6 +55,8 @@ data class WorkoutProfile(
     val vibrationMode: VibrationMode = VibrationMode.OFF,
     /** Cue vibration strength 0..1 (scales the amplitude of phone/watch haptics). */
     val vibrationIntensity: Float = 0.5f,
+    /** Dark theme override per profile: null follows the system setting, true = dark, false = light. */
+    val darkMode: Boolean? = null,
 ) {
     val totalSeconds: Long
         get() = when (lengthMode) {

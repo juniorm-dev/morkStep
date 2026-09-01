@@ -70,6 +70,31 @@ class TransferTest {
     }
 
     @Test
+    fun profileExport_roundTripsDarkMode() {
+        val dark = WorkoutProfile(id = 8, name = "Night", darkMode = true)
+        val backDark = json.decodeFromString<ProfileExport>(
+            json.encodeToString(ProfileExport(profiles = listOf(dark)))
+        )
+        assertEquals(true, backDark.profiles[0].darkMode)
+
+        val light = WorkoutProfile(id = 9, name = "Day", darkMode = false)
+        val backLight = json.decodeFromString<ProfileExport>(
+            json.encodeToString(ProfileExport(profiles = listOf(light)))
+        )
+        assertEquals(false, backLight.profiles[0].darkMode)
+    }
+
+    @Test
+    fun profileExport_absentDarkModeDefaultsToSystem() {
+        // A pre-dark-mode export has no darkMode key; null = follow system.
+        val legacy = """
+            {"version":1,"profiles":[{"id":1,"name":"Legacy"}]}
+        """.trimIndent()
+        val back = json.decodeFromString<ProfileExport>(legacy)
+        assertEquals(null, back.profiles[0].darkMode)
+    }
+
+    @Test
     fun profileExport_oldPayloadWithoutIntensityDefaultsToHalf() {
         // A pre-0.8 export has no vibrationIntensity key; the field default must apply.
         val legacy = """

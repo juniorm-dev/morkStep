@@ -17,9 +17,11 @@ import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
 import com.morkstep.data.PhaseType
 import com.morkstep.data.TransferIO
-import com.morkstep.data.WorkoutEntity
 import com.morkstep.data.VibrationMode
+import com.morkstep.data.WorkoutEntity
 import com.morkstep.data.WorkoutProfile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import com.morkstep.data.defaultProfile
 import com.morkstep.engine.CueSink
 import com.morkstep.engine.CueVibration
@@ -439,19 +441,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
-    /** Mirror the live session snapshot to the paired watch (phase, paused, running). */
+    /** Mirror the live session snapshot to the paired watch (phase, paused, running),
+     *  seconds-in-phase, pace, push progress and the profile's phase lengths and
+     *  pace targets — everything the watch graphics (Bars/Band/Gauge) render. */
     private fun sendWatchState(ls: LiveState) {
+        val p = _activeProfile.value ?: return
         val phaseOrd = when (ls.phase) {
             PhaseType.WARMUP -> 1
             PhaseType.FAST -> 2
             PhaseType.SLOW -> 3
             PhaseType.COOLDOWN -> 4
         }
-        val payload = byteArrayOf(
-            phaseOrd.toByte(),
-            (if (ls.paused) 1 else 0).toByte(),
-            (if (ls.running) 1 else 0).toByte(),
-        )
+        val payload = ByteBuffer.allocate(WATCH_STATE_BYTES).order(ByteOrder.BIG_ENDIAN)
+            .put(phaseOrd.toByte())
+            .put((if (ls.paused) 1 else 0).toByte())
+            .put((if (ls.running) 1 else 0).toByte())
+            .putInt(ls.secondsInPhase)
+            .putFloat(ls.pace ?: Float.NaN)
+            .putInt(ls.fastSegmentsDone)
+            .putInt(ls.fastRoundsTotal ?: -1)
+            .putInt(p.fastSec)
+            .putInt(p.slowSec)
+            .putFloat(p.paceFloorMph.toFloat())
+            .putFloat(p.paceCeilingMph.toFloat())
+            .array()
         if (payload.contentEquals(lastWatchState)) return
         lastWatchState = payload
         val nodes = runCatching {
@@ -535,6 +548,8 @@ class MainViewModelFactory(
 /** Paths shared with the Wear companion over the Wearable message layer. */
 private const val WEAR_PAUSE_PATH = "/morkstep/pause"
 private const val WEAR_STATE_PATH = "/morkstep/state"
+/** Bytes of the /morkstep/state payload; the watch decodes exactly this many. */
+private const val WATCH_STATE_BYTES = 35
 
 /** Await a Google Play Services [Task] (mirrors the wear app). */
 private fun <T> com.google.android.gms.tasks.Task<T>.await(): T =

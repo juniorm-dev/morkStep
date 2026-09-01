@@ -71,8 +71,8 @@ android {
         applicationId = "com.morkstep.wear"
         minSdk = 30
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     testOptions {
@@ -148,6 +148,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     testImplementation("junit:junit:4.13.2")
+
+    // Required by createComposeRule() for the graphics-panel instrumented tests.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
