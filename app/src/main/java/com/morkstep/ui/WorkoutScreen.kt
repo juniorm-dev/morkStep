@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -56,9 +58,11 @@ fun WorkoutScreen(
     onTogglePause: () -> Unit,
 ) {
     val adhoc = profile.lengthMode == WorkoutLength.ADHOC
+    var phaseView by rememberSaveable { mutableStateOf(WorkoutPhaseView.BARS) }
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -154,6 +158,15 @@ fun WorkoutScreen(
             SensorCard("PUSH", "${live.fastSegmentsDone}", Modifier.weight(1f))
             SensorCard("DIST (mi)", "%.2f".format(live.distanceMiles), Modifier.weight(1f))
         }
+
+        Spacer(Modifier.height(20.dp))
+
+        WorkoutPhasePanel(
+            live = live,
+            profile = profile,
+            view = phaseView,
+            onViewChange = { phaseView = it },
+        )
 
         Spacer(Modifier.height(20.dp))
 

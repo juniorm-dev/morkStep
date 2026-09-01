@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutProfile
+import kotlin.math.roundToInt
 
 /** Format a duration in seconds as "m:ss"; under a minute, just "Ns". */
 private fun formatSeconds(sec: Int): String =
@@ -103,7 +104,7 @@ fun HomeScreen(
                                     VibrationMode.ALL -> "all cues"
                                     else -> "off"
                                 }
-                            }",
+                            } · ${(p.vibrationIntensity * 100).roundToInt()}%",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }

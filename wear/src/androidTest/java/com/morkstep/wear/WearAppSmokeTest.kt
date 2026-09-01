@@ -44,4 +44,15 @@ class WearAppSmokeTest {
         // No physical sensor on an emulator: the app intentionally stays "unknown".
         composeRule.onNodeWithText("HR: -- bpm").assertExists()
     }
+
+    @Test
+    fun idleScreenShowsVibrateToggleButNoWorkoutControls() {
+        // The watch-local haptics mute is always available…
+        composeRule.onNodeWithText("Vibrate").assertExists()
+        // …but with no workout running the phase/pause controls must not show.
+        composeRule.onNodeWithText("Pause").assertDoesNotExist()
+        composeRule.onNodeWithText("Resume").assertDoesNotExist()
+        composeRule.onNodeWithText("Warm-up").assertDoesNotExist()
+        composeRule.onNodeWithText("PAUSED").assertDoesNotExist()
+    }
 }

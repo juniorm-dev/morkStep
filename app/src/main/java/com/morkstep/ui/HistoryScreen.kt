@@ -2,6 +2,7 @@ package com.morkstep.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,33 +37,61 @@ private fun formatDuration(sec: Int): String {
 
 @Suppress("FunctionName")
 @Composable
-fun HistoryScreen() {
+fun HistoryScreen(
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MorkApplication
     val dao = app.container.workoutDao
     val workouts by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
 
-    if (workouts.isEmpty()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("No workouts yet", style = MaterialTheme.typography.titleMedium)
-            Text("Finish a session and it will appear here.", style = MaterialTheme.typography.bodyMedium)
-        }
-        return
-    }
-
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(workouts, key = { it.id }) { w ->
-            WorkoutRow(w)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedButton(
+                onClick = onExport,
+                modifier = Modifier.weight(1f),
+                enabled = workouts.isNotEmpty(),
+            ) {
+                Text("Export history")
+            }
+            OutlinedButton(
+                onClick = onImport,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Import history")
+            }
+        }
+        if (workouts.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("No workouts yet", style = MaterialTheme.typography.titleMedium)
+                Text("Finish a session and it will appear here.", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(workouts, key = { it.id }) { w ->
+                    WorkoutRow(w)
+                }
+            }
         }
     }
 }

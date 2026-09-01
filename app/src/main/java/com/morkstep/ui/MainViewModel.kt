@@ -2,6 +2,7 @@ package com.morkstep.ui
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -14,9 +15,13 @@ import com.morkstep.AppContainer
 import com.morkstep.MorkApplication
 import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
-import com.morkstep.data.WorkoutEntity
+import com.morkstep.data.PhaseType
+import com.morkstep.data.TransferIO
 import com.morkstep.data.VibrationMode
+import com.morkstep.data.WorkoutEntity
 import com.morkstep.data.WorkoutProfile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import com.morkstep.data.defaultProfile
 import com.morkstep.engine.CueSink
 import com.morkstep.engine.CueVibration
@@ -32,6 +37,7 @@ import com.google.android.gms.tasks.Task
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,6 +54,8 @@ private class SpeakerSink(
     private val vibrationMode: StateFlow<VibrationMode>,
     /** Live toggle: also relay cues to the paired Wear companion for watch haptics. */
     private val wearVibrate: StateFlow<Boolean>,
+    /** Live cue-vibration strength 0..1 from the active profile. */
+    private val vibrationIntensity: StateFlow<Float>,
 ) : CueSink {
     override fun beep() = speaker.beep()
     override fun speak(text: String) = speaker.speak(text)
@@ -58,25 +66,38 @@ private class SpeakerSink(
         val allowed = mode == VibrationMode.ALL ||
             (mode == VibrationMode.PHASE_CHANGE && kind == CueVibration.TRANSITION)
         if (!allowed) return
-        vibratePhone()
-        if (wearVibrate.value) scope.launch { sendWatchVibrate(kind) }
+        val intensity = vibrationIntensity.value.coerceIn(0f, 1f)
+        vibratePhone(intensity)
+        if (wearVibrate.value) scope.launch { sendWatchVibrate(kind, intensity) }
     }
 
-    private fun vibratePhone() {
+    private fun vibratePhone(intensity: Float) {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
         } else {
             @Suppress("DEPRECATION")
             app.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-        vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
+        // A longer, distinct cue buzz (up from 120 ms); amplitude scales with
+        // the profile's intensity slider. 0 intensity still emits the effect —
+        // gating happens in vibrate() via the mode.
+        vibrator.vibrate(
+            VibrationEffect.createOneShot(
+                VIBRATE_MS,
+                (intensity * 255).roundToInt().coerceIn(1, 255),
+            )
+        )
     }
 
-    /** Tell the paired watch to buzz; payload distinguishes transition (1) from guidance (2). */
-    private fun sendWatchVibrate(kind: CueVibration) {
+    /** Tell the paired watch to buzz; payload distinguishes transition (1) from guidance (2)
+     *  and carries the intensity 0..255 (0 = watch default strength). */
+    private fun sendWatchVibrate(kind: CueVibration, intensity: Float) {
         val nodes: List<Node> = Wearable.getNodeClient(app).connectedNodes.await()
         val messageClient: MessageClient = Wearable.getMessageClient(app)
-        val payload = byteArrayOf(if (kind == CueVibration.TRANSITION) 1 else 2)
+        val payload = byteArrayOf(
+            (if (kind == CueVibration.TRANSITION) 1 else 2).toByte(),
+            (intensity * 255).roundToInt().coerceIn(0, 255).toByte(),
+        )
         nodes.forEach { node ->
             runCatching { messageClient.sendMessage(node.id, VIBRATE_PATH, payload).await() }
         }
@@ -85,6 +106,8 @@ private class SpeakerSink(
     companion object {
         /** Path cue vibrations are relayed on to the Wear companion. Must match the wear app. */
         const val VIBRATE_PATH = "/morkstep/vibrate"
+        /** Phone cue haptic length in ms: a clearly tactile buzz for transitions and cues. */
+        const val VIBRATE_MS = 300L
     }
 }
 
@@ -100,12 +123,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _wearVibrate = MutableStateFlow(false)
     val wearVibrate: StateFlow<Boolean> = _wearVibrate.asStateFlow()
 
-    private val sink = SpeakerSink(speaker, app, viewModelScope, _vibrationMode, _wearVibrate)
+    /** Cue-vibration strength 0..1 from the active profile. */
+    private val _vibrationIntensity = MutableStateFlow(0.5f)
+    val vibrationIntensity: StateFlow<Float> = _vibrationIntensity.asStateFlow()
+
+    private val sink = SpeakerSink(speaker, app, viewModelScope, _vibrationMode, _wearVibrate, _vibrationIntensity)
 
     private var engine: SessionEngine? = null
     private var tickerJob: Job? = null
     /** Collects sensor + live-state for the current engine; cancelled when it is replaced. */
     private var engineJob: Job? = null
+    /** Accepts pause/resume commands sent by the paired Wear companion. */
+    private val wearPauseListener = object : com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener {
+        override fun onMessageReceived(event: com.google.android.gms.wearable.MessageEvent) {
+            if (event.path != WEAR_PAUSE_PATH) return
+            val pause = event.data.firstOrNull()?.toInt() == 1
+            if (pause) engine?.pause() else engine?.resume()
+        }
+    }
+    /** Last state payload sent to the watch; identical snapshots are not re-sent. */
+    private var lastWatchState = byteArrayOf()
 
     // Real sources (only live while simulated mode is OFF).
     private var gps: GpsPaceSource? = null
@@ -145,7 +182,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _savedProfileName = MutableStateFlow<String?>(null)
     val savedProfileName: StateFlow<String?> = _savedProfileName.asStateFlow()
 
+    /** One-shot: result of the last profile/history export or import. Consumed back by the UI. */
+    private val _transferMessage = MutableStateFlow<String?>(null)
+    val transferMessage: StateFlow<String?> = _transferMessage.asStateFlow()
+
+    /** Backup/restore of profiles and workout history through the Storage Access Framework. */
+    private val transfer by lazy {
+        TransferIO(
+            getApplication<Application>().contentResolver,
+            container.configStore,
+            container.workoutDao,
+        )
+    }
+
     init {
+        runCatching {
+            com.google.android.gms.wearable.Wearable.getMessageClient(getApplication())
+                .addListener(wearPauseListener)
+        }
         viewModelScope.launch {
             container.configStore.simulatedSensors.collect { simOn ->
                 _simulated.value = simOn
@@ -227,6 +281,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ?: _profiles.value.firstOrNull()
             ?: defaultProfile()
         _vibrationMode.value = _activeProfile.value?.vibrationMode ?: VibrationMode.OFF
+        _vibrationIntensity.value = _activeProfile.value?.vibrationIntensity ?: 0.5f
         setupEngine()
     }
 
@@ -320,6 +375,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---- Profile / history backup (SAF) ----
+
+    fun exportProfiles(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { transfer.writeProfiles(uri) }
+                .onSuccess { _transferMessage.value = "Profiles exported (${_profiles.value.size})" }
+                .onFailure { _transferMessage.value = it.message ?: "Export failed" }
+        }
+    }
+
+    /** Import a profile backup; the profile list is replaced (restore semantics). */
+    fun importProfiles(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { transfer.readProfiles(uri) }
+                .onSuccess { _transferMessage.value = "$it profiles imported" }
+                .onFailure { _transferMessage.value = it.message ?: "Import failed" }
+        }
+    }
+
+    fun exportWorkouts(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { transfer.writeWorkouts(uri) }
+                .onSuccess { _transferMessage.value = "History exported" }
+                .onFailure { _transferMessage.value = it.message ?: "Export failed" }
+        }
+    }
+
+    /** Import workout history; rows are merged, imported ids win. */
+    fun importWorkouts(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { transfer.readWorkouts(uri) }
+                .onSuccess { _transferMessage.value = "$it workouts imported" }
+                .onFailure { _transferMessage.value = it.message ?: "Import failed" }
+        }
+    }
+
+    /** Clear the transfer-result event after the UI has acted on it. */
+    fun consumeTransferMessage() {
+        _transferMessage.value = null
+    }
+
     fun startWorkout() {
         val p = _activeProfile.value ?: return
         if (p.fastSec <= 0 || p.slowSec <= 0) return
@@ -338,10 +434,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 engine?.tick()
                 val ls = engine?.state?.value ?: break
                 WorkoutService.update(getApplication(), ls)
+                sendWatchState(ls)
                 // Drive simulated values only when simulated mode is on.
                 if (_simulated.value) sim?.setPhase(ls.phase)
                 if (ls.finished) onFinished()
             }
+        }
+    }
+    /** Mirror the live session snapshot to the paired watch (phase, paused, running),
+     *  seconds-in-phase, pace, push progress and the profile's phase lengths and
+     *  pace targets — everything the watch graphics (Bars/Band/Gauge) render. */
+    private fun sendWatchState(ls: LiveState) {
+        val p = _activeProfile.value ?: return
+        val phaseOrd = when (ls.phase) {
+            PhaseType.WARMUP -> 1
+            PhaseType.FAST -> 2
+            PhaseType.SLOW -> 3
+            PhaseType.COOLDOWN -> 4
+        }
+        val payload = ByteBuffer.allocate(WATCH_STATE_BYTES).order(ByteOrder.BIG_ENDIAN)
+            .put(phaseOrd.toByte())
+            .put((if (ls.paused) 1 else 0).toByte())
+            .put((if (ls.running) 1 else 0).toByte())
+            .putInt(ls.secondsInPhase)
+            .putFloat(ls.pace ?: Float.NaN)
+            .putInt(ls.fastSegmentsDone)
+            .putInt(ls.fastRoundsTotal ?: -1)
+            .putInt(p.fastSec)
+            .putInt(p.slowSec)
+            .putFloat(p.paceFloorMph.toFloat())
+            .putFloat(p.paceCeilingMph.toFloat())
+            .array()
+        if (payload.contentEquals(lastWatchState)) return
+        lastWatchState = payload
+        val nodes = runCatching {
+            com.google.android.gms.wearable.Wearable.getNodeClient(getApplication()).connectedNodes.await()
+        }.getOrNull() ?: return
+        val client = com.google.android.gms.wearable.Wearable.getMessageClient(getApplication())
+        nodes.forEach { node ->
+            runCatching { client.sendMessage(node.id, WEAR_STATE_PATH, payload).await() }
         }
     }
 
@@ -388,6 +519,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun discardWorkout() {
         tickerJob?.cancel()
         WorkoutService.stop(getApplication())
+        lastWatchState = byteArrayOf()
         // Fully reset: replace the engine so the next Start begins a clean
         // session, and live state returns to its idle snapshot.
         setupEngine()
@@ -396,6 +528,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         WorkoutService.stop(getApplication())
+        runCatching {
+            com.google.android.gms.wearable.Wearable.getMessageClient(getApplication())
+                .removeListener(wearPauseListener)
+        }
         stopSources()
         speaker.shutdown()
     }
@@ -408,6 +544,12 @@ class MainViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         MainViewModel(app) as T
 }
+
+/** Paths shared with the Wear companion over the Wearable message layer. */
+private const val WEAR_PAUSE_PATH = "/morkstep/pause"
+private const val WEAR_STATE_PATH = "/morkstep/state"
+/** Bytes of the /morkstep/state payload; the watch decodes exactly this many. */
+private const val WATCH_STATE_BYTES = 35
 
 /** Await a Google Play Services [Task] (mirrors the wear app). */
 private fun <T> com.google.android.gms.tasks.Task<T>.await(): T =

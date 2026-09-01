@@ -58,6 +58,34 @@ fun MorkApp(viewModel: MainViewModel) {
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
     val savedProfileName by viewModel.savedProfileName.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val transferMessage by viewModel.transferMessage.collectAsStateWithLifecycle()
+
+    // Storage Access Framework: pick a destination (export) / source (import).
+    val createProfileDoc = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let(viewModel::exportProfiles) }
+    val openProfileDoc = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(viewModel::importProfiles) }
+    val createWorkoutDoc = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let(viewModel::exportWorkouts) }
+    val openWorkoutDoc = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(viewModel::importWorkouts) }
+
+    fun launchProfileExport() {
+        createProfileDoc.launch("morkStep-profiles-${System.currentTimeMillis()}.json")
+    }
+    fun launchProfileImport() {
+        openProfileDoc.launch(arrayOf("application/json"))
+    }
+    fun launchHistoryExport() {
+        createWorkoutDoc.launch("morkStep-history-${System.currentTimeMillis()}.json")
+    }
+    fun launchHistoryImport() {
+        openWorkoutDoc.launch(arrayOf("application/json"))
+    }
 
     // After saving a profile: confirm with a snackbar and return to Home.
     LaunchedEffect(savedProfileName) {
@@ -68,6 +96,13 @@ fun MorkApp(viewModel: MainViewModel) {
         }
         snackbarHostState.showSnackbar("Profile \"$name\" saved")
         viewModel.consumeSavedProfile()
+    }
+
+    // After a backup/restore: confirm with a snackbar and stop showing it.
+    LaunchedEffect(transferMessage) {
+        val msg = transferMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(msg)
+        viewModel.consumeTransferMessage()
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -168,10 +203,15 @@ fun MorkApp(viewModel: MainViewModel) {
                     onRequestPermissions = requestPermissions,
                     locationGranted = locationGranted,
                     bluetoothGranted = bluetoothGranted,
+                    onExportProfiles = ::launchProfileExport,
+                    onImportProfiles = ::launchProfileImport,
                 )
             }
             composable(Routes.HISTORY) {
-                HistoryScreen()
+                HistoryScreen(
+                    onExport = ::launchHistoryExport,
+                    onImport = ::launchHistoryImport,
+                )
             }
         }
     }
