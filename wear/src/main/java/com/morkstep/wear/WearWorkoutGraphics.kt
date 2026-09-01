@@ -55,15 +55,15 @@ data class WearSessionState(
     val pace: Float? = null,
     val fastDone: Int = 0,
     val fastTotal: Int? = null,
-    val fastSec: Int = 180,
-    val slowSec: Int = 180,
-    val paceFloor: Float = 3.2f,
-    val paceCeiling: Float = 4.5f,
+    val fastSec: Int = Constants.DEFAULT_FAST_SEC,
+    val slowSec: Int = Constants.DEFAULT_SLOW_SEC,
+    val paceFloor: Float = Constants.DEFAULT_PACE_FLOOR_MPH,
+    val paceCeiling: Float = Constants.DEFAULT_PACE_CEILING_MPH,
 )
 
-/** Decode the phone's 35-byte state payload; a short/empty payload yields defaults. */
+/** Decode the phone's state payload; a short/empty payload yields defaults. */
 fun decodeWearSessionState(data: ByteArray): WearSessionState {
-    if (data.size < 35) return WearSessionState()
+    if (data.size < Constants.STATE_PAYLOAD_BYTES) return WearSessionState()
     return runCatching {
         val buf = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
         WearSessionState(
@@ -81,11 +81,6 @@ fun decodeWearSessionState(data: ByteArray): WearSessionState {
         )
     }.getOrDefault(WearSessionState())
 }
-
-private val PUSH_COLOR = Color(0xFFD1402A)
-private val RECOVERY_COLOR = Color(0xFF2E7AC4)
-private val NEUTRAL_COLOR = Color(0xFF7B8A99)
-private val OK_GREEN = Color(0xFF2E9E4F)
 
 private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 
@@ -117,8 +112,8 @@ private fun WearSessionState.statusCaption(): String = when (targetStatus()) {
 }
 
 private fun statusColor(status: TargetStatus, subdued: Color): Color = when (status) {
-    TargetStatus.ON_TARGET -> OK_GREEN
-    TargetStatus.OFF_TARGET -> PUSH_COLOR
+    TargetStatus.ON_TARGET -> Constants.OK_COLOR
+    TargetStatus.OFF_TARGET -> Constants.PHASE_FAST_COLOR
     TargetStatus.NONE -> subdued
 }
 
@@ -172,8 +167,8 @@ private fun WearBars(s: WearSessionState) {
         else -> 0f
     }
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        WearBarRow("PUSH", pushFrac, PUSH_COLOR)
-        WearBarRow("RECOVERY", recFrac, RECOVERY_COLOR)
+        WearBarRow("PUSH", pushFrac, Constants.PHASE_FAST_COLOR)
+        WearBarRow("RECOVERY", recFrac, Constants.PHASE_SLOW_COLOR)
         Text(
             s.statusCaption(),
             style = MaterialTheme.typography.labelSmall,
@@ -208,14 +203,14 @@ private fun WearBarRow(label: String, frac: Float, color: Color) {
 @Suppress("FunctionName")
 @Composable
 private fun WearBand(s: WearSessionState) {
-    val maxMph = maxOf(s.paceCeiling, s.paceFloor, s.pace ?: 0f) * 1.2f
+    val maxMph = maxOf(s.paceCeiling, s.paceFloor, s.pace ?: 0f) * Constants.SCALE_HEADROOM
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val captionColor = statusColor(s.targetStatus(), onSurfaceVariant)
     val targetColor = when (WearPhase.from(s.phaseOrd)) {
-        WearPhase.FAST -> PUSH_COLOR
-        WearPhase.SLOW -> RECOVERY_COLOR
-        else -> NEUTRAL_COLOR
+        WearPhase.FAST -> Constants.PHASE_FAST_COLOR
+        WearPhase.SLOW -> Constants.PHASE_SLOW_COLOR
+        else -> Constants.PHASE_COOLDOWN_COLOR
     }
 
     Column {
@@ -286,9 +281,9 @@ private fun WearGauge(s: WearSessionState) {
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val valueColor = statusColor(s.targetStatus(), onSurfaceVariant)
     val phaseColor = when (WearPhase.from(s.phaseOrd)) {
-        WearPhase.FAST -> PUSH_COLOR
-        WearPhase.SLOW -> RECOVERY_COLOR
-        else -> NEUTRAL_COLOR
+        WearPhase.FAST -> Constants.PHASE_FAST_COLOR
+        WearPhase.SLOW -> Constants.PHASE_SLOW_COLOR
+        else -> Constants.PHASE_COOLDOWN_COLOR
     }
     val progress = when (s.phaseOrd) {
         2 -> segFrac(s.secondsInPhase, s.fastSec)
@@ -304,8 +299,8 @@ private fun WearGauge(s: WearSessionState) {
             val stroke = Stroke(width = 10.dp.toPx())
             val arcSize = Size(size.width - stroke.width, size.height - stroke.width)
             val topLeft = Offset(stroke.width / 2, stroke.width / 2)
-            val startAngle = 150f
-            val sweepTotal = 240f
+            val startAngle = Constants.GAUGE_START_ANGLE_DEG
+            val sweepTotal = Constants.GAUGE_SWEEP_DEG
 
             drawArc(
                 color = outlineVariant.copy(alpha = 0.6f),
@@ -325,7 +320,7 @@ private fun WearGauge(s: WearSessionState) {
                 size = arcSize,
                 style = stroke,
             )
-            val scaleMax = maxOf(s.paceCeiling, s.paceFloor) * 1.2f
+            val scaleMax = maxOf(s.paceCeiling, s.paceFloor) * Constants.SCALE_HEADROOM
             listOf(s.paceFloor, s.paceCeiling).forEach { mph ->
                 val frac = (mph / scaleMax).coerceIn(0f, 1f)
                 val angle = Math.toRadians((startAngle + sweepTotal * frac).toDouble())
