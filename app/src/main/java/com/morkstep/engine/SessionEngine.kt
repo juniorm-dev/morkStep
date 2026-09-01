@@ -407,8 +407,9 @@ class SessionEngine(
                     // Speed up while the push target (HR/pace ceiling) is unmet.
                     // HR and pace share one cue so they never double-fire, and a
                     // reading without a meaningful signal never triggers a cue:
-                    // HR 0, or pace at/below the min-signal threshold.
-                    val hrBelow = s.hr != null && s.hr > 0 && s.hr < profile.hrCeiling
+                    // HR below the min-signal threshold, or pace at/below its
+                    // min-signal threshold.
+                    val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrCeiling
                     val paceBelow = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace < profile.paceCeilingMph.toFloat()
                     if (hrBelow || paceBelow) cueIf("speedUp", "Speed up")
                 }
@@ -416,7 +417,7 @@ class SessionEngine(
             PhaseType.SLOW -> {
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
                     // Slow down while the recovery target (HR/pace floor) is unmet.
-                    val hrAbove = s.hr != null && s.hr > 0 && s.hr > profile.hrFloor
+                    val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrFloor
                     val paceAbove = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace > profile.paceFloorMph.toFloat()
                     if (hrAbove || paceAbove) cueIf("slowDown", "Slow down")
                 }
