@@ -51,7 +51,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-debug-0.6.0.apk # versioned APK name
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.7.0.apk # versioned APK name
 ```
 
 ### Emulator (instrumented) tests — NOT run by default
@@ -74,7 +74,7 @@ form factor (its nav taps assume a phone-sized display).
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release-0.6.0.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.7.0.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -152,7 +152,7 @@ Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returnin
 
 The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
-**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug-0.3.0.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
+**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug-0.4.0.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
 
 ### Storage — `data/`
 
