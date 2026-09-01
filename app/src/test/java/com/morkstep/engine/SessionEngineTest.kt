@@ -637,6 +637,23 @@ class SessionEngineTest {
     }
 
     @Test
+    fun hrAtMinValidThreshold_triggersHrCue() {
+        // 1 bpm is the min valid signal: pace is over the ceiling (5.0 > 4.5)
+        // so only the HR condition can cue — and it must.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 1)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
+    }
+
+    @Test
     fun noSignalPace_suppressesPaceCue() {
         // Pace at/below the 1.5 mph min-signal threshold (e.g. 0, GPS not
         // reporting) must not cue even though HR is below the ceiling.

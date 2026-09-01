@@ -17,6 +17,12 @@ object Constants {
      * still or walking unrealistically slowly).
      */
     const val MIN_VALID_PACE_MPH = 1.5f
+    /**
+     * Lowest heart rate (bpm) that counts as a meaningful signal. Readings
+     * below this are treated like "no signal": they never trigger a Speed up /
+     * Slow down warning cue (a 0 reading = sensor detached / no contact).
+     */
+    const val MIN_VALID_HR_BPM = 1
 
     /** Fused-location update cadence (ms) for the GPS pace source. */
     const val GPS_UPDATE_INTERVAL_MS = 1_000L
