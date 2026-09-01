@@ -16,6 +16,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
@@ -145,8 +146,16 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
             g.setCharacteristicNotification(characteristic, true)
             val cccd = characteristic.getDescriptor(CCCD)
                 ?: return
-            cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            g.writeDescriptor(cccd)
+            val enableValue = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Memory-safe API 33+ overload: the value is passed in, not stored on the descriptor.
+                g.writeDescriptor(cccd, enableValue)
+            } else {
+                @Suppress("DEPRECATION")
+                cccd.value = enableValue
+                @Suppress("DEPRECATION")
+                g.writeDescriptor(cccd)
+            }
         }
 
         @SuppressLint("MissingPermission")

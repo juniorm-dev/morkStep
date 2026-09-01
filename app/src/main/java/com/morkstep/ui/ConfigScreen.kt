@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
+import kotlin.math.roundToInt
 
 private val LENGTH_MODES = listOf(
     WorkoutLength.ROUNDS to "Rounds",
@@ -60,6 +61,7 @@ private val VIBRATION_MODES = listOf(
 private fun sliderSteps(range: ClosedFloatingPointRange<Float>, step: Float): Int =
     ((range.endInclusive - range.start) / step).toInt() - 1
 
+@Suppress("FunctionName")
 @Composable
 private fun SliderRow(
     label: String,
@@ -87,6 +89,7 @@ private fun SliderRow(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("FunctionName")
 @Composable
 fun ConfigScreen(
     profiles: List<WorkoutProfile>,
@@ -408,8 +411,8 @@ fun ConfigScreen(
                         slowSec = slowSec,
                         warmupSec = warmupSec,
                         cooldownSec = cooldownSec,
-                        paceCeilingMph = Math.round(paceCeil * 10) / 10.0,
-                        paceFloorMph = Math.round(paceFloor * 10) / 10.0,
+                        paceCeilingMph = (paceCeil * 10).roundToInt() / 10.0,
+                        paceFloorMph = (paceFloor * 10).roundToInt() / 10.0,
                         hrCeiling = hrCeil,
                         hrFloor = hrFloor,
                         warningThresholdSec = warnSec,

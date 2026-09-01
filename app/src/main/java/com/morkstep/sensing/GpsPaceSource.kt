@@ -34,8 +34,7 @@ class GpsPaceSource(context: Context) : PaceSource {
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            val loc: Location? = result.lastLocation
-            if (loc == null) return
+            val loc = result.lastLocation ?: return
             val mps = if (loc.hasSpeed()) loc.speed else 0f
             val mph = mps * MPH_PER_MPS
             if (mph > 0f) _pace.value = mph

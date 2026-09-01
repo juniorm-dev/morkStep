@@ -27,6 +27,7 @@ import com.morkstep.data.WorkoutProfile
 private fun formatSeconds(sec: Int): String =
     if (sec < 60) "${sec}s" else "%d:%02d".format(sec / 60, sec % 60)
 
+@Suppress("FunctionName")
 @Composable
 fun HomeScreen(
     profiles: List<WorkoutProfile>,
@@ -100,7 +101,7 @@ fun HomeScreen(
                                 when (p.vibrationMode) {
                                     VibrationMode.PHASE_CHANGE -> "phase changes"
                                     VibrationMode.ALL -> "all cues"
-                                    VibrationMode.OFF -> "off"
+                                    else -> "off"
                                 }
                             }",
                             style = MaterialTheme.typography.bodyMedium,

@@ -1,8 +1,62 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.plugins.BasePluginExtension
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputFiles
+import org.gradle.api.tasks.TaskAction
+
+// Renames every packaged APK to a version-numbered name, preserving a
+// "-unsigned"/"-signed" suffix. Input is globbed so it also matches the
+// unsigned release artifact (morkStep-release-unsigned.apk).
+abstract class VersionApk : DefaultTask() {
+    @get:Input
+    abstract val version: Property<String>
+
+    @get:InputFiles
+    abstract val apkFiles: ConfigurableFileCollection
+
+    @TaskAction
+    fun run() {
+        val v = version.get()
+        // "-0.2.0" (or stacked "-0.2.0-0.2.0", or an older version) marks an APK
+        // already versioned by an earlier run. Never touch it — re-renaming stacks
+        // the suffix every build, and deleting it breaks AGP's up-to-date check
+        // (packageDebug would not regenerate it). Only the pristine package
+        // output gets moved to the versioned name.
+        val versionedTail = Regex("(-\\d+(\\.\\d+)*)+$")
+        apkFiles.files.forEach { src ->
+            val suffix = when {
+                src.name.endsWith("-unsigned.apk") -> "-unsigned.apk"
+                src.name.endsWith("-signed.apk") -> "-signed.apk"
+                else -> ".apk"
+            }
+            val base = src.name.removeSuffix(suffix)
+            if (versionedTail.containsMatchIn(base)) return@forEach
+            val dst = src.parentFile.resolve("$base-$v$suffix")
+            // Purge stale outputs for this base (older versions, stacked names)
+            // so only the current version remains. Only runs when a pristine base
+            // is present, i.e. whenever packageDebug actually re-packaged.
+            src.parentFile.listFiles()?.forEach { stale ->
+                val n = stale.name
+                if (n == src.name || n == dst.name) return@forEach
+                val sameKind = when {
+                    suffix == ".apk" -> n.endsWith(".apk") &&
+                        !n.endsWith("-unsigned.apk") && !n.endsWith("-signed.apk")
+                    else -> n.endsWith(suffix)
+                }
+                if (sameKind && n.startsWith("$base-")) stale.delete()
+            }
+            // Copy, never move: AGP and connected tests consume the pristine
+            // package output by its unversioned path, so it must stay in place.
+            src.copyTo(dst, overwrite = true)
+        }
+    }
+}
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -17,8 +71,13 @@ android {
         applicationId = "com.morkstep.wear"
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    testOptions {
+        // Disable system animations so Compose UI assertions aren't racing transitions.
+        animationsDisabled = true
     }
 
     buildTypes {
@@ -29,35 +88,50 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
-            // Shrink the installable debug APK too (R8); slower builds, much
-            // smaller APKs for emulator installs.
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // No R8: debuggable builds disable optimizations anyway, and stripping
+            // unused classes (e.g. kotlin.LazyKt the test platform needs) breaks
+            // instrumented tests. Keep debug installable-size fast instead.
+            isMinifyEnabled = false
         }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
-    // Name APK artifacts with the app version: morkStep-wear-$versionName-$buildType.apk.
-    applicationVariants.all {
-        val v = versionName
-        val t = buildType.name
-        outputs.all {
-            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
-                "morkStep-wear-$v-$t.apk"
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+androidComponents {
+    onVariants { variant ->
+        val base = the<BasePluginExtension>().archivesName.get()
+        val pkgName = variant.name.replaceFirstChar { it.uppercase() }
+        val apkDir = layout.buildDirectory.dir("outputs/apk/${variant.name}")
+        val version = variant.outputs.first().versionName.orNull ?: "0"
+        val rename = project.tasks.register("rename${pkgName}Apk", VersionApk::class.java) {
+            apkFiles.from(apkDir.map { it.asFileTree.matching { include("*.apk") } })
+            this.version.set(version)
+        }
+        tasks.matching { it.name == "package$pkgName" }.configureEach {
+            finalizedBy(rename)
+        }
+        tasks.matching { it.name == "create${pkgName}ApkListingFileRedirect" }.configureEach {
+            mustRunAfter(rename)
         }
     }
 }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+    // Not added automatically here (no kotlin plugin wiring; AGP built-in Kotlin).
+    // Without it R8 strips stdlib from the app dex and the test dex lacks it.
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.10")
     implementation(composeBom)
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
@@ -74,4 +148,16 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     testImplementation("junit:junit:4.13.2")
+
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Compose ui-test 1.7.x pulls espresso-core 3.5.1, which crashes on
+    // Android 15/16 images (InputManager.getInstance NoSuchMethodException).
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    // Test dex must carry stdlib itself (see implementation above).
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.10")
 }

@@ -69,16 +69,11 @@ private class SpeakerSink(
             @Suppress("DEPRECATION")
             app.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(120)
-        }
+        vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
     /** Tell the paired watch to buzz; payload distinguishes transition (1) from guidance (2). */
-    private suspend fun sendWatchVibrate(kind: CueVibration) {
+    private fun sendWatchVibrate(kind: CueVibration) {
         val nodes: List<Node> = Wearable.getNodeClient(app).connectedNodes.await()
         val messageClient: MessageClient = Wearable.getMessageClient(app)
         val payload = byteArrayOf(if (kind == CueVibration.TRANSITION) 1 else 2)
@@ -338,6 +333,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
             while (engine?.snapshot?.finished != true) {
+                @Suppress("ConvertLongToDuration")
                 delay(1000)
                 engine?.tick()
                 val ls = engine?.state?.value ?: break
@@ -413,6 +409,6 @@ class MainViewModelFactory(
         MainViewModel(app) as T
 }
 
-/** Await a Google Play Services [Task] as a suspend result (mirrors the wear app). */
-private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T =
+/** Await a Google Play Services [Task] (mirrors the wear app). */
+private fun <T> com.google.android.gms.tasks.Task<T>.await(): T =
     com.google.android.gms.tasks.Tasks.await(this)

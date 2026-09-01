@@ -20,4 +20,7 @@ captures/
 
 # Tool download (local only)
 .tools/
-.omp/
+
+# .omp is committed (personal repo): lsp.json + AGENTS.md. Keep the transient
+# Android UI hierarchy dump out of git.
+.omp/ui_home.xml

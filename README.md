@@ -32,26 +32,49 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 | ---- | ------- |
 | Android Studio JBR (JDK) | 21 |
 | Android SDK | compileSdk 36 (Android 16), targetSdk 36, minSdk 26 |
-| Gradle | 8.11.1 (wrapper) |
-| Android Gradle Plugin | 8.10.1 |
-| Kotlin | 2.0.21 (Compose compiler plugin 2.0.21) |
+| Gradle | 9.4.0 (wrapper) |
+| Android Gradle Plugin | 9.0.1 |
+| Kotlin | 2.2.10 (Compose compiler plugin 2.2.10) |
+| KSP | 2.2.10-2.0.2 |
+| Room | 2.7.2 |
 | Play Services (Fused Location) | play-services-location 21.3.0 |
 
 `local.properties` must set `sdk.dir` to your SDK path.
+
+> Gradle 9.4 runs on JDK 17–26, but KSP 2.2.10 cannot read JDK 26 class files yet
+> (`unexpected jvm signature V`), so point `JAVA_HOME` at the Android Studio JBR
+> (JDK 21) before running `gradlew` — e.g. on Windows:
+> `set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"`.
 
 ## Build & run
 
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-0.5.0-debug.apk # APK name includes the app version
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.6.0.apk # versioned APK name
 ```
+
+### Emulator (instrumented) tests — NOT run by default
+
+The Compose smoke suites live in `src/androidTest` and are excluded from the
+default `assemble`/`test` lifecycle. Run them explicitly against a booted
+emulator when needed:
+
+```bash
+./gradlew :app:connectedDebugAndroidTest   # phone app UI smoke tests (4)
+./gradlew :wear:connectedDebugAndroidTest  # Wear companion UI smoke tests (2)
+```
+
+Each suite installs the app, starts from a clean state (`clearPackageData`),
+and asserts the home screen, navigation, and version footer. With multiple
+devices attached, Gradle runs the suite on each: the app suite targets a phone
+form factor (its nav taps assume a phone-sized display).
 
 ### Release (signed) build
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-0.5.0-release.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.6.0.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -129,7 +152,7 @@ Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returnin
 
 The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
-**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-<version>-debug.apk`, e.g. `morkStep-wear-0.2.0-debug.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
+**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug-0.3.0.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen.
 
 ### Storage — `data/`
 
@@ -146,47 +169,50 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 
 | Tool | Version | Why |
 | ---- | ------- | --- |
-| Gradle 8.11.1 (wrapper) | 8.11.1 | Pinned via the wrapper for reproducible builds |
-| Android Gradle Plugin | 8.10.1 | Matches the root build; compatible with Gradle 8.11.1 and Compose BOM 2024.10.01 |
-| Kotlin | 2.0.21 | Compose compiler now ships with Kotlin (the `compose` compiler Gradle plugin), so build and toolchain stay in lockstep |
+| Gradle 9.4.0 (wrapper) | 9.4.0 | Pinned via the wrapper; runs on JDK 17–26 |
+| Android Gradle Plugin | 9.0.1 | New DSL + built-in Kotlin (KGP 2.2.10); no `kotlin-android` plugin needed |
+| Kotlin | 2.2.10 | Built-in Kotlin target; Compose compiler ships with Kotlin, so build and toolchain stay in lockstep |
 | Jetpack Compose BOM | 2024.10.01 | Bundles Compose material/UI versions together |
-| KSP | 2.0.21-1.0.28 | Room compile-time codegen |
-| JDK | 21 (Android Studio JBR) | Gradle 8.x + AGP 8.x require JDK 17+; the Studio-bundled JBR is available offline |
-| Room | 2.6.1 | Type-safe SQLite DAO for workout history |
+| KSP | 2.2.10-2.0.2 | Room compile-time codegen (KSP2) |
+| JDK | 21 (Android Studio JBR) | Gradle 9.4 accepts up to JDK 26, but KSP 2.2.10 can't read JDK 26 class files yet — build on the JBR 21 |
+| Room | 2.7.2 | Type-safe SQLite DAO for workout history (KSP2/Kotlin 2.2-compatible) |
 | DataStore Preferences | 1.0.0 | Coroutine-backed config persistence |
-| kotlinx-serialization-json | 1.6.3 | Profile-list JSON persistence (with the Kotlin serialization plugin 2.0.21) |
+| kotlinx-serialization-json | 1.6.3 | Profile-list JSON persistence (with the Kotlin serialization plugin 2.2.10) |
 
 **Language servers (LSP)**
 | Server | Version | Notes |
 | ------ | ------- | ----- |
-| `kotlin-lsp` (fwcd/kotlin-language-server) | 1.3.13 | Navigation, symbols, references, refactors, diagnostics. Downloaded to `.tools/`, launched with the Android Studio JBR 21 via `<project>/.omp/lsp.json`. See classpath note below. |
+| `kotlin-lsp` (JetBrains `intellij-server`) | 2026.2 EAP | Official Kotlin LSP, IntelliJ-based; resolves Gradle/AGP projects itself. Launched from `$PATH`; configured once globally in `~/.omp/agent/lsp.json`. See note below. |
 
-> **LSP classpath (setup).** kotlin-lsp cannot discover the Android compile classpath itself —
-> its bundled resolver understands plain JVM Gradle projects only, and BSP is unavailable for
-> `com.android.application`. The repo ships `:app:exportLspClasspath` (`app/build.gradle.kts`),
-> which writes `.classpath.absolute` at the repo root: the app compile classpath
-> (`debugCompileClasspath` full library jars), the unit-test classpath
-> (`compileDebugUnitTestKotlin.libraries`), and the `android-36/android.jar` platform jar.
-> Restart kotlin-lsp after running it and diagnostics resolve AndroidX/Compose/coroutines/
-> junit. The file is machine-specific (absolute paths) and gitignored — rerun
-> `./gradlew :app:exportLspClasspath` after dependency changes or on a fresh checkout. The
-> Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type errors.
+> **LSP setup (committed, machine-independent).** The JetBrains Kotlin Language Server
+> (`intellij-server`, on `$PATH`) does its own Gradle/AGP project resolution — no exported
+> classpath, no `exportLspClasspath` task. This is a personal repo, so `.omp/` is **committed**
+> (gitignored only for the transient `ui_home.xml` dump) and carries `lsp.json` — the
+> `kotlin-lsp` wiring (`command: kotlin-lsp.cmd`, no machine paths) — plus `AGENTS.md`, the
+> project context that directs the coding agent to use the LSP server for Kotlin code
+> intelligence. The only machine-level pieces are the `kotlin-lsp.cmd` wrapper and its
+> `intellij-server` install on `$PATH`, and a JDK ≤ the Gradle ceiling registered where IntelliJ
+> finds JDKs (`~/.jdks/` on Windows — `JAVA_HOME` is *not* consulted); keep that copy in sync
+> with the build JDK. Known quirk: the **first** diagnostics request after a reload can report
+> cascading `Unresolved reference` false positives while the index warms — simply re-request;
+> subsequent checks are clean.
+> The Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type
+> errors.
 
 ## Upgrade caveats
 
-- **Kotlin Gradle Plugin API drift.** `exportLspClasspath` reads the compile classpath from
-  `KotlinCompile.libraries` (a `ConfigurableFileCollection` in KGP 2.0.21). Other KGP versions
-  name the same property `classpath` — if the task fails with `Unresolved reference: classpath`
-  after a Kotlin upgrade, swap `libraries` → `classpath` (confirm against the plugin jar:
-  `javap -cp kotlin-gradle-plugin-<version>.jar org.jetbrains.kotlin.gradle.tasks.KotlinCompile`).
-  The main-app classpath deliberately comes from AGP's `debugCompileClasspath` configuration
-  rather than the Kotlin task: AGP resolves full library jars there, while the Kotlin task
-  resolves `-api.jar` variants for main compilation and is used here only for the unit-test
-  extras (junit, coroutines-test).
-- **Versioned APK artifacts.** `android.applicationVariants.all` renames outputs to
-  `morkStep-$versionName-$buildType.apk`. Bump `versionCode` and `versionName` together in
-  `app/build.gradle.kts` — and keep the `adb install` paths in this README's Build & run
-  section in sync.
+- **LSP classpath task removed.** `:app:exportLspClasspath` is gone along with the generated
+  `.classpath.absolute` and machine-specific `.omp/lsp.json`. The JetBrains Kotlin Language
+  Server resolves Gradle/AGP projects itself; config is the machine-independent
+  `~/.omp/agent/lsp.json` (global) plus the matching `.omp/lsp.json` in this repo.
+- **Versioned APK artifact names.** AGP 9 removed `applicationVariants`/`BaseVariantOutputImpl`
+  and the public per-output rename (`SingleArtifact.APK` is now a `ContainsMany` directory
+  artifact), so both modules add a `versioned` post-packaging task (`rename<Variant>Apk`,
+  finalizedBy `package<Variant>`) that renames the packaged APK to
+  `morkStep-<versionName>-<buildType>.apk` / `morkStep-wear-<versionName>-<buildType>.apk`,
+  preserving a `-unsigned` suffix for the unsigned wear release. Bump `versionCode`/`versionName`
+  together in the module's `build.gradle.kts` — and keep the `adb install` paths in this
+  README's Build & run section in sync.
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 

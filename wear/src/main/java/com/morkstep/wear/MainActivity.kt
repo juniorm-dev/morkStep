@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        private suspend fun sendBpm(bpm: Int) {
+        private fun sendBpm(bpm: Int) {
             val nodes: List<Node> = Wearable.getNodeClient(context).connectedNodes.await()
             val messageClient: MessageClient = Wearable.getMessageClient(context)
             val payload = byteArrayOf(bpm.toByte())
@@ -237,6 +237,6 @@ class MainActivity : ComponentActivity() {
 }
 
 
-/** Await a Google Play Services [com.google.android.gms.tasks.Task] as a suspend result. */
-private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T =
+/** Await a Google Play Services [com.google.android.gms.tasks.Task]. */
+private fun <T> com.google.android.gms.tasks.Task<T>.await(): T =
     com.google.android.gms.tasks.Tasks.await(this)
