@@ -18,7 +18,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 - **Heart rate** — a *ceiling* and *floor* (bpm). Push cues "Speed up" while HR is below the ceiling; recovery cues "Slow down" while HR is above the floor.
 - **Audio cues** —
     - per-phase spoken announcements plus beeps on transitions,
-    - spoken warning cues — during **push**, "Speed up" when pace or HR is below the push *ceiling*; during **recovery**, "Slow down" when pace or HR is above the recovery *floor*. Pace and HR share one cue per phase so they never double-fire, and a 0 reading (no signal — 0 BPM or 0 MPH) never triggers a cue. A cue repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
+    - spoken warning cues — during **push**, "Speed up" when pace or HR is below the push *ceiling*; during **recovery**, "Slow down" when pace or HR is above the recovery *floor*. Pace and HR share one cue per phase so they never double-fire, and a reading without a meaningful signal never triggers a cue — 0 BPM, or pace at/below 1.5 mph (GPS noise when standing still). A cue repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
     - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
 - **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds over ceiling) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
@@ -51,7 +51,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-debug-0.9.0.apk # versioned APK name
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.9.1.apk # versioned APK name
 ```
 
 ### Emulator (instrumented) tests — NOT run by default
@@ -74,7 +74,7 @@ form factor (its nav taps assume a phone-sized display).
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release-0.9.0.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.9.1.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -244,7 +244,7 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 - recovery warning cues: "Slow down" when pace or HR is above the recovery floor (incl. HR inside the old band)
 - warning-repeat threshold in seconds shared by push and recovery
 - single shared cue (one speech + one vibration) when both HR and pace trigger
-- zero-readout suppression: 0 BPM / 0 MPH never cue, on push and recovery
+- no-signal suppression: 0 BPM / pace ≤ 1.5 mph never cue, on push and recovery
 - first warning cue after each phase transition suppressed (FAST and SLOW)
 - distance accumulation from pace (mph → miles)
 - per-phase average accumulation: push/recovery/overall pace & HR bucketed from 1 Hz samples

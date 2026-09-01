@@ -1,0 +1,49 @@
+package com.morkstep
+
+/**
+ * Central phone-app configuration: tuning constants and magic numbers shared
+ * across sensing, haptics, and the session engine. Device behavior is
+ * adjustable from this single file.
+ */
+object Constants {
+    // ---- sensing ----
+    /** Meters-per-second to miles-per-hour conversion factor (1 m/s = 2.23694 mph). */
+    const val MPH_PER_MPS = 2.23694f
+
+    /**
+     * Lowest instantaneous pace (mph) that counts as a meaningful signal.
+     * Readings at or below this are treated like "no signal": they never
+     * trigger a Speed up / Slow down warning cue (GPS noise while standing
+     * still or walking unrealistically slowly).
+     */
+    const val MIN_VALID_PACE_MPH = 1.5f
+
+    /** Fused-location update cadence (ms) for the GPS pace source. */
+    const val GPS_UPDATE_INTERVAL_MS = 1_000L
+    /** Fused-location minimum update interval (ms). */
+    const val GPS_MIN_UPDATE_INTERVAL_MS = 1_000L
+    /** Fused-location maximum tolerated update delay before a batch is forced (ms). */
+    const val GPS_MAX_UPDATE_DELAY_MS = 2_000L
+
+    // ---- haptics ----
+    /** Phone cue haptic length in ms: a clearly tactile buzz for transitions and cues. */
+    const val PHONE_VIBRATE_MS = 600L
+    /** VibrationEffect amplitude scale: 0 (off) .. 255 (full). */
+    const val HAPTIC_AMPLITUDE_MAX = 255
+    /** Phone haptics floor: a 0 amplitude would be an empty effect, so clamp to 1. */
+    const val PHONE_AMPLITUDE_MIN = 1
+    /** Watch intensity floor: 0 means "watch default strength" on the companion. */
+    const val WATCH_AMPLITUDE_MIN = 0
+    /** Path cue vibrations are relayed on to the Wear companion. Must match the wear app. */
+    const val VIBRATE_PATH = "/morkstep/vibrate"
+    /** Watch vibrate payload marker: phase-transition cue. */
+    const val WATCH_VIBRATE_TRANSITION = 1
+    /** Watch vibrate payload marker: guidance cue. */
+    const val WATCH_VIBRATE_GUIDANCE = 2
+
+    // ---- engine ----
+    /** Milliseconds in one second, for tick timestamps. */
+    const val MILLIS_PER_SECOND = 1_000L
+    /** Seconds in one hour, for integrating mph into miles. */
+    const val SECONDS_PER_HOUR = 3600.0
+}

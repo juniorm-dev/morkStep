@@ -1,5 +1,6 @@
 package com.morkstep.engine
 
+import com.morkstep.Constants
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
@@ -168,7 +169,7 @@ class SessionEngine(
      * profile's shared warning threshold (seconds) so push and recovery cue cadence
      * is user-configurable.
      */
-    private val cueCooldownMs: Long get() = profile.warningThresholdSec.coerceAtLeast(1) * 1000L
+    private val cueCooldownMs: Long get() = profile.warningThresholdSec.coerceAtLeast(1) * Constants.MILLIS_PER_SECOND
 
     // Phase-average accumulators (pace in mph, HR in bpm).
     private var fastPaceSum = 0.0
@@ -229,14 +230,14 @@ class SessionEngine(
     /** Advance the session to the current wall-clock time. Call ~1 Hz while running. */
     fun tick() {
         if (!snapshot.running || snapshot.finished || snapshot.paused) return
-        val rawT = ((clock.nowMillis() - launchedAtMs) / 1000L).toInt()
+        val rawT = ((clock.nowMillis() - launchedAtMs) / Constants.MILLIS_PER_SECOND).toInt()
         val t = if (finishSec < Long.MAX_VALUE) rawT.coerceAtMost(finishSec.toInt()) else rawT
         if (t < lastDistTick) return
         // Integrate distance from pace over the elapsed interval.
         val dt = t - lastDistTick
         lastDistTick = t
         val mph = snapshot.pace ?: 0f
-        if (dt > 0) distance += mph * dt / 3600.0
+        if (dt > 0) distance += mph * dt / Constants.SECONDS_PER_HOUR
 
         // DISTANCE: latch cool-down once the target is reached.
         if (profile.lengthMode == WorkoutLength.DISTANCE && !latched && distance >= profile.distanceMiles) {
@@ -405,9 +406,10 @@ class SessionEngine(
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
                     // Speed up while the push target (HR/pace ceiling) is unmet.
                     // HR and pace share one cue so they never double-fire, and a
-                    // 0 reading (no signal) never triggers a cue.
+                    // reading without a meaningful signal never triggers a cue:
+                    // HR 0, or pace at/below the min-signal threshold.
                     val hrBelow = s.hr != null && s.hr > 0 && s.hr < profile.hrCeiling
-                    val paceBelow = s.pace != null && s.pace > 0f && s.pace < profile.paceCeilingMph.toFloat()
+                    val paceBelow = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace < profile.paceCeilingMph.toFloat()
                     if (hrBelow || paceBelow) cueIf("speedUp", "Speed up")
                 }
             }
@@ -415,7 +417,7 @@ class SessionEngine(
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
                     // Slow down while the recovery target (HR/pace floor) is unmet.
                     val hrAbove = s.hr != null && s.hr > 0 && s.hr > profile.hrFloor
-                    val paceAbove = s.pace != null && s.pace > 0f && s.pace > profile.paceFloorMph.toFloat()
+                    val paceAbove = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace > profile.paceFloorMph.toFloat()
                     if (hrAbove || paceAbove) cueIf("slowDown", "Slow down")
                 }
             }

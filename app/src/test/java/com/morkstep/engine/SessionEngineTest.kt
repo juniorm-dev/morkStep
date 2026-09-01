@@ -637,11 +637,12 @@ class SessionEngineTest {
     }
 
     @Test
-    fun zeroPace_suppressesPaceCue() {
-        // Pace 0 (GPS not reporting) must not cue even though HR is below the ceiling.
+    fun noSignalPace_suppressesPaceCue() {
+        // Pace at/below the 1.5 mph min-signal threshold (e.g. 0, GPS not
+        // reporting) must not cue even though HR is below the ceiling.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 0f, hr = 160)
+        val eng = engineWith(roundsProfile, clock, cue, pace = 1.5f, hr = 160)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -650,6 +651,23 @@ class SessionEngineTest {
         clock.advance(1_000)
         eng.tick()
         assertFalse(cue.spoken.any { it.contains("Speed up") })
+    }
+
+    @Test
+    fun paceJustAboveThreshold_triggersPaceCue() {
+        // 1.6 mph is above the 1.5 mph min-signal threshold: HR is over the
+        // ceiling (160 > 150) so only the pace condition can cue — and it must.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, pace = 1.6f, hr = 160)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
     @Test
