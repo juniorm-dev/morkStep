@@ -11,6 +11,9 @@ enum class WorkoutLength { ROUNDS, DISTANCE, TIME, ADHOC }
 /** Device haptics for workout cues: none, phase transitions only, or every cue. */
 enum class VibrationMode { OFF, PHASE_CHANGE, ALL }
 
+/** Global app theme preference; SYSTEM follows the device setting. */
+enum class DarkMode { SYSTEM, DARK, LIGHT }
+
 /**
  * One named workout configuration (profile).
  *
@@ -35,9 +38,16 @@ data class WorkoutProfile(
     val fastSec: Int = 180,
     val slowSec: Int = 180,
     val cooldownSec: Int = 120,
-    /** Push cues "Speed up" while pace is below this; recovery uses [paceFloorMph]. */
+    /**
+     * Recovery-phase pace cap (mph): recovery cues "Slow down" while pace is
+     * above this. (Named "ceiling" for historical reasons; it caps recovery,
+     * while [paceFloorMph] floors push — the naming may change in a future update.)
+     */
     val paceCeilingMph: Double = 4.5,
-    /** Recovery cues "Slow down" while pace is above this. */
+    /**
+     * Push-phase pace floor (mph): push cues "Speed up" while pace is below
+     * this. (Named "floor" for historical reasons; see [paceCeilingMph].)
+     */
     val paceFloorMph: Double = 3.2,
     /** Heart rate (bpm): push cues "Speed up" while HR is below this. */
     val hrCeiling: Int = 150,
@@ -55,9 +65,7 @@ data class WorkoutProfile(
     val vibrationMode: VibrationMode = VibrationMode.OFF,
     /** Cue vibration strength 0..1 (scales the amplitude of phone/watch haptics). */
     val vibrationIntensity: Float = 0.5f,
-    /** Dark theme override per profile: null follows the system setting, true = dark, false = light. */
-    val darkMode: Boolean? = null,
-) {
+    ) {
     val totalSeconds: Long
         get() = when (lengthMode) {
             WorkoutLength.ROUNDS -> warmupSec.toLong() + rounds.toLong() * (fastSec + slowSec) + cooldownSec

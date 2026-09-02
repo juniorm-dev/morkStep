@@ -87,27 +87,27 @@ private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 private fun WearSessionState.targetStatus(): TargetStatus {
     val p = pace ?: return TargetStatus.NONE
     return when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> if (p >= paceCeiling) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        WearPhase.SLOW -> if (p <= paceFloor) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        WearPhase.FAST -> if (p >= paceFloor) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        WearPhase.SLOW -> if (p <= paceCeiling) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
         else -> TargetStatus.NONE
     }
 }
 
 private fun WearSessionState.statusCaption(): String = when (targetStatus()) {
     TargetStatus.NONE -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "Push — target $paceCeiling mph ceiling"
-        WearPhase.SLOW -> "Recovery — target $paceFloor mph floor"
+        WearPhase.FAST -> "Push — target $paceFloor mph floor"
+        WearPhase.SLOW -> "Recovery — target $paceCeiling mph ceiling"
         WearPhase.WARMUP -> "Warm-up — no pace target"
         WearPhase.COOLDOWN -> "Cooldown — no pace target"
         null -> ""
     }
     TargetStatus.ON_TARGET -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "On target — pace ≥ $paceCeiling mph ceiling"
-        else -> "On target — pace ≤ $paceFloor mph floor"
+        WearPhase.FAST -> "On target — pace ≥ $paceFloor mph floor"
+        else -> "On target — pace ≤ $paceCeiling mph ceiling"
     }
     TargetStatus.OFF_TARGET -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "Speed up — pace < $paceCeiling mph ceiling"
-        else -> "Slow down — pace > $paceFloor mph floor"
+        WearPhase.FAST -> "Speed up — pace < $paceFloor mph floor"
+        else -> "Slow down — pace > $paceCeiling mph ceiling"
     }
 }
 
@@ -227,19 +227,17 @@ private fun WearBand(s: WearSessionState) {
                 color = surfaceVariant,
                 cornerRadius = CornerRadius(12.dp.toPx()),
             )
-            val xFloor = s.paceFloor / maxMph * w
-            val xCeil = s.paceCeiling / maxMph * w
-            if (xCeil > xFloor) {
-                drawRoundRect(
-                    color = targetColor.copy(alpha = 0.22f),
-                    topLeft = Offset(xFloor.coerceIn(0f, w), bandTop),
-                    size = Size((xCeil - xFloor).coerceAtLeast(0f), bandH),
-                    cornerRadius = CornerRadius(8.dp.toPx()),
-                )
-            }
+            val xLow = minOf(s.paceFloor, s.paceCeiling) / maxMph * w
+            val xHigh = maxOf(s.paceFloor, s.paceCeiling) / maxMph * w
+            drawRoundRect(
+                color = targetColor.copy(alpha = 0.22f),
+                topLeft = Offset(xLow.coerceIn(0f, w), bandTop),
+                size = Size((xHigh - xLow).coerceAtLeast(0f), bandH),
+                cornerRadius = CornerRadius(8.dp.toPx()),
+            )
             val targetFrac = when (WearPhase.from(s.phaseOrd)) {
-                WearPhase.FAST -> s.paceCeiling / maxMph
-                WearPhase.SLOW -> s.paceFloor / maxMph
+                WearPhase.FAST -> s.paceFloor / maxMph
+                WearPhase.SLOW -> s.paceCeiling / maxMph
                 else -> null
             }
             targetFrac?.let { fx ->

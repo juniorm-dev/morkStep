@@ -53,8 +53,8 @@ private val OK_GREEN = Color(0xFF2E9E4F)
 
 /**
  * Phase tracker for the running session: how the push/recovery segments are
- * progressing, plus how the live pace compares to the phase target (ceiling
- * during push, floor during recovery). Pure render over [LiveState].
+ * progressing, plus how the live pace compares to the phase target (floor
+ * during push, ceiling during recovery). Pure render over [LiveState].
  */
 @Suppress("FunctionName")
 @Composable
@@ -102,30 +102,30 @@ private fun segmentProgress(live: LiveState, profile: WorkoutProfile): Float {
 
 private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 
-/** Compare the live pace to the phase target (ceiling in PUSH, floor in RECOVERY). */
+/** Compare the live pace to the phase target (floor in PUSH, ceiling in RECOVERY). */
 private fun targetStatus(live: LiveState, profile: WorkoutProfile): TargetStatus {
     val pace = live.pace ?: return TargetStatus.NONE
     return when (live.phase) {
-        PhaseType.FAST -> if (pace >= profile.paceCeilingMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        PhaseType.SLOW -> if (pace <= profile.paceFloorMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        PhaseType.FAST -> if (pace >= profile.paceFloorMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        PhaseType.SLOW -> if (pace <= profile.paceCeilingMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
         else -> TargetStatus.NONE
     }
 }
 
 private fun statusCaption(live: LiveState, profile: WorkoutProfile): String = when (targetStatus(live, profile)) {
     TargetStatus.NONE -> when (live.phase) {
-        PhaseType.FAST -> "Push — target ${profile.paceCeilingMph} mph ceiling"
-        PhaseType.SLOW -> "Recovery — target ${profile.paceFloorMph} mph floor"
+        PhaseType.FAST -> "Push — target ${profile.paceFloorMph} mph floor"
+        PhaseType.SLOW -> "Recovery — target ${profile.paceCeilingMph} mph ceiling"
         PhaseType.WARMUP -> "Warm-up — no pace target"
         PhaseType.COOLDOWN -> "Cooldown — no pace target"
     }
     TargetStatus.ON_TARGET -> when (live.phase) {
-        PhaseType.FAST -> "On target — pace ≥ ${profile.paceCeilingMph} mph ceiling"
-        else -> "On target — pace ≤ ${profile.paceFloorMph} mph floor"
+        PhaseType.FAST -> "On target — pace ≥ ${profile.paceFloorMph} mph floor"
+        else -> "On target — pace ≤ ${profile.paceCeilingMph} mph ceiling"
     }
     TargetStatus.OFF_TARGET -> when (live.phase) {
-        PhaseType.FAST -> "Speed up — pace < ${profile.paceCeilingMph} mph ceiling"
-        else -> "Slow down — pace > ${profile.paceFloorMph} mph floor"
+        PhaseType.FAST -> "Speed up — pace < ${profile.paceFloorMph} mph floor"
+        else -> "Slow down — pace > ${profile.paceCeilingMph} mph ceiling"
     }
 }
 
@@ -221,21 +221,20 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
                 color = trackColor,
                 cornerRadius = CornerRadius(corner),
             )
-            // Floor..ceiling band.
-            val xFloor = (profile.paceFloorMph / maxMph).toFloat() * w
-            val xCeil = (profile.paceCeilingMph / maxMph).toFloat() * w
-            if (xCeil > xFloor) {
-                drawRoundRect(
-                    color = targetColor.copy(alpha = 0.22f),
-                    topLeft = Offset(xFloor.coerceIn(0f, w), bandTop),
-                    size = Size((xCeil - xFloor).coerceAtLeast(0f), bandH),
-                    cornerRadius = CornerRadius(10.dp.toPx()),
-                )
-            }
-            // Target boundary (ceiling in push, floor in recovery).
+            // Band between the two targets (rendered min..max so an inverted
+            // band — push floor above the recovery cap — still shows).
+            val xLow = (minOf(profile.paceFloorMph, profile.paceCeilingMph) / maxMph).toFloat() * w
+            val xHigh = (maxOf(profile.paceFloorMph, profile.paceCeilingMph) / maxMph).toFloat() * w
+            drawRoundRect(
+                color = targetColor.copy(alpha = 0.22f),
+                topLeft = Offset(xLow.coerceIn(0f, w), bandTop),
+                size = Size((xHigh - xLow).coerceAtLeast(0f), bandH),
+                cornerRadius = CornerRadius(10.dp.toPx()),
+            )
+            // Target boundary (push floor / recovery cap).
             val targetFrac = when (live.phase) {
-                PhaseType.FAST -> (profile.paceCeilingMph / maxMph).toFloat()
-                PhaseType.SLOW -> (profile.paceFloorMph / maxMph).toFloat()
+                PhaseType.FAST -> (profile.paceFloorMph / maxMph).toFloat()
+                PhaseType.SLOW -> (profile.paceCeilingMph / maxMph).toFloat()
                 else -> null
             }
             targetFrac?.let { fx ->

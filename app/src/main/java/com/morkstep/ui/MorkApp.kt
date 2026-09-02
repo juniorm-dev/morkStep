@@ -56,6 +56,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
     val locationGranted by viewModel.locationGranted.collectAsStateWithLifecycle()
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
+    val darkMode by viewModel.darkMode.collectAsStateWithLifecycle()
     val savedProfileName by viewModel.savedProfileName.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val transferMessage by viewModel.transferMessage.collectAsStateWithLifecycle()
@@ -192,6 +193,9 @@ fun MorkApp(viewModel: MainViewModel) {
                     onSelect = viewModel::selectProfile,
                     onSave = viewModel::updateProfile,
                     onNewProfile = viewModel::newProfileFromActive,
+                    onCreateBaseline = viewModel::createBaselineProfile,
+                    darkMode = darkMode,
+                    onDarkModeChange = viewModel::setDarkMode,
                     simulated = simulated,
                     sensorNote = sensorNote,
                     onSimulatedChange = viewModel::setSimulatedSensors,

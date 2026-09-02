@@ -77,7 +77,7 @@ class AppSmokeTest {
         rule.onAllNodesWithText("Settings").onFirst().performClick()
         rule.onNodeWithText("Profile settings").assertExists()
         rule.onNodeWithText("Dark mode").performScrollTo().assertExists()
-        rule.onNodeWithText("On forces the dark theme; off follows the system setting.")
+        rule.onNodeWithText("Applies to the whole app; System follows the device setting.")
             .performScrollTo().assertExists()
     }
 

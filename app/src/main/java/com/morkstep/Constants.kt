@@ -52,4 +52,41 @@ object Constants {
     const val MILLIS_PER_SECOND = 1_000L
     /** Seconds in one hour, for integrating mph into miles. */
     const val SECONDS_PER_HOUR = 3600.0
+
+    // ---- baseline profile ----
+    /** Name of the Baseline profile; identity used by the home label and post-workout update. */
+    const val BASELINE_PROFILE_NAME = "Baseline"
+    // Calibration workout (installed by "Create baseline"): a few quick push/recovery rounds.
+    /** Baseline calibration: number of push/recovery rounds. */
+    const val BASELINE_ROUNDS = 3
+    /** Baseline calibration: push interval in seconds. */
+    const val BASELINE_PUSH_SEC = 45
+    /** Baseline calibration: recovery interval in seconds. */
+    const val BASELINE_RECOVERY_SEC = 45
+    /** Baseline calibration: warm-up in seconds. */
+    const val BASELINE_WARMUP_SEC = 20
+    /** Baseline calibration: cool-down in seconds. */
+    const val BASELINE_COOLDOWN_SEC = 0
+    // Calibrated profile (applied after a baseline workout completes).
+    /** Baseline calibrated: workout length in minutes. */
+    const val BASELINE_UPDATED_TIME_MIN = 30
+    /** Baseline calibrated: push interval in seconds. */
+    const val BASELINE_UPDATED_PUSH_SEC = 120
+    /** Baseline calibrated: recovery interval in seconds. */
+    const val BASELINE_UPDATED_RECOVERY_SEC = 120
+    /** Baseline calibrated: warm-up in seconds. */
+    const val BASELINE_UPDATED_WARMUP_SEC = 30
+    /** Baseline calibrated: cool-down in seconds. */
+    const val BASELINE_UPDATED_COOLDOWN_SEC = 30
+    // Pace-target clamp bounds, matching the Config screen sliders so a derived
+    // average can never put a slider out of range (ceiling = recovery cap,
+    // floor = push floor).
+    /** Baseline calibrated: recovery-pace ceiling (mph) lower bound. */
+    const val BASELINE_MIN_PACE_CEILING_MPH = 2.0
+    /** Baseline calibrated: recovery-pace ceiling (mph) upper bound. */
+    const val BASELINE_MAX_PACE_CEILING_MPH = 8.0
+    /** Baseline calibrated: push-pace floor (mph) lower bound. */
+    const val BASELINE_MIN_PACE_FLOOR_MPH = 1.5
+    /** Baseline calibrated: push-pace floor (mph) upper bound. */
+    const val BASELINE_MAX_PACE_FLOOR_MPH = 7.0
 }
