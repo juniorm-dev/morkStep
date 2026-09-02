@@ -97,6 +97,16 @@ keytool -genkeypair -v -keystore release.keystore -alias morkstep \
 
 If `keystore.properties` is absent/incomplete, `assembleRelease` still succeeds but produces an **unsigned** `morkStep-release-unsigned.apk` (cannot be installed on a device) — the build never hard-fails on a missing secret. Present credentials → a signed, sideloadable `morkStep-release.apk`. Keep the keystore and its password safe and private: they are the app's release identity and are **not** backed up or committed.
 
+### Releasing
+
+**`release.bat`** runs the whole flow in one command (run on `main` after the feature PR has merged):
+
+1. `git fetch --tags` so the version guard sees the latest tags;
+2. `assembleRelease` — the **version guard** (`verifyReleaseVersion`) fails the build if `v<versionName>` already exists, i.e. you are about to ship a version you already released without bumping it;
+3. tags the built source `v<versionName>` and pushes both the branch and the tag.
+
+The package name is read from the same `app/build.gradle.kts` the guard checked and the tag is created from, so the tag can never describe a different version than the APK it points at. **Bump `versionCode`/`versionName` together in `app/build.gradle.kts` before running it** — if you forget, the guard stops `assembleRelease` with a clear message.
+
 ---
 ## Architecture
 

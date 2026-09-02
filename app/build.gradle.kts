@@ -1,6 +1,7 @@
 import java.util.Properties
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.api.provider.Property
@@ -70,6 +71,34 @@ abstract class VersionApk : DefaultTask() {
                 val pristine = src.parentFile.resolve("$stem$suffix")
                 if (!pristine.exists()) src.copyTo(pristine)
             }
+        }
+    }
+}
+
+// Fails the release build when a git tag for the current version already
+// exists. Releases are tagged v<versionName>, so a second build of the same
+// version means versionCode/versionName were not bumped — exactly the mistake
+// that shipped a 0.10.1 package under the v0.10.2 tag. Run before packaging a
+// release variant so the package name can never drift from the release tag.
+abstract class VerifyVersionTag : DefaultTask() {
+    @get:Input
+    abstract val version: Property<String>
+
+    @TaskAction
+    fun run() {
+        val v = version.get()
+        val tag = "v$v"
+        val existing = ProcessBuilder("git", "tag", "-l", tag)
+            .redirectErrorStream(true)
+            .start()
+            .inputStream.bufferedReader().use { it.readText() }
+            .trim()
+        if (existing == tag) {
+            throw GradleException(
+                "Version $v is already released (tag $tag exists on this repo). " +
+                    "Bump versionCode/versionName in app/build.gradle.kts before " +
+                    "building a release package."
+            )
         }
     }
 }
@@ -163,6 +192,17 @@ androidComponents {
         }
         tasks.matching { it.name == "package$pkgName" }.configureEach {
             finalizedBy(rename)
+        }
+        // Guard release packaging against shipping a version that was already
+        // tagged (see VerifyVersionTag). Debug builds are not gated so day-to-day
+        // iteration is unaffected.
+        if (variant.buildType == "release") {
+            val verify = project.tasks.register("verify${pkgName}Version", VerifyVersionTag::class.java) {
+                this.version.set(version)
+            }
+            tasks.matching { it.name == "package$pkgName" }.configureEach {
+                dependsOn(verify)
+            }
         }
         tasks.matching { it.name == "create${pkgName}ApkListingFileRedirect" }.configureEach {
             mustRunAfter(rename)
