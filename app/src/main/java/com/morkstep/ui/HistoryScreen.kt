@@ -138,6 +138,7 @@ private fun WorkoutRow(w: WorkoutEntity) {
             }
             val stats = buildList {
                 w.avgHeartRate?.let { add("avg HR $it bpm") }
+                if (w.minHr != null && w.maxHr != null) add("min–max HR ${w.minHr}–${w.maxHr}")
                 if (w.distanceMiles > 0f) add("%.2f mi".format(w.distanceMiles))
                 if (w.overCeilingSec > 0) add("above ceiling ${w.overCeilingSec}s")
             }

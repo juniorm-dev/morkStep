@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Read heart-rate records from Health Connect (post-workout backfill). -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
 
     <!-- Bluetooth heart-rate straps -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -44,6 +46,18 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Shown by Health Connect before the permission grant so the user
+             understands why heart rate access is requested. -->
+        <activity
+            android:name=".RationaleActivity"
+            android:exported="true"
+            android:theme="@style/Theme.morkStep">
+            <intent-filter>
+                <action android:name="android.health.connect.action.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

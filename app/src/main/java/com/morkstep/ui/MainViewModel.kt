@@ -35,6 +35,7 @@ import com.morkstep.engine.SessionEngine
 import com.morkstep.sensing.GpsPaceSource
 import com.morkstep.sensing.BleHeartRateSource
 import com.morkstep.sensing.HeartRateSource
+import com.morkstep.sensing.healthConnectHrForWorkout
 import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.SimulatedSensors
 import com.morkstep.sensing.WearHeartRateSource
@@ -126,6 +127,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Relay gated cue vibrations to the paired Wear companion for watch haptics. */
     private val _wearVibrate = MutableStateFlow(false)
     val wearVibrate: StateFlow<Boolean> = _wearVibrate.asStateFlow()
+
+    /** Post-workout Health Connect HR backfill (applies when the Wear relay is off). */
+    private val _hcBackfillHr = MutableStateFlow(true)
+    val hcBackfillHr: StateFlow<Boolean> = _hcBackfillHr.asStateFlow()
+
+    /** Health Connect READ_HEART_RATE granted state; refreshed on launch and after the permission screen. */
+    private val _hcGranted = MutableStateFlow(false)
+    val hcGranted: StateFlow<Boolean> = _hcGranted.asStateFlow()
 
     /** Cue-vibration strength 0..1 from the active profile. */
     private val _vibrationIntensity = MutableStateFlow(0.5f)
@@ -225,6 +234,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _wearVibrate.value = on
             }
         }
+        viewModelScope.launch {
+            container.configStore.hcBackfillHr.collect { on ->
+                _hcBackfillHr.value = on
+            }
+        }
+        refreshHealthConnectState()
         viewModelScope.launch {
             container.configStore.darkMode.collect { _darkMode.value = it }
         }
@@ -326,6 +341,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Choose heart rate source: paired Wear companion (relay) instead of BLE. */
     fun setWearHr(on: Boolean) {
         viewModelScope.launch { container.configStore.setWearHr(on) }
+    }
+
+    /** Whether to backfill HR from Health Connect after workouts without the watch. */
+    fun setHcBackfillHr(on: Boolean) {
+        viewModelScope.launch { container.configStore.setHcBackfillHr(on) }
+    }
+
+    /** Re-check Health Connect availability and read permission (call after the permission screen). */
+    fun refreshHealthConnectState() {
+        val context = getApplication<Application>()
+        _hcGranted.value =
+            androidx.health.connect.client.HealthConnectClient.getSdkStatus(context) ==
+                androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, "android.permission.health.READ_HEART_RATE"
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
     /** Relay gated cue vibrations to the paired Wear companion for watch haptics. */
     fun setWearVibrate(on: Boolean) {
@@ -524,25 +555,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         WorkoutService.stop(getApplication())
         val ended = System.currentTimeMillis()
         val started = ended - ls.totalSeconds * 1000L
+        val activeProfileAtFinish = _activeProfile.value
         viewModelScope.launch {
-            container.workoutDao.insert(
-                WorkoutEntity(
-                    startTime = started,
-                    endTime = ended,
-                    durationSec = ls.totalSeconds,
-                    fastSegments = ls.fastSegmentsDone,
-                    avgFastPace = ls.avgOverallPaceMph,
-                    avgHeartRate = ls.avgOverallHr,
-                    overCeilingSec = ls.overCeilingSec,
-                    distanceMiles = ls.distanceMiles.toFloat(),
-                    avgPushPace = ls.avgPushPaceMph,
-                    avgRecoveryPace = ls.avgRecoveryPaceMph,
-                    avgOverallPace = ls.avgOverallPaceMph,
-                    avgPushHr = ls.avgPushHr,
-                    avgRecoveryHr = ls.avgRecoveryHr,
-                    avgOverallHr = ls.avgOverallHr,
-                )
+            val entity = WorkoutEntity(
+                startTime = started,
+                endTime = ended,
+                durationSec = ls.totalSeconds,
+                fastSegments = ls.fastSegmentsDone,
+                avgFastPace = ls.avgOverallPaceMph,
+                avgHeartRate = ls.avgOverallHr,
+                overCeilingSec = ls.overCeilingSec,
+                distanceMiles = ls.distanceMiles.toFloat(),
+                avgPushPace = ls.avgPushPaceMph,
+                avgRecoveryPace = ls.avgRecoveryPaceMph,
+                avgOverallPace = ls.avgOverallPaceMph,
+                avgPushHr = ls.avgPushHr,
+                avgRecoveryHr = ls.avgRecoveryHr,
+                avgOverallHr = ls.avgOverallHr,
             )
+            val id = container.workoutDao.insert(entity)
+            // Health Connect backfill: only when the Wear relay is off; real-time
+            // values already recorded (BLE strap) are never overwritten — each
+            // backfilled field fills only what is still null.
+            if (_hcBackfillHr.value && !_useWearHr.value && activeProfileAtFinish != null) {
+                val hc = runCatching {
+                    healthConnectHrForWorkout(getApplication(), entity.copy(id = id), activeProfileAtFinish)
+                }.getOrNull() ?: return@launch
+                val merged = entity.copy(
+                    id = id,
+                    avgHeartRate = entity.avgHeartRate ?: hc.avgOverall,
+                    avgOverallHr = entity.avgOverallHr ?: hc.avgOverall,
+                    avgPushHr = entity.avgPushHr ?: hc.avgPush,
+                    avgRecoveryHr = entity.avgRecoveryHr ?: hc.avgRecovery,
+                    minHr = hc.minHr,
+                    maxHr = hc.maxHr,
+                )
+                if (merged != entity) container.workoutDao.update(merged)
+            }
         }
         // Baseline: after any baseline workout, re-derive the calibrated profile
         // (fixed 30-minute length and 120 s intervals; the pace band comes from
