@@ -404,21 +404,21 @@ class SessionEngine(
                 // The first warning cue after a phase transition is suppressed:
                 // the sensor value carried over from the previous phase is stale.
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Speed up while the push target (HR/pace ceiling) is unmet.
+                    // Speed up while the push target (HR ceiling / pace floor) is unmet.
                     // HR and pace share one cue so they never double-fire, and a
                     // reading without a meaningful signal never triggers a cue:
                     // HR below the min-signal threshold, or pace at/below its
                     // min-signal threshold.
                     val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrCeiling
-                    val paceBelow = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace < profile.paceCeilingMph.toFloat()
+                    val paceBelow = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace < profile.paceFloorMph.toFloat()
                     if (hrBelow || paceBelow) cueIf("speedUp", "Speed up")
                 }
             }
             PhaseType.SLOW -> {
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Slow down while the recovery target (HR/pace floor) is unmet.
+                    // Slow down while the recovery target (HR floor / pace ceiling) is unmet.
                     val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrFloor
-                    val paceAbove = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace > profile.paceFloorMph.toFloat()
+                    val paceAbove = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace > profile.paceCeilingMph.toFloat()
                     if (hrAbove || paceAbove) cueIf("slowDown", "Slow down")
                 }
             }

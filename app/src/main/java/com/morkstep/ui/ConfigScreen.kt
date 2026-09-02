@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.morkstep.data.DarkMode
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
@@ -55,6 +56,13 @@ private val VIBRATION_MODES = listOf(
     VibrationMode.OFF to "Off",
     VibrationMode.PHASE_CHANGE to "On phase change",
     VibrationMode.ALL to "All cues",
+)
+
+/** Global dark-mode options (labels mirror the user-facing setting names). */
+private val DARK_MODES = listOf(
+    DarkMode.SYSTEM to "System",
+    DarkMode.DARK to "Dark",
+    DarkMode.LIGHT to "Light",
 )
 
 /** Material `Slider` `steps` count giving [step] granularity across [range] (interval count minus the two endpoints). */
@@ -97,6 +105,9 @@ fun ConfigScreen(
     onSelect: (Long) -> Unit,
     onSave: (WorkoutProfile) -> Unit,
     onNewProfile: () -> Unit,
+    onCreateBaseline: () -> Unit,
+    darkMode: DarkMode,
+    onDarkModeChange: (DarkMode) -> Unit,
     simulated: Boolean,
     sensorNote: String,
     onSimulatedChange: (Boolean) -> Unit,
@@ -154,6 +165,21 @@ fun ConfigScreen(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Baseline", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Creates the Baseline profile: a 3-round calibration workout (45 s push / 45 s recovery, 20 s warm-up). " +
+                        "After the workout it becomes your calibrated 30-minute baseline.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(onClick = onCreateBaseline, modifier = Modifier.fillMaxWidth()) {
+                    Text("Create baseline")
+                }
+            }
+        }
+
         if (profile == null) {
             Spacer(Modifier.height(16.dp))
             Text("No profiles yet — tap New to create one.", style = MaterialTheme.typography.bodyMedium)
@@ -178,8 +204,6 @@ fun ConfigScreen(
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
         var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
         var vibrationIntensity by rememberSaveable(profile.id) { mutableFloatStateOf(profile.vibrationIntensity) }
-        var darkMode by rememberSaveable(profile.id) { mutableStateOf(profile.darkMode) }
-
         Spacer(Modifier.height(16.dp))
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -197,19 +221,38 @@ fun ConfigScreen(
         Text("Appearance", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                var darkExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = darkExpanded,
+                    onExpandedChange = { darkExpanded = it },
                 ) {
-                    Text("Dark mode", style = MaterialTheme.typography.bodyLarge)
-                    Switch(
-                        checked = darkMode == true,
-                        onCheckedChange = { darkMode = if (it) true else null },
+                    OutlinedTextField(
+                        value = DARK_MODES.first { it.first == darkMode }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Dark mode") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = darkExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
                     )
+                    ExposedDropdownMenu(
+                        expanded = darkExpanded,
+                        onDismissRequest = { darkExpanded = false },
+                    ) {
+                        DARK_MODES.forEach { (mode, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onDarkModeChange(mode)
+                                    darkExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
                 Text(
-                    "On forces the dark theme; off follows the system setting.",
+                    "Applies to the whole app; System follows the device setting.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -291,7 +334,7 @@ fun ConfigScreen(
                 SliderRow("Pace ceiling", "%.1f".format(paceCeil), paceCeil, 2f..8f, 24) { paceCeil = it }
                 SliderRow("Pace floor", "%.1f".format(paceFloor), paceFloor, 1.5f..7f, 24) { paceFloor = it }
                 Text(
-                    "Push cues \"Speed up\" until pace reaches the ceiling; recovery cues \"Slow down\" until pace drops to the floor.",
+                    "Push cues \"Speed up\" while pace stays below the floor; recovery cues \"Slow down\" while pace stays above the ceiling.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -312,8 +355,8 @@ fun ConfigScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
                 Text(
-                    "Push cues \"Speed up\" while pace or heart rate is below the ceiling; recovery cues " +
-                        "\"Slow down\" while pace or heart rate is above the floor. A cue repeats at most once " +
+                    "Push cues \"Speed up\" while pace is below the pace floor, or heart rate below the HR ceiling; recovery cues " +
+                        "\"Slow down\" while pace is above the pace ceiling, or heart rate above the HR floor. A cue repeats at most once " +
                         "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -468,7 +511,6 @@ fun ConfigScreen(
                         audioCues = audio,
                         vibrationMode = vibration,
                         vibrationIntensity = vibrationIntensity,
-                        darkMode = darkMode,
                     )
                 )
             },

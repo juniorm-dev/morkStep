@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutProfile
+import com.morkstep.data.isBaselineProfile
 import kotlin.math.roundToInt
 
 /** Format a duration in seconds as "m:ss"; under a minute, just "Ns". */
@@ -58,7 +59,7 @@ fun HomeScreen(
             Column(Modifier.padding(16.dp)) {
                 Text("Select profile", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                profiles.forEach { p ->
+                profiles.filterNot { isBaselineProfile(it) }.forEach { p ->
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -119,7 +120,9 @@ fun HomeScreen(
                     .height(56.dp),
             ) {
                 Text(
-                    if (workoutActive) "Active workout" else "Start workout",
+                    if (workoutActive) "Active workout"
+                    else if (isBaselineProfile(active)) "Start baseline"
+                    else "Start workout",
                     style = MaterialTheme.typography.titleMedium,
                 )
             }

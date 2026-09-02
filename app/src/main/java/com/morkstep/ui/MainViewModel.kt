@@ -16,6 +16,7 @@ import com.morkstep.Constants
 import com.morkstep.MorkApplication
 import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
+import com.morkstep.data.DarkMode
 import com.morkstep.data.PhaseType
 import com.morkstep.data.TransferIO
 import com.morkstep.data.VibrationMode
@@ -23,7 +24,10 @@ import com.morkstep.data.WorkoutEntity
 import com.morkstep.data.WorkoutProfile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import com.morkstep.data.baselineCalibrationProfile
 import com.morkstep.data.defaultProfile
+import com.morkstep.data.isBaselineProfile
+import com.morkstep.data.updatedBaselineProfile
 import com.morkstep.engine.CueSink
 import com.morkstep.engine.CueVibration
 import com.morkstep.engine.LiveState
@@ -110,6 +114,10 @@ private class SpeakerSink(
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val container: AppContainer = (app as MorkApplication).container
     private val speaker = CueSpeaker(app)
+
+    /** Global dark-mode preference (system / dark / light), shared by the whole app. */
+    private val _darkMode = MutableStateFlow(DarkMode.SYSTEM)
+    val darkMode: StateFlow<DarkMode> = _darkMode.asStateFlow()
 
     /** Vibration mode from the active profile's settings; gates phone + watch haptics. */
     private val _vibrationMode = MutableStateFlow(VibrationMode.OFF)
@@ -214,6 +222,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
+            container.configStore.darkMode.collect { _darkMode.value = it }
+        }
+        viewModelScope.launch {
             container.configStore.profiles.collect { list ->
                 _profiles.value = list
                 refreshActive()
@@ -299,6 +310,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Set the global dark-mode preference. */
+    fun setDarkMode(mode: DarkMode) {
+        viewModelScope.launch { container.configStore.setDarkMode(mode) }
+    }
+
     fun setSimulatedSensors(on: Boolean) {
         viewModelScope.launch { container.configStore.setSimulatedSensors(on) }
     }
@@ -349,6 +365,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val list = _profiles.value + fresh
             container.configStore.saveProfiles(list)
             container.configStore.setActive(fresh.id)
+        }
+    }
+
+    /** Create (or reset) the Baseline calibration profile and make it active. */
+    fun createBaselineProfile() {
+        val existing = _profiles.value.firstOrNull { isBaselineProfile(it) }
+        viewModelScope.launch {
+            val fresh = baselineCalibrationProfile(id = existing?.id ?: System.currentTimeMillis())
+            val list = if (existing != null) {
+                _profiles.value.map { if (it.id == existing.id) fresh else it }
+            } else {
+                _profiles.value + fresh
+            }
+            container.configStore.saveProfiles(list)
+            container.configStore.setActive(fresh.id)
+            _savedProfileName.value = Constants.BASELINE_PROFILE_NAME
         }
     }
 
@@ -496,6 +528,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     avgOverallHr = ls.avgOverallHr,
                 )
             )
+        }
+        // Baseline: after any baseline workout, re-derive the calibrated profile
+        // (fixed 30-minute length and 120 s intervals; the pace band comes from
+        // this session's push/recovery averages).
+        val active = _activeProfile.value
+        if (active != null && isBaselineProfile(active)) {
+            val updated = updatedBaselineProfile(
+                baseline = active,
+                pushPaceMph = ls.avgPushPaceMph?.toDouble(),
+                recoveryPaceMph = ls.avgRecoveryPaceMph?.toDouble(),
+            )
+            if (updated != active) {
+                viewModelScope.launch {
+                    container.configStore.saveProfiles(
+                        _profiles.value.map { if (it.id == active.id) updated else it }
+                    )
+                }
+            }
         }
     }
 

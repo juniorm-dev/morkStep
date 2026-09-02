@@ -38,9 +38,9 @@ object Constants {
     const val DEFAULT_FAST_SEC = 180
     /** Default recovery-segment length in seconds, shown before the first state relay. */
     const val DEFAULT_SLOW_SEC = 180
-    /** Default recovery pace floor (mph), mirroring the phone's profile default. */
+    /** Default push pace floor (mph), mirroring the phone's profile default. */
     const val DEFAULT_PACE_FLOOR_MPH = 3.2f
-    /** Default push pace ceiling (mph), mirroring the phone's profile default. */
+    /** Default recovery pace ceiling (mph), mirroring the phone's profile default. */
     const val DEFAULT_PACE_CEILING_MPH = 4.5f
 
     // ---- Phase palette (mirrors the phone tracker) ----

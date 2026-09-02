@@ -25,6 +25,7 @@ class ConfigStore(private val context: Context) {
         private val SIMULATED = booleanPreferencesKey("simulatedSensors")
         private val WEAR_HR = booleanPreferencesKey("wearHeartRate")
         private val WEAR_VIBRATE = booleanPreferencesKey("wearVibrate")
+        private val DARK_MODE = stringPreferencesKey("darkMode")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -46,6 +47,15 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setWearVibrate(value: Boolean) = context.dataStore.edit { p ->
         p[WEAR_VIBRATE] = value
+    }
+
+    /** Global dark-mode preference (system / dark / light), shared by the whole app. Default SYSTEM. */
+    val darkMode: Flow<DarkMode> = context.dataStore.data.map { p ->
+        runCatching { DarkMode.valueOf(p[DARK_MODE] ?: "SYSTEM") }.getOrDefault(DarkMode.SYSTEM)
+    }
+
+    suspend fun setDarkMode(mode: DarkMode) = context.dataStore.edit { p ->
+        p[DARK_MODE] = mode.name
     }
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]

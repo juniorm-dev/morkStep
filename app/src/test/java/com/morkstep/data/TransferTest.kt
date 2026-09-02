@@ -70,28 +70,15 @@ class TransferTest {
     }
 
     @Test
-    fun profileExport_roundTripsDarkMode() {
-        val dark = WorkoutProfile(id = 8, name = "Night", darkMode = true)
-        val backDark = json.decodeFromString<ProfileExport>(
-            json.encodeToString(ProfileExport(profiles = listOf(dark)))
-        )
-        assertEquals(true, backDark.profiles[0].darkMode)
-
-        val light = WorkoutProfile(id = 9, name = "Day", darkMode = false)
-        val backLight = json.decodeFromString<ProfileExport>(
-            json.encodeToString(ProfileExport(profiles = listOf(light)))
-        )
-        assertEquals(false, backLight.profiles[0].darkMode)
-    }
-
-    @Test
-    fun profileExport_absentDarkModeDefaultsToSystem() {
-        // A pre-dark-mode export has no darkMode key; null = follow system.
+    fun profileExport_ignoresLegacyDarkModeKey() {
+        // Dark mode is now a global preference, not a profile field; legacy
+        // exports that still carry the key must decode and drop it.
         val legacy = """
-            {"version":1,"profiles":[{"id":1,"name":"Legacy"}]}
+            {"version":1,"profiles":[{"id":1,"name":"Legacy","darkMode":true}]}
         """.trimIndent()
         val back = json.decodeFromString<ProfileExport>(legacy)
-        assertEquals(null, back.profiles[0].darkMode)
+        assertEquals(1, back.profiles.size)
+        assertEquals("Legacy", back.profiles[0].name)
     }
 
     @Test
