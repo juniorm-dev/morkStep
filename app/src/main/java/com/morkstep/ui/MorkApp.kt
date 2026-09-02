@@ -54,6 +54,8 @@ fun MorkApp(viewModel: MainViewModel) {
     val simulated by viewModel.simulated.collectAsStateWithLifecycle()
     val useWearHr by viewModel.useWearHr.collectAsStateWithLifecycle()
     val wearVibrate by viewModel.wearVibrate.collectAsStateWithLifecycle()
+    val hcBackfillHr by viewModel.hcBackfillHr.collectAsStateWithLifecycle()
+    val hcGranted by viewModel.hcGranted.collectAsStateWithLifecycle()
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
     val locationGranted by viewModel.locationGranted.collectAsStateWithLifecycle()
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
@@ -127,6 +129,20 @@ fun MorkApp(viewModel: MainViewModel) {
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         viewModel.refreshPermissions()
+    }
+
+    // Health Connect's own permission screen (a system activity, not a runtime prompt).
+    // The library's 1.1.0 permission constants are internal; "android.permission.health.
+    // READ_HEART_RATE" is the stable manifest string for both the manifest and the request.
+    val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
+        androidx.health.connect.client.PermissionController.createRequestPermissionResultContract()
+    ) {
+        viewModel.refreshHealthConnectState()
+    }
+    val requestHealthConnectPermission = {
+        healthConnectPermissionLauncher.launch(
+            setOf("android.permission.health.READ_HEART_RATE")
+        )
     }
 
     val requestPermissions = {
@@ -223,6 +239,10 @@ fun MorkApp(viewModel: MainViewModel) {
                     onWearHrChange = viewModel::setWearHr,
                     wearVibrate = wearVibrate,
                     onWearVibrateChange = viewModel::setWearVibrate,
+                    hcBackfillHr = hcBackfillHr,
+                    onHcBackfillChange = viewModel::setHcBackfillHr,
+                    hcGranted = hcGranted,
+                    onHealthConnectPermission = { requestHealthConnectPermission() },
                     onDelete = viewModel::deleteProfile,
                     onRequestPermissions = requestPermissions,
                     locationGranted = locationGranted,

@@ -115,6 +115,10 @@ fun ConfigScreen(
     onWearHrChange: (Boolean) -> Unit,
     wearVibrate: Boolean,
     onWearVibrateChange: (Boolean) -> Unit,
+    hcBackfillHr: Boolean,
+    onHcBackfillChange: (Boolean) -> Unit,
+    hcGranted: Boolean,
+    onHealthConnectPermission: () -> Unit,
     onDelete: (Long) -> Unit,
     onRequestPermissions: () -> Unit,
     locationGranted: Boolean,
@@ -445,6 +449,19 @@ fun ConfigScreen(
                         Text("Vibrate watch", style = MaterialTheme.typography.bodyLarge)
                         Switch(checked = wearVibrate, onCheckedChange = onWearVibrateChange)
                     }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Health Connect HR (after workout)", style = MaterialTheme.typography.bodyLarge)
+                        Switch(checked = hcBackfillHr, onCheckedChange = onHcBackfillChange)
+                    }
+                    Text(
+                        "When the Wear relay is off, average/min/max heart rate for a finished " +
+                            "workout is backfilled from Health Connect (no live readings).",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
                             onClick = onRequestPermissions,
@@ -452,10 +469,17 @@ fun ConfigScreen(
                         ) {
                             Text("Grant sensor permissions")
                         }
+                        OutlinedButton(
+                            onClick = onHealthConnectPermission,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Grant Health Connect access")
+                        }
                     }
                     Text(
                         "Location: ${if (locationGranted) "granted" else "not granted"} · " +
-                            "Bluetooth: ${if (bluetoothGranted) "granted" else "not granted"}",
+                            "Bluetooth: ${if (bluetoothGranted) "granted" else "not granted"} · " +
+                            "Health Connect: ${if (hcGranted) "granted" else "not granted"}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 } else {

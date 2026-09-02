@@ -8,6 +8,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,9 @@ data class WorkoutEntity(
     val avgPushHr: Int?,
     val avgRecoveryHr: Int?,
     val avgOverallHr: Int?,
+    /** Min / max heart rate (bpm) — from Health Connect backfill when no real-time source was live. */
+    val minHr: Int? = null,
+    val maxHr: Int? = null,
 )
 
 @Dao
@@ -51,6 +55,9 @@ interface WorkoutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(workouts: List<WorkoutEntity>)
 
+    @Update
+    suspend fun update(workout: WorkoutEntity)
+
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun observeAll(): Flow<List<WorkoutEntity>>
 
@@ -61,7 +68,7 @@ interface WorkoutDao {
     suspend fun clear()
 }
 
-@Database(entities = [WorkoutEntity::class], version = 3, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 4, exportSchema = false)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
 
@@ -82,6 +89,14 @@ abstract class MorkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE workouts ADD COLUMN avgPushHr INTEGER")
                 db.execSQL("ALTER TABLE workouts ADD COLUMN avgRecoveryHr INTEGER")
                 db.execSQL("ALTER TABLE workouts ADD COLUMN avgOverallHr INTEGER")
+            }
+        }
+
+        /** v4 adds min/max HR (Health Connect post-workout backfill). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workouts ADD COLUMN minHr INTEGER")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN maxHr INTEGER")
             }
         }
     }

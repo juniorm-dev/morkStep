@@ -188,6 +188,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     // Receive live heart rate relayed from the morkStep Wear companion app.
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
+    // Post-workout heart-rate backfill when the Wear relay is off: read
+    // average/min/max HR for the workout window from Health Connect.
+    implementation("androidx.health.connect:connect-client:1.1.0")
 
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
