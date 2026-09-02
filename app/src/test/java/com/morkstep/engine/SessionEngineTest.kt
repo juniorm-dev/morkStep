@@ -587,6 +587,25 @@ class SessionEngineTest {
     }
 
     @Test
+    fun warningVibrates_EvenWhenAudioCuesOff() {
+        // Haptics are independent of the audio toggle: a rate warning must
+        // still vibrate when audio cues are disabled.
+        val p = roundsProfile.copy(audioCues = false)
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue, pace = 4.0f, hr = 100) // < hrCeiling 150
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000) // then it fires
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
+    }
+
+    @Test
     fun fastHrBetweenFloorAndCeiling_cuesSpeedUp() {
         // The ceiling is the push target: HR inside the old band (120–150) is
         // still below the ceiling and must cue.

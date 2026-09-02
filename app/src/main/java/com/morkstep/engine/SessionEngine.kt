@@ -404,7 +404,7 @@ class SessionEngine(
                 // The first warning cue after a phase transition is suppressed:
                 // the sensor value carried over from the previous phase is stale.
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Speed up while the push target (HR ceiling / pace floor) is unmet.
+                    // Speed up while the push target (Recovery Max bpm / Push Min mph) is unmet.
                     // HR and pace share one cue so they never double-fire, and a
                     // reading without a meaningful signal never triggers a cue:
                     // HR below the min-signal threshold, or pace at/below its
@@ -416,7 +416,7 @@ class SessionEngine(
             }
             PhaseType.SLOW -> {
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Slow down while the recovery target (HR floor / pace ceiling) is unmet.
+                    // Slow down while the recovery target (Push Min bpm / Recovery Max mph) is unmet.
                     val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrFloor
                     val paceAbove = s.pace != null && s.pace > Constants.MIN_VALID_PACE_MPH && s.pace > profile.paceCeilingMph.toFloat()
                     if (hrAbove || paceAbove) cueIf("slowDown", "Slow down")
@@ -427,11 +427,13 @@ class SessionEngine(
     }
 
     private fun cueIf(key: String, text: String) {
-        if (!profile.audioCues) return
         val now = clock.nowMillis()
         if (now - (lastCueAt[key] ?: 0L) < cueCooldownMs) return
         lastCueAt[key] = now
-        cue.speak(text)
+        // Audio and haptics are independent: speech is gated by the audio
+        // toggle, but the vibration follows the profile's vibration mode
+        // (enforced in the sink), so cue haptics still work with audio off.
+        if (profile.audioCues) cue.speak(text)
         cue.vibrate(CueVibration.GUIDANCE)
     }
 }

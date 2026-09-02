@@ -328,24 +328,24 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Pace band (mph)", style = MaterialTheme.typography.titleMedium)
+        Text("Pace (mph)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow("Pace ceiling", "%.1f".format(paceCeil), paceCeil, 2f..8f, 24) { paceCeil = it }
-                SliderRow("Pace floor", "%.1f".format(paceFloor), paceFloor, 1.5f..7f, 24) { paceFloor = it }
+                SliderRow("Recovery Max mph", "%.1f".format(paceCeil), paceCeil, 2f..8f, 24) { paceCeil = it }
+                SliderRow("Push Min mph", "%.1f".format(paceFloor), paceFloor, 1.5f..7f, 24) { paceFloor = it }
                 Text(
-                    "Push cues \"Speed up\" while pace stays below the floor; recovery cues \"Slow down\" while pace stays above the ceiling.",
+                    "Push cues \"Speed up\" while pace stays below Push Min; recovery cues \"Slow down\" while pace stays above Recovery Max.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Heart-rate (bpm)", style = MaterialTheme.typography.titleMedium)
+        Text("Heart rate (bpm)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow("HR ceiling", "$hrCeil", hrCeil.toFloat(), 90f..200f, 22) { hrCeil = it.toInt() }
-                SliderRow("HR floor", "$hrFloor", hrFloor.toFloat(), 70f..190f, 24) { hrFloor = it.toInt() }
+                SliderRow("Recovery Max bpm", "$hrCeil", hrCeil.toFloat(), 90f..200f, 22) { hrCeil = it.toInt() }
+                SliderRow("Push Min bpm", "$hrFloor", hrFloor.toFloat(), 70f..190f, 24) { hrFloor = it.toInt() }
             }
         }
 
@@ -355,8 +355,8 @@ fun ConfigScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
                 Text(
-                    "Push cues \"Speed up\" while pace is below the pace floor, or heart rate below the HR ceiling; recovery cues " +
-                        "\"Slow down\" while pace is above the pace ceiling, or heart rate above the HR floor. A cue repeats at most once " +
+                    "Push cues \"Speed up\" while pace is below Push Min mph, or heart rate below Recovery Max bpm; recovery cues " +
+                        "\"Slow down\" while pace is above Recovery Max mph, or heart rate above Push Min bpm. A cue repeats at most once " +
                         "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue.",
                     style = MaterialTheme.typography.bodySmall,
                 )

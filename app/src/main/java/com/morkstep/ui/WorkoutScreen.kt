@@ -2,6 +2,7 @@ package com.morkstep.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
@@ -118,7 +120,12 @@ fun WorkoutScreen(
             if (showCountdown) "time left in phase" else "seconds in phase",
             style = MaterialTheme.typography.bodySmall,
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.height(12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            // Clear visual gap between the switch pill and its label.
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Switch(checked = countUp, onCheckedChange = { countUp = it })
             Text(if (countUp) "Count up" else "Count down", style = MaterialTheme.typography.bodySmall)
         }
@@ -170,19 +177,37 @@ fun WorkoutScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onStop, modifier = Modifier.weight(1f)) {
-                Text("Discard")
+        // Slim horizontal padding so "Finish early" fits on one line in its
+        // third of the row; centered text keeps wrapped lines balanced on
+        // narrower screens.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onStop,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 8.dp),
+            ) {
+                Text("Discard", textAlign = TextAlign.Center)
             }
             Button(
                 onClick = onTogglePause,
                 modifier = Modifier.weight(1f),
                 enabled = !live.finished,
+                contentPadding = PaddingValues(horizontal = 8.dp),
             ) {
-                Text(if (live.paused) "Resume" else "Pause")
+                Text(if (live.paused) "Resume" else "Pause", textAlign = TextAlign.Center)
             }
-            Button(onClick = onEnd, modifier = Modifier.weight(1f)) {
-                Text(if (adhoc) "Finish" else if (live.finished) "Done" else "Finish early")
+            Button(
+                onClick = onEnd,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 8.dp),
+            ) {
+                Text(
+                    if (adhoc) "Finish" else if (live.finished) "Done" else "Finish early",
+                    textAlign = TextAlign.Center,
+                )
             }
         }
 

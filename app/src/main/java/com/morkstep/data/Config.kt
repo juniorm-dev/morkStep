@@ -49,9 +49,15 @@ data class WorkoutProfile(
      * this. (Named "floor" for historical reasons; see [paceCeilingMph].)
      */
     val paceFloorMph: Double = 3.2,
-    /** Heart rate (bpm): push cues "Speed up" while HR is below this. */
+    /**
+     * Heart rate (bpm) — Recovery Max: the upper HR bound. Push cues
+     * "Speed up" while HR is below this; recovery keeps HR below this.
+     */
     val hrCeiling: Int = 150,
-    /** Heart rate (bpm): recovery cues "Slow down" while HR is above this. */
+    /**
+     * Heart rate (bpm) — Push Min: the lower HR bound. Recovery cues
+     * "Slow down" while HR is above this; a push keeps HR above this.
+     */
     val hrFloor: Int = 120,
     /**
      * Seconds between repeats of the same pace/HR warning cue, shared by push

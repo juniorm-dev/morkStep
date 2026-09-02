@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
+import com.morkstep.data.isBaselineProfile
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -58,6 +59,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
     val darkMode by viewModel.darkMode.collectAsStateWithLifecycle()
     val savedProfileName by viewModel.savedProfileName.collectAsStateWithLifecycle()
+    val baselineCreatedMessage by viewModel.baselineCreatedMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val transferMessage by viewModel.transferMessage.collectAsStateWithLifecycle()
 
@@ -104,6 +106,21 @@ fun MorkApp(viewModel: MainViewModel) {
         val msg = transferMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(msg)
         viewModel.consumeTransferMessage()
+    }
+
+    // After a baseline workout ends: go to Settings and confirm the baseline
+    // was created (the calibrated profile is already saved, ready to clone).
+    // Manual early-stop and natural finish both land here.
+    LaunchedEffect(baselineCreatedMessage) {
+        val msg = baselineCreatedMessage ?: return@LaunchedEffect
+        if (currentDestination?.route == Routes.WORKOUT) {
+            navController.navigate(Routes.CONFIG) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+        snackbarHostState.showSnackbar(msg)
+        viewModel.consumeBaselineCreatedMessage()
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -174,10 +191,13 @@ fun MorkApp(viewModel: MainViewModel) {
                         live = live,
                         profile = profile,
                         simulated = simulated,
-                        onEnd = {
-                            viewModel.endWorkout()
+                                            onEnd = {
+                        viewModel.endWorkout()
+                        // Baseline: the finish event above returns Home itself.
+                        if (activeProfile?.let { isBaselineProfile(it) } != true) {
                             navController.popBackStack()
-                        },
+                        }
+                    },
                         onStop = {
                             viewModel.discardWorkout()
                             navController.popBackStack()
