@@ -28,7 +28,7 @@ data class WorkoutEntity(
     val avgFastPace: Float?,
     /** Average heart rate over the workout (bpm), or null. */
     val avgHeartRate: Int?,
-    /** Seconds spent above the HR ceiling during push segments. */
+    /** Seconds spent above the Recovery Max bpm during push segments. */
     val overCeilingSec: Int,
     /** Distance covered, in miles. */
     val distanceMiles: Float,

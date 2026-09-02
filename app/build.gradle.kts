@@ -54,6 +54,23 @@ abstract class VersionApk : DefaultTask() {
             // package output by its unversioned path, so it must stay in place.
             src.copyTo(dst, overwrite = true)
         }
+        // Guarantee the unversioned artifact is always present too: packaging
+        // leaves its pristine output in place, but if it is gone for any
+        // reason, restore it from the current versioned copy so both names
+        // exist after every build that created APKs.
+        apkFiles.files.forEach { src ->
+            val suffix = when {
+                src.name.endsWith("-unsigned.apk") -> "-unsigned.apk"
+                src.name.endsWith("-signed.apk") -> "-signed.apk"
+                else -> ".apk"
+            }
+            val base = src.name.removeSuffix(suffix)
+            if (base.endsWith("-$v") && versionedTail.containsMatchIn(base)) {
+                val stem = versionedTail.replaceFirst(base, "")
+                val pristine = src.parentFile.resolve("$stem$suffix")
+                if (!pristine.exists()) src.copyTo(pristine)
+            }
+        }
     }
 }
 
@@ -99,8 +116,8 @@ android {
         applicationId = "com.morkstep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.10.0"
+        versionCode = 13
+        versionName = "0.10.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Instrumented (emulator) tests start from a clean app state: no leftover
         // profiles or history, so assertions are deterministic. These tests are

@@ -186,6 +186,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _savedProfileName = MutableStateFlow<String?>(null)
     val savedProfileName: StateFlow<String?> = _savedProfileName.asStateFlow()
 
+    /** One-shot: set when a baseline workout finishes; the UI returns home and confirms. */
+    private val _baselineCreatedMessage = MutableStateFlow<String?>(null)
+    val baselineCreatedMessage: StateFlow<String?> = _baselineCreatedMessage.asStateFlow()
+
     /** One-shot: result of the last profile/history export or import. Consumed back by the UI. */
     private val _transferMessage = MutableStateFlow<String?>(null)
     val transferMessage: StateFlow<String?> = _transferMessage.asStateFlow()
@@ -346,6 +350,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeSavedProfile() {
         _savedProfileName.value = null
     }
+
+    /** Clear the baseline-created event after the UI has shown it. */
+    fun consumeBaselineCreatedMessage() {
+        _baselineCreatedMessage.value = null
+    }
     /** First free "Profile N" name (skips names already in use after deletions). */
     private fun nextFreeProfileName(): String {
         val used = _profiles.value.map { it.name }.toSet()
@@ -373,6 +382,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val existing = _profiles.value.firstOrNull { isBaselineProfile(it) }
         viewModelScope.launch {
             val fresh = baselineCalibrationProfile(id = existing?.id ?: System.currentTimeMillis())
+                // Keep the current haptics so the calibration workout (and the
+                // derived baseline, which copies all fields) is not silent.
+                .copy(
+                    vibrationMode = _activeProfile.value?.vibrationMode ?: VibrationMode.OFF,
+                    vibrationIntensity = _activeProfile.value?.vibrationIntensity ?: 0.5f,
+                )
             val list = if (existing != null) {
                 _profiles.value.map { if (it.id == existing.id) fresh else it }
             } else {
@@ -546,6 +561,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
+            // One-shot: the UI opens Settings and confirms the baseline was made.
+            _baselineCreatedMessage.value = "Baseline created"
         }
     }
 
