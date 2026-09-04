@@ -200,8 +200,8 @@ fun ConfigScreen(
         var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
         var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
         var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
-        var paceCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceCeilingMph.toFloat()) }
-        var paceFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.paceFloorMph.toFloat()) }
+        var speedCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.speedCeilingMph.toFloat()) }
+        var speedFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.speedFloorMph.toFloat()) }
         var hrCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrCeiling) }
         var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
         var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
@@ -332,13 +332,13 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Pace (mph)", style = MaterialTheme.typography.titleMedium)
+        Text("Speed (mph)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow("Recovery Max mph", "%.1f".format(paceCeil), paceCeil, 2f..8f, 24) { paceCeil = it }
-                SliderRow("Push Min mph", "%.1f".format(paceFloor), paceFloor, 1.5f..7f, 24) { paceFloor = it }
+                SliderRow("Recovery Max mph", "%.1f".format(speedCeil), speedCeil, 2f..8f, 24) { speedCeil = it }
+                SliderRow("Push Min mph", "%.1f".format(speedFloor), speedFloor, 1.5f..7f, 24) { speedFloor = it }
                 Text(
-                    "Push cues \"Speed up\" while pace stays below Push Min; recovery cues \"Slow down\" while pace stays above Recovery Max.",
+                    "Push cues \"Speed up\" while speed stays below Push Min; recovery cues \"Slow down\" while speed stays above Recovery Max.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -359,8 +359,8 @@ fun ConfigScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
                 Text(
-                    "Push cues \"Speed up\" while pace is below Push Min mph, or heart rate below Recovery Max bpm; recovery cues " +
-                        "\"Slow down\" while pace is above Recovery Max mph, or heart rate above Push Min bpm. A cue repeats at most once " +
+                    "Push cues \"Speed up\" while speed is below Push Min mph, or heart rate below Recovery Max bpm; recovery cues " +
+                        "\"Slow down\" while speed is above Recovery Max mph, or heart rate above Push Min bpm. A cue repeats at most once " +
                         "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -428,7 +428,7 @@ fun ConfigScreen(
                     Switch(checked = simulated, onCheckedChange = onSimulatedChange)
                 }
                 Text(
-                    "Off uses real hardware: GPS pace and a Bluetooth heart-rate strap. " +
+                    "Off uses real hardware: GPS speed and a Bluetooth heart-rate strap. " +
                         "No automatic fallback — if off and a signal is missing, readings stay blank.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -527,8 +527,8 @@ fun ConfigScreen(
                         slowSec = slowSec,
                         warmupSec = warmupSec,
                         cooldownSec = cooldownSec,
-                        paceCeilingMph = (paceCeil * 10).roundToInt() / 10.0,
-                        paceFloorMph = (paceFloor * 10).roundToInt() / 10.0,
+                        speedCeilingMph = (speedCeil * 10).roundToInt() / 10.0,
+                        speedFloorMph = (speedFloor * 10).roundToInt() / 10.0,
                         hrCeiling = hrCeil,
                         hrFloor = hrFloor,
                         warningThresholdSec = warnSec,

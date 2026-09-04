@@ -38,10 +38,10 @@ object Constants {
     const val DEFAULT_FAST_SEC = 180
     /** Default recovery-segment length in seconds, shown before the first state relay. */
     const val DEFAULT_SLOW_SEC = 180
-    /** Default push pace floor (mph), mirroring the phone's profile default. */
-    const val DEFAULT_PACE_FLOOR_MPH = 3.2f
-    /** Default recovery pace ceiling (mph), mirroring the phone's profile default. */
-    const val DEFAULT_PACE_CEILING_MPH = 4.5f
+    /** Default push speed floor (mph), mirroring the phone's profile default. */
+    const val DEFAULT_SPEED_FLOOR_MPH = 3.2f
+    /** Default recovery speed ceiling (mph), mirroring the phone's profile default. */
+    const val DEFAULT_SPEED_CEILING_MPH = 4.5f
 
     // ---- Phase palette (mirrors the phone tracker) ----
     val PHASE_WARMUP_COLOR = Color(0xFF58A05C)

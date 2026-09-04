@@ -10,9 +10,9 @@ import com.morkstep.Constants
  * the active Baseline profile is re-derived into the calibrated 30-minute
  * baseline, pacing it off the phase averages actually recorded.
  *
- * Pace-band semantics (see the engine): the "ceiling" is the recovery-phase
- * cap ("Slow down" while recovery pace stays above it) and the "floor" is the
- * push-phase floor ("Speed up" while push pace stays below it). The field
+ * Speed-band semantics (see the engine): the "ceiling" is the recovery-phase
+ * cap ("Slow down" while recovery speed stays above it) and the "floor" is the
+ * push-phase floor ("Speed up" while push speed stays below it). The field
  * names predate that role split and may be renamed later.
  */
 
@@ -33,19 +33,19 @@ fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
 
 /**
  * Re-derive [baseline] after a workout: fixed 30-minute time length, 120 s /
- * 120 s / 30 s / 30 s intervals, recovery-pace ceiling and push-pace floor
- * taken from the session's averages. Pace targets only update when both
+ * 120 s / 30 s / 30 s intervals, recovery-speed ceiling and push-speed floor
+ * taken from the session's averages. Speed targets only update when both
  * averages were recorded; otherwise the previous targets are kept. The result
  * is clamped to the Config slider ranges so it can never be edited away.
  */
 fun updatedBaselineProfile(
     baseline: WorkoutProfile,
-    pushPaceMph: Double?,
-    recoveryPaceMph: Double?,
+    pushSpeedMph: Double?,
+    recoverySpeedMph: Double?,
 ): WorkoutProfile {
-    val ceiling = (recoveryPaceMph ?: baseline.paceCeilingMph)
+    val ceiling = (recoverySpeedMph ?: baseline.speedCeilingMph)
         .coerceIn(Constants.BASELINE_MIN_PACE_CEILING_MPH, Constants.BASELINE_MAX_PACE_CEILING_MPH)
-    val floor = (pushPaceMph ?: baseline.paceFloorMph)
+    val floor = (pushSpeedMph ?: baseline.speedFloorMph)
         .coerceIn(Constants.BASELINE_MIN_PACE_FLOOR_MPH, Constants.BASELINE_MAX_PACE_FLOOR_MPH)
     return baseline.copy(
         lengthMode = WorkoutLength.TIME,
@@ -54,7 +54,7 @@ fun updatedBaselineProfile(
         slowSec = Constants.BASELINE_UPDATED_RECOVERY_SEC,
         warmupSec = Constants.BASELINE_UPDATED_WARMUP_SEC,
         cooldownSec = Constants.BASELINE_UPDATED_COOLDOWN_SEC,
-        paceCeilingMph = ceiling,
-        paceFloorMph = floor,
+        speedCeilingMph = ceiling,
+        speedFloorMph = floor,
     )
 }

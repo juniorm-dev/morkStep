@@ -32,11 +32,11 @@ import com.morkstep.engine.CueSink
 import com.morkstep.engine.CueVibration
 import com.morkstep.engine.LiveState
 import com.morkstep.engine.SessionEngine
-import com.morkstep.sensing.GpsPaceSource
+import com.morkstep.sensing.GpsSpeedSource
 import com.morkstep.sensing.BleHeartRateSource
 import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.healthConnectHrForWorkout
-import com.morkstep.sensing.PaceSource
+import com.morkstep.sensing.SpeedSource
 import com.morkstep.sensing.SimulatedSensors
 import com.morkstep.sensing.WearHeartRateSource
 import com.google.android.gms.tasks.Task
@@ -158,7 +158,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var lastWatchState = byteArrayOf()
 
     // Real sources (only live while simulated mode is OFF).
-    private var gps: GpsPaceSource? = null
+    private var gps: GpsSpeedSource? = null
     private var ble: BleHeartRateSource? = null
     private var wear: WearHeartRateSource? = null
     private var sim: SimulatedSensors? = null
@@ -257,7 +257,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** (Re)create pace/HR sources per the simulated toggle. Real sources do NOT fall back. */
+    /** (Re)create speed/HR sources per the simulated toggle. Real sources do NOT fall back. */
     private fun rebuildSources() {
         stopSources()
         refreshPermissions()
@@ -265,13 +265,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             sim = SimulatedSensors()
             _sensorNote.value = "Simulated sensors (debug)"
         } else {
-            gps = GpsPaceSource(getApplication())
+            gps = GpsSpeedSource(getApplication())
             ble = BleHeartRateSource(getApplication())
             if (_useWearHr.value) {
                 wear = WearHeartRateSource(getApplication())
             }
             _sensorNote.value =
-                if (_useWearHr.value) "GPS pace · Wear companion heart rate" else "GPS pace · BLE heart rate"
+                if (_useWearHr.value) "GPS speed · Wear companion heart rate" else "GPS speed · BLE heart rate"
         }
         setupEngine()
     }
@@ -313,13 +313,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun setupEngine() {
         val p = _activeProfile.value ?: return
-        val paceSrc: PaceSource = sim ?: gps ?: return
+        val speedSrc: SpeedSource = sim ?: gps ?: return
         val hrSrc: HeartRateSource =
             if (_simulated.value) sim!!
             else if (_useWearHr.value) wear ?: ble ?: return
             else ble ?: return
         engineJob?.cancel()
-        val e = SessionEngine(p, paceSrc, hrSrc, sink)
+        val e = SessionEngine(p, speedSrc, hrSrc, sink)
         engine = e
         engineJob = viewModelScope.launch {
             // Sensor observation and live-state fan-out share one job so a
@@ -516,8 +516,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     /** Mirror the live session snapshot to the paired watch (phase, paused, running),
-     *  seconds-in-phase, pace, push progress and the profile's phase lengths and
-     *  pace targets — everything the watch graphics (Bars/Band/Gauge) render. */
+     *  seconds-in-phase, speed, push progress and the profile's phase lengths and
+     *  speed targets — everything the watch graphics (Bars/Band/Gauge) render. */
     private fun sendWatchState(ls: LiveState) {
         val p = _activeProfile.value ?: return
         val phaseOrd = when (ls.phase) {
@@ -531,13 +531,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .put((if (ls.paused) 1 else 0).toByte())
             .put((if (ls.running) 1 else 0).toByte())
             .putInt(ls.secondsInPhase)
-            .putFloat(ls.pace ?: Float.NaN)
+            .putFloat(ls.speed ?: Float.NaN)
             .putInt(ls.fastSegmentsDone)
             .putInt(ls.fastRoundsTotal ?: -1)
             .putInt(p.fastSec)
             .putInt(p.slowSec)
-            .putFloat(p.paceFloorMph.toFloat())
-            .putFloat(p.paceCeilingMph.toFloat())
+            .putFloat(p.speedFloorMph.toFloat())
+            .putFloat(p.speedCeilingMph.toFloat())
             .array()
         if (payload.contentEquals(lastWatchState)) return
         lastWatchState = payload
@@ -562,13 +562,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 endTime = ended,
                 durationSec = ls.totalSeconds,
                 fastSegments = ls.fastSegmentsDone,
-                avgFastPace = ls.avgOverallPaceMph,
+                avgFastSpeed = ls.avgOverallSpeedMph,
                 avgHeartRate = ls.avgOverallHr,
                 overCeilingSec = ls.overCeilingSec,
                 distanceMiles = ls.distanceMiles.toFloat(),
-                avgPushPace = ls.avgPushPaceMph,
-                avgRecoveryPace = ls.avgRecoveryPaceMph,
-                avgOverallPace = ls.avgOverallPaceMph,
+                avgPushSpeed = ls.avgPushSpeedMph,
+                avgRecoverySpeed = ls.avgRecoverySpeedMph,
+                avgOverallSpeed = ls.avgOverallSpeedMph,
                 avgPushHr = ls.avgPushHr,
                 avgRecoveryHr = ls.avgRecoveryHr,
                 avgOverallHr = ls.avgOverallHr,
@@ -594,14 +594,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         // Baseline: after any baseline workout, re-derive the calibrated profile
-        // (fixed 30-minute length and 120 s intervals; the pace band comes from
+        // (fixed 30-minute length and 120 s intervals; the speed band comes from
         // this session's push/recovery averages).
         val active = _activeProfile.value
         if (active != null && isBaselineProfile(active)) {
             val updated = updatedBaselineProfile(
                 baseline = active,
-                pushPaceMph = ls.avgPushPaceMph?.toDouble(),
-                recoveryPaceMph = ls.avgRecoveryPaceMph?.toDouble(),
+                pushSpeedMph = ls.avgPushSpeedMph?.toDouble(),
+                recoverySpeedMph = ls.avgRecoverySpeedMph?.toDouble(),
             )
             if (updated != active) {
                 viewModelScope.launch {

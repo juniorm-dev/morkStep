@@ -112,14 +112,14 @@ private fun WorkoutRow(w: WorkoutEntity) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             // Per-phase + overall averages (v3; older rows may be null).
-            val paceAvgs = buildList {
-                w.avgPushPace?.let { add("push %.1f".format(it)) }
-                w.avgRecoveryPace?.let { add("rec %.1f".format(it)) }
-                w.avgOverallPace?.let { add("overall %.1f".format(it)) }
+            val speedAvgs = buildList {
+                w.avgPushSpeed?.let { add("push %.1f".format(it)) }
+                w.avgRecoverySpeed?.let { add("rec %.1f".format(it)) }
+                w.avgOverallSpeed?.let { add("overall %.1f".format(it)) }
             }
-            if (paceAvgs.isNotEmpty()) {
+            if (speedAvgs.isNotEmpty()) {
                 Text(
-                    "pace mph:  " + paceAvgs.joinToString(" · "),
+                    "speed mph:  " + speedAvgs.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

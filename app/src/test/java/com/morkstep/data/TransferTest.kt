@@ -96,8 +96,8 @@ class TransferTest {
     fun workoutExport_roundTrips() {
         val w = WorkoutEntity(
             id = 3, startTime = 1L, endTime = 2L, durationSec = 60, fastSegments = 1,
-            avgFastPace = 4.5f, avgHeartRate = 130, overCeilingSec = 0, distanceMiles = 0.2f,
-            avgPushPace = 4.5f, avgRecoveryPace = 3.1f, avgOverallPace = null,
+            avgFastSpeed = 4.5f, avgHeartRate = 130, overCeilingSec = 0, distanceMiles = 0.2f,
+            avgPushSpeed = 4.5f, avgRecoverySpeed = 3.1f, avgOverallSpeed = null,
             avgPushHr = 132, avgRecoveryHr = 120, avgOverallHr = null,
         )
         val text = json.encodeToString(WorkoutExport(workouts = listOf(w)))
@@ -105,7 +105,7 @@ class TransferTest {
         assertEquals(1, back.workouts.size)
         val row = back.workouts[0]
         assertEquals(60, row.durationSec)
-        assertEquals(4.5f, row.avgPushPace!!, 0.001f)
+        assertEquals(4.5f, row.avgPushSpeed!!, 0.001f)
         assertEquals(120, row.avgRecoveryHr!!)
     }
 }

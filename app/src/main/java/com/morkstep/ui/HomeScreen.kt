@@ -73,7 +73,7 @@ fun HomeScreen(
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${p.lengthLabel()} · pace ${p.paceFloorMph}–${p.paceCeilingMph} mph · HR ${p.hrFloor}–${p.hrCeiling}",
+                                "${p.lengthLabel()} · speed ${p.speedFloorMph}–${p.speedCeilingMph} mph · HR ${p.hrFloor}–${p.hrCeiling}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }

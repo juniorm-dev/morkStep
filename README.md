@@ -2,7 +2,7 @@
 
 Modern Android fitness app for **Interval Walking Training** (IWT / "Japanese walking").
 
-IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep guides a session through a configurable plan, gives live pace and heart-rate feedback, plays audio cues when you drift from your pace or heart-rate targets, and records every completed workout to a history log.
+IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep guides a session through a configurable plan, gives live speed and heart-rate feedback, plays audio cues when you drift from your speed or heart-rate targets, and records every completed workout to a history log.
 
 ## Features
 
@@ -14,15 +14,15 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
   - **Adhoc** — no preset length; ends when you tap Finish.
 - **Configurable intervals** — warm-up length, push interval, recovery interval, cool-down length (per profile), adjustable in **15-second** steps (e.g. 30 s is selectable).
 - **Pause / resume** — freeze a workout mid-session (elapsed time, distance and audio cues stop) and continue where you left off; paused wall-clock time is excluded from the recorded duration. Discard and Finish still work while paused, and pausing never alters the length plan.
-- **Pace limits (mph)** — a per-profile *Push Min* floor and *Recovery Max* ceiling (miles per hour). Push keeps pace above the Push Min; recovery keeps pace below the Recovery Max.
+- **Speed limits (mph)** — a per-profile *Push Min* floor and *Recovery Max* ceiling (miles per hour). Push keeps speed above the Push Min; recovery keeps speed below the Recovery Max.
 - **Heart rate** — a *Recovery Max* and *Push Min* (bpm). Push cues "Speed up" while HR is below the Recovery Max; recovery cues "Slow down" while HR is above the Push Min.
-- **Baseline profile** — **Create baseline** in Settings installs a short calibration workout (3 rounds: 45 s push / 45 s recovery, 20 s warm-up). The Baseline profile is hidden from the home profile list while it is active, so the home button reads **Start baseline**. When the workout ends (naturally or via **Finish early**) it is re-derived into a calibrated 30-minute baseline — 120 s push / 120 s recovery, warm-up 30 s, cool-down 30 s, with the pace band taken from the session's actual push/recovery averages (clamped to the slider ranges). The app then jumps to **Settings**, shows a **"Baseline created"** snackbar, and you can **Clone** it into your own profile (the current haptics settings are carried into the baseline).
+- **Baseline profile** — **Create baseline** in Settings installs a short calibration workout (3 rounds: 45 s push / 45 s recovery, 20 s warm-up). The Baseline profile is hidden from the home profile list while it is active, so the home button reads **Start baseline**. When the workout ends (naturally or via **Finish early**) it is re-derived into a calibrated 30-minute baseline — 120 s push / 120 s recovery, warm-up 30 s, cool-down 30 s, with the speed band taken from the session's actual push/recovery averages (clamped to the slider ranges). The app then jumps to **Settings**, shows a **"Baseline created"** snackbar, and you can **Clone** it into your own profile (the current haptics settings are carried into the baseline).
 - **Audio cues** —
     - per-phase spoken announcements plus beeps on transitions,
-    - spoken warning cues — during **push**, "Speed up" when pace is below the *Push Min* or HR is below the *Recovery Max*; during **recovery**, "Slow down" when pace is above the *Recovery Max* or HR is above the *Push Min*. Pace and HR share one cue per phase so they never double-fire, and a reading without a meaningful signal never triggers a cue — 0 BPM, or pace at/below 1.5 mph (GPS noise when standing still). A cue repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
+    - spoken warning cues — during **push**, "Speed up" when speed is below the *Push Min* or HR is below the *Recovery Max*; during **recovery**, "Slow down" when speed is above the *Recovery Max* or HR is above the *Push Min*. Speed and HR share one cue per phase so they never double-fire, and a reading without a meaningful signal never triggers a cue — 0 BPM, or speed at/below 1.5 mph (GPS noise when standing still). A cue repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
     - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
   - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
-- **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds above the max HR) plus **per-phase averages** — average pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
+- **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds above the max HR) plus **per-phase averages** — average speed and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
 - **Runs with the screen locked** — a running session starts a foreground service (`WorkoutService`) that holds a partial wake lock so the 1 Hz ticker keeps firing on schedule (audio cues stay on time) and posts an ongoing notification, so the session survives backgrounding and process pressure. The service stops on finish, discard, or profile change tear-down. Saving a profile in Settings confirms with a "Profile saved" snackbar and returns to Home.
 - **Workout plan at a glance** — the home screen shows the active profile's push/recovery and warm-up/cool-down durations as `m:ss` (plain seconds under a minute) instead of rounded minutes, plus the configured vibration mode.
 - **Vibration** — per-profile haptics chosen in Settings: **Off**, **On phase change** (warm-up, push, recovery, cool-down, finish), or **All cues** (also quarter, push-round, and warning cues, mirroring audio). The watch can mirror them too: turn on **Vibrate watch** and the paired Wear companion buzzes alongside the phone.
@@ -52,7 +52,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-debug-0.10.1.apk # versioned APK name
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.11.0.apk # versioned APK name
 ```
 
 ### Emulator (instrumented) tests — NOT run by default
@@ -75,7 +75,7 @@ form factor (its nav taps assume a phone-sized display).
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release-0.10.1.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.11.0.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -139,7 +139,7 @@ All code lives under `app/src/main/java/com/morkstep/`, organised by responsibil
 | Package | Responsibility |
 | ------- | -------------- |
 | `engine/` | Pure interval session state machine and cue logic (no Android deps except a clock) |
-| `sensing/` | Pace & heart-rate source abstractions + a simulated implementation |
+| `sensing/` | Speed & heart-rate source abstractions + a simulated implementation |
 | `audio/` | TTS + tone cues |
 | `data/` | Domain models, profiles + config persistence (DataStore), workout history (Room) |
 | `ui/` | Jetpack Compose screens + ViewModel wiring |
@@ -154,7 +154,7 @@ ConfigScreen ──save──▶ DataStore (IntervalConfig)
                    SessionEngine (wall-clock
                          state machine)
                         │               │
-   pace/hr sensors ─────┤               ├──▶ audio CueSink (beeps/TTS)
+   speed/hr sensors ─────┤               ├──▶ audio CueSink (beeps/TTS)
                         │               │
                         ▼               ▼
                      LiveState       on-finish
@@ -164,36 +164,36 @@ ConfigScreen ──save──▶ DataStore (IntervalConfig)
 
 ### Interval engine — `engine/SessionEngine.kt`
 
-The core is a **pure, deterministic state machine** (`phaseAt`, `planFor`, `completedFastIn`, `progressAt`) that maps elapsed wall-clock seconds + accumulated distance to a position in the active profile's plan. It is deliberately *push-only*: its owner drives time forward with `tick()`, it reads instantaneous pace/HR, and writes an immutable `LiveState` snapshot plus cues.
+The core is a **pure, deterministic state machine** (`phaseAt`, `planFor`, `completedFastIn`, `progressAt`) that maps elapsed wall-clock seconds + accumulated distance to a position in the active profile's plan. It is deliberately *push-only*: its owner drives time forward with `tick()`, it reads instantaneous speed/HR, and writes an immutable `LiveState` snapshot plus cues.
 
 The pure mapping helpers have **no Android dependencies**, so they are unit-tested on the JVM without instrumentation. Wall-clock is behind a `SessionClock` interface so tests can fake time and assert exact transitions.
 
 **Why this shape:**
 
 - **One engine, every length mode.** `planFor` yields a `(coreEndSec, finishSec)` pair: ROUNDS sums the cycle, TIME targets a fixed duration and reserves cool-down at the end, DISTANCE latches the end live when the distance target is crossed, and ADHOC never finishes on its own. Elapsed time is recomputed from `SystemClock.elapsedRealtime()` each tick, so a dropped or late tick never corrupts the running total; progress and fast-segment counts are plan-derived, not transition-counted.
-- **Distance is integrated, not sampled.** Each tick adds `pace × dt / 3600` miles, so distance tracks the live pace signal smoothly and its accumulation works even with irregular tick cadence (unit-tested).
-- **Pull sensors, push state.** The engine observes pace/HR via `StateFlow` and emits aggregated state downstream. The UI never drives the engine's truth; it only renders `LiveState`.
+- **Distance is integrated, not sampled.** Each tick adds `speed × dt / 3600` miles, so distance tracks the live speed signal smoothly and its accumulation works even with irregular tick cadence (unit-tested).
+- **Pull sensors, push state.** The engine observes speed/HR via `StateFlow` and emits aggregated state downstream. The UI never drives the engine's truth; it only renders `LiveState`.
 
 ### Sensing — `sensing/`
 
-Pace and HR are two narrow interfaces (`PaceSource`, `HeartRateSource`) returning `StateFlow`; the engine and UI depend only on those. Production sources:
+Speed and HR are two narrow interfaces (`SpeedSource`, `HeartRateSource`) returning `StateFlow`; the engine and UI depend only on those. Production sources:
 
-- **`GpsPaceSource`** — real pace via the **Fused Location Provider** (Play Services), `Location.getSpeed()` m/s → mph (×2.23694), 1 s updates.
+- **`GpsSpeedSource`** — real speed via the **Fused Location Provider** (Play Services), `Location.getSpeed()` m/s → mph (×2.23694), 1 s updates.
 - **`BleHeartRateSource`** — real HR via a **Bluetooth LE heart-rate strap** (Heart Rate Service `0x180D` / measurement `0x2A37`): scans for the service, connects, subscribes to notifications, parses 8/16-bit HR payloads. Disconnects re-scan automatically; gives up after 60 s.
 - **`SimulatedSensors`** — developer-only. Random-walks toward phase targets so cue/history paths can be exercised **when explicitly toggled on** in Settings. It is **never an automatic fallback**: when off, a missing signal simply reads blank (`–`), so real workouts can never be silently polluted by fake readings.
 - **`WearHeartRateSource`** — heart rate relayed from the paired **morkStep Wear** companion over the Wearable message layer (path `/morkstep/hr`); the watch reads HR via Wear Health Services and streams each beat-per-minute value on demand. Selected in Settings with the "Heart rate from Wear companion" switch (used instead of BLE when on).
 
 The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
-**Workout graphics.** While a session runs, the Workout screen offers a phase-tracker with four views (chip-selected, session-persistent): **Off** hides it, **Bars** shows push/recovery segment progress, **Band** draws the Push Min–Recovery Max pace band with a live needle, and **Gauge** is a circular arc of segment progress with pace in the center. All three report how the live pace compares to the phase target (Push Min floor during push, Recovery Max ceiling during recovery) with a green "On target" / red "Speed up / Slow down" caption.
+**Workout graphics.** While a session runs, the Workout screen offers a phase-tracker with four views (chip-selected, session-persistent): **Off** hides it, **Bars** shows push/recovery segment progress, **Band** draws the Push Min–Recovery Max speed band with a live needle, and **Gauge** is a circular arc of segment progress with speed in the center. All three report how the live speed compares to the phase target (Push Min floor during push, Recovery Max ceiling during recovery) with a green "On target" / red "Speed up / Slow down" caption.
 
 **Dark mode.** Profile settings has a **Dark mode** switch: on forces the dark theme, off follows the system setting. Applied on Save.
 
 **Backup.** Profile settings and the History screen offer Export/Import of profiles or workout history as versioned JSON files via the system file picker (SAF). Importing profiles restores the list (colliding ids are reassigned); importing history merges rows.
 
-**Baseline profile.** `data/Baseline.kt` owns the lifecycle: `baselineCalibrationProfile()` builds the 3-round calibration workout (preserving the existing baseline's id on re-create and carrying the active profile's vibration mode/intensity), `isBaselineProfile()` identifies it by name, and `updatedBaselineProfile()` re-derives the calibrated 30-minute profile after a workout — the recovery-pace average becomes the Recovery Max ceiling and the push-pace average the Push Min floor, each clamped to the Config slider bounds (falls back to the previous targets if an average was not recorded). The re-derive runs in `MainViewModel.onFinished()` (a `.copy()` keeps every other setting); the UI then navigates to Settings and raises a one-shot "Baseline created" message.
+**Baseline profile.** `data/Baseline.kt` owns the lifecycle: `baselineCalibrationProfile()` builds the 3-round calibration workout (preserving the existing baseline's id on re-create and carrying the active profile's vibration mode/intensity), `isBaselineProfile()` identifies it by name, and `updatedBaselineProfile()` re-derives the calibrated 30-minute profile after a workout — the recovery-speed average becomes the Recovery Max ceiling and the push-speed average the Push Min floor, each clamped to the Config slider bounds (falls back to the previous targets if an average was not recorded). The re-derive runs in `MainViewModel.onFinished()` (a `.copy()` keeps every other setting); the UI then navigates to Settings and raises a one-shot "Baseline created" message.
 
-**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug-0.6.1.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen. While a phone workout is active, the watch mirrors the phase and offers the same **Off / Bars / Band / Gauge** graphics selector, plus a local **Pause/Resume** button (the engine pause lives on the phone) and a **Vibrate** switch that mutes watch haptics without stopping the phone's relay.
+**Wear companion.** `wear/` is a standalone Wear OS app (its own APK, `morkStep-wear-debug-0.7.0.apk`) that streams the watch's live heart rate to the phone and buzzes when the phone relays a cue. Vibration gating happens on the phone — the active profile's vibration mode decides, and the optional **Vibrate watch** setting forwards permitted cues to the watch on path `/morkstep/vibrate`. The watch app also shows the live HR value and its app version on-screen. While a phone workout is active, the watch mirrors the phase and offers the same **Off / Bars / Band / Gauge** graphics selector, plus a local **Pause/Resume** button (the engine pause lives on the phone) and a **Vibrate** switch that mutes watch haptics without stopping the phone's relay.
 
 **Health Connect** (`sensing/HealthConnectHr.kt`). The phone has no HR sensor, so when the Wear relay is off there is no real-time source. With the **Health Connect HR (after workout)** setting on (default), a finished workout is **backfilled** from Health Connect over the exact workout window: statistical aggregates give overall average / min / max, and per-minute buckets mapped through the engine's own `phaseAt` plan give per-phase push/recovery averages. Backfill is read-only, only fills values that are still null (a real-time BLE strap is never overwritten), and degrades cleanly to a no-op when Health Connect is unavailable, `READ_HEART_RATE` is not granted (the flow shows a rationale screen first, `RationaleActivity`), or no HR records exist for the window. It is "not perfect" by design — Health Connect only holds HR that a device or app wrote, samples can be sparse, and by default the read window is 30 days before the first grant (`PERMISSION_READ_HEALTH_DATA_HISTORY` extends it). Requires Health Connect present (Android 14+ built-in; on the API-36 AOSP emulator image it is absent, so the grant/backfill cannot be exercised there).
 
@@ -202,7 +202,7 @@ The simulated toggle lives in Settings ("Simulated sensors (debug)", default **o
 ### Storage — `data/`
 
 - **`ConfigStore`** — the profile list (JSON via kotlinx.serialization) and the active profile id, persisted through Jetpack DataStore (Preferences): coroutine-native, atomic, lock-free. A deliberate round-trip rule: a zero-length warm-up/cool-down is real user intent ("none"), so raw seconds are persisted and re-read skips them, rather than silently resurrecting defaults.
-- **`WorkoutHistory.kt`** — Room `@Entity`/`@Dao` with a v1→v2 migration (`distanceKm` → `distanceMiles`). History is a relational, time-ordered list with a stable primary key; completed workouts stream into the History screen via `Flow`.
+- **`WorkoutHistory.kt`** — Room `@Entity`/`@Dao` (schema v5). Pre-v5 databases are discarded via `fallbackToDestructiveMigration` (the app has not shipped, so no history is migrated); history is a relational, time-ordered list with a stable primary key, and completed workouts stream into the History screen via `Flow`.
 
 ### UI — `ui/`
 
@@ -280,14 +280,14 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 - TIME mode finishes exactly at the target duration
 - ADHOC runs until `endNow()` and cues every Nth completed push round
 - quarter cues fire at 25% / 50% / 75%
-- push warning cues: "Speed up" when pace is below the Push Min or HR below the Recovery Max (incl. HR inside the old band); over-max-HR counter (push) without a push cue
+- push warning cues: "Speed up" when speed is below the Push Min or HR below the Recovery Max (incl. HR inside the old band); over-max-HR counter (push) without a push cue
 - haptic vibration cues: `TRANSITION` on phase entry and finish; `GUIDANCE` on quarter and warning cues
-- recovery warning cues: "Slow down" when pace is above the Recovery Max or HR above the Push Min (incl. HR inside the old band)
+- recovery warning cues: "Slow down" when speed is above the Recovery Max or HR above the Push Min (incl. HR inside the old band)
 - warning-repeat threshold in seconds shared by push and recovery
-- single shared cue (one speech + one vibration) when both HR and pace trigger
-- no-signal suppression: 0 BPM / pace ≤ 1.5 mph never cue, on push and recovery
+- single shared cue (one speech + one vibration) when both HR and speed trigger
+- no-signal suppression: 0 BPM / speed ≤ 1.5 mph never cue, on push and recovery
 - first warning cue after each phase transition suppressed (FAST and SLOW)
-- distance accumulation from pace (mph → miles)
-- per-phase average accumulation: push/recovery/overall pace & HR bucketed from 1 Hz samples
+- distance accumulation from speed (mph → miles)
+- per-phase average accumulation: push/recovery/overall speed & HR bucketed from 1 Hz samples
 
 Run with `./gradlew testDebugUnitTest`.

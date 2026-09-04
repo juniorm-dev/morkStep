@@ -9,8 +9,6 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Update
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 
@@ -25,18 +23,18 @@ data class WorkoutEntity(
     val durationSec: Int,
     /** Completed fast (push) segment count. */
     val fastSegments: Int,
-    /** Average push pace over the workout (mph), or null if none. */
-    val avgFastPace: Float?,
+    /** Average push speed over the workout (mph), or null if none. */
+    val avgFastSpeed: Float?,
     /** Average heart rate over the workout (bpm), or null. */
     val avgHeartRate: Int?,
     /** Seconds spent above the Recovery Max bpm during push segments. */
     val overCeilingSec: Int,
     /** Distance covered, in miles. */
     val distanceMiles: Float,
-    /** Average pace (mph) during push / recovery / overall. */
-    val avgPushPace: Float?,
-    val avgRecoveryPace: Float?,
-    val avgOverallPace: Float?,
+    /** Average speed (mph) during push / recovery / overall. */
+    val avgPushSpeed: Float?,
+    val avgRecoverySpeed: Float?,
+    val avgOverallSpeed: Float?,
     /** Average heart rate (bpm) during push / recovery / overall. */
     val avgPushHr: Int?,
     val avgRecoveryHr: Int?,
@@ -68,36 +66,7 @@ interface WorkoutDao {
     suspend fun clear()
 }
 
-@Database(entities = [WorkoutEntity::class], version = 4, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 5, exportSchema = false)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
-
-    companion object {
-        /** v1 stored distance in km (`distanceKm`); v2 renamed to `distanceMiles` in mph. */
-        val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE workouts RENAME COLUMN distanceKm TO distanceMiles")
-            }
-        }
-
-        /** v3 adds per-phase and overall average pace/HR columns. */
-        val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE workouts ADD COLUMN avgPushPace REAL")
-                db.execSQL("ALTER TABLE workouts ADD COLUMN avgRecoveryPace REAL")
-                db.execSQL("ALTER TABLE workouts ADD COLUMN avgOverallPace REAL")
-                db.execSQL("ALTER TABLE workouts ADD COLUMN avgPushHr INTEGER")
-                db.execSQL("ALTER TABLE workouts ADD COLUMN avgRecoveryHr INTEGER")
-                db.execSQL("ALTER TABLE workouts ADD COLUMN avgOverallHr INTEGER")
-            }
-        }
-
-        /** v4 adds min/max HR (Health Connect post-workout backfill). */
-        val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE workouts ADD COLUMN minHr INTEGER")
-                db.execSQL("ALTER TABLE workouts ADD COLUMN maxHr INTEGER")
-            }
-        }
-    }
 }

@@ -53,7 +53,7 @@ private val OK_GREEN = Color(0xFF2E9E4F)
 
 /**
  * Phase tracker for the running session: how the push/recovery segments are
- * progressing, plus how the live pace compares to the phase target (floor
+ * progressing, plus how the live speed compares to the phase target (floor
  * during push, ceiling during recovery). Pure render over [LiveState].
  */
 @Suppress("FunctionName")
@@ -102,30 +102,30 @@ private fun segmentProgress(live: LiveState, profile: WorkoutProfile): Float {
 
 private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 
-/** Compare the live pace to the phase target (floor in PUSH, ceiling in RECOVERY). */
+/** Compare the live speed to the phase target (floor in PUSH, ceiling in RECOVERY). */
 private fun targetStatus(live: LiveState, profile: WorkoutProfile): TargetStatus {
-    val pace = live.pace ?: return TargetStatus.NONE
+    val speed = live.speed ?: return TargetStatus.NONE
     return when (live.phase) {
-        PhaseType.FAST -> if (pace >= profile.paceFloorMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        PhaseType.SLOW -> if (pace <= profile.paceCeilingMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        PhaseType.FAST -> if (speed >= profile.speedFloorMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        PhaseType.SLOW -> if (speed <= profile.speedCeilingMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
         else -> TargetStatus.NONE
     }
 }
 
 private fun statusCaption(live: LiveState, profile: WorkoutProfile): String = when (targetStatus(live, profile)) {
     TargetStatus.NONE -> when (live.phase) {
-        PhaseType.FAST -> "Push — target ${profile.paceFloorMph} mph floor"
-        PhaseType.SLOW -> "Recovery — target ${profile.paceCeilingMph} mph ceiling"
-        PhaseType.WARMUP -> "Warm-up — no pace target"
-        PhaseType.COOLDOWN -> "Cooldown — no pace target"
+        PhaseType.FAST -> "Push — target ${profile.speedFloorMph} mph floor"
+        PhaseType.SLOW -> "Recovery — target ${profile.speedCeilingMph} mph ceiling"
+        PhaseType.WARMUP -> "Warm-up — no speed target"
+        PhaseType.COOLDOWN -> "Cooldown — no speed target"
     }
     TargetStatus.ON_TARGET -> when (live.phase) {
-        PhaseType.FAST -> "On target — pace ≥ ${profile.paceFloorMph} mph floor"
-        else -> "On target — pace ≤ ${profile.paceCeilingMph} mph ceiling"
+        PhaseType.FAST -> "On target — speed ≥ ${profile.speedFloorMph} mph floor"
+        else -> "On target — speed ≤ ${profile.speedCeilingMph} mph ceiling"
     }
     TargetStatus.OFF_TARGET -> when (live.phase) {
-        PhaseType.FAST -> "Speed up — pace < ${profile.paceFloorMph} mph floor"
-        else -> "Slow down — pace > ${profile.paceCeilingMph} mph ceiling"
+        PhaseType.FAST -> "Speed up — speed < ${profile.speedFloorMph} mph floor"
+        else -> "Slow down — speed > ${profile.speedCeilingMph} mph ceiling"
     }
 }
 
@@ -188,12 +188,12 @@ private fun BarRow(label: String, frac: Float, color: Color) {
     }
 }
 
-// ---- Band: pace vs floor/ceiling band ----
+// ---- Band: speed vs floor/ceiling band ----
 
 @Suppress("FunctionName")
 @Composable
 private fun BandView(live: LiveState, profile: WorkoutProfile) {
-    val maxMph = maxOf(profile.paceCeilingMph, profile.paceFloorMph, (live.pace ?: 0f).toDouble()) * 1.2
+    val maxMph = maxOf(profile.speedCeilingMph, profile.speedFloorMph, (live.speed ?: 0f).toDouble()) * 1.2
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val captionColor = statusColor(targetStatus(live, profile), onSurfaceVariant)
@@ -202,7 +202,7 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
         PhaseType.SLOW -> RECOVERY_COLOR
         else -> NEUTRAL_COLOR
     }
-    val pace = live.pace
+    val speed = live.speed
 
     Column {
         Canvas(
@@ -223,8 +223,8 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
             )
             // Band between the two targets (rendered min..max so an inverted
             // band — push floor above the recovery cap — still shows).
-            val xLow = (minOf(profile.paceFloorMph, profile.paceCeilingMph) / maxMph).toFloat() * w
-            val xHigh = (maxOf(profile.paceFloorMph, profile.paceCeilingMph) / maxMph).toFloat() * w
+            val xLow = (minOf(profile.speedFloorMph, profile.speedCeilingMph) / maxMph).toFloat() * w
+            val xHigh = (maxOf(profile.speedFloorMph, profile.speedCeilingMph) / maxMph).toFloat() * w
             drawRoundRect(
                 color = targetColor.copy(alpha = 0.22f),
                 topLeft = Offset(xLow.coerceIn(0f, w), bandTop),
@@ -233,8 +233,8 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
             )
             // Target boundary (push floor / recovery cap).
             val targetFrac = when (live.phase) {
-                PhaseType.FAST -> (profile.paceFloorMph / maxMph).toFloat()
-                PhaseType.SLOW -> (profile.paceCeilingMph / maxMph).toFloat()
+                PhaseType.FAST -> (profile.speedFloorMph / maxMph).toFloat()
+                PhaseType.SLOW -> (profile.speedCeilingMph / maxMph).toFloat()
                 else -> null
             }
             targetFrac?.let { fx ->
@@ -246,8 +246,8 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
                     strokeWidth = 2.dp.toPx(),
                 )
             }
-            // Live pace needle.
-            val needleFrac = if (pace != null) (pace / maxMph).toFloat().coerceIn(0f, 1f) else 0f
+            // Live speed needle.
+            val needleFrac = if (speed != null) (speed / maxMph).toFloat().coerceIn(0f, 1f) else 0f
             val nx = (needleFrac * w).coerceIn(0f, w)
             drawLine(
                 color = Color.White,
@@ -258,8 +258,8 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
         }
         Text(
             buildString {
-                append("pace ${pace?.let { "%.1f".format(it) } ?: "--"} mph")
-                append("   band ${profile.paceFloorMph}–${profile.paceCeilingMph}")
+                append("speed ${speed?.let { "%.1f".format(it) } ?: "--"} mph")
+                append("   band ${profile.speedFloorMph}–${profile.speedCeilingMph}")
             },
             style = MaterialTheme.typography.labelSmall,
             color = onSurfaceVariant,
@@ -272,7 +272,7 @@ private fun BandView(live: LiveState, profile: WorkoutProfile) {
     }
 }
 
-// ---- Gauge: circular segment progress + pace ----
+// ---- Gauge: circular segment progress + speed ----
 
 @Suppress("FunctionName")
 @Composable
@@ -283,7 +283,7 @@ private fun GaugeView(live: LiveState, profile: WorkoutProfile) {
         else -> NEUTRAL_COLOR
     }
     val progress = segmentProgress(live, profile)
-    val pace = live.pace
+    val speed = live.speed
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val valueColor = statusColor(targetStatus(live, profile), onSurfaceVariant)
@@ -323,8 +323,8 @@ private fun GaugeView(live: LiveState, profile: WorkoutProfile) {
                     style = stroke,
                 )
                 // Floor / ceiling tick marks on the arc.
-                val scaleMax = maxOf(profile.paceCeilingMph, profile.paceFloorMph) * 1.2
-                listOf(profile.paceFloorMph, profile.paceCeilingMph).forEach { mph ->
+                val scaleMax = maxOf(profile.speedCeilingMph, profile.speedFloorMph) * 1.2
+                listOf(profile.speedFloorMph, profile.speedCeilingMph).forEach { mph ->
                     val frac = (mph / scaleMax).coerceIn(0.0, 1.0).toFloat()
                     val angle = Math.toRadians((startAngle + sweepTotal * frac).toDouble())
                     val r0 = size.width / 2 - 13.dp.toPx()
@@ -345,7 +345,7 @@ private fun GaugeView(live: LiveState, profile: WorkoutProfile) {
                     )
                 }
 
-                // Center: pace + phase.
+                // Center: speed + phase.
                 val textPaint = Paint().apply {
                     isAntiAlias = true
                     color = valueColor.toArgb()
@@ -355,7 +355,7 @@ private fun GaugeView(live: LiveState, profile: WorkoutProfile) {
                 val cx = size.width / 2
                 val cy = size.height / 2
                 drawContext.canvas.nativeCanvas.drawText(
-                    pace?.let { "%.1f".format(it) } ?: "--",
+                    speed?.let { "%.1f".format(it) } ?: "--",
                     cx,
                     cy - 4.dp.toPx(),
                     textPaint,

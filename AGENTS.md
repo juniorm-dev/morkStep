@@ -2,8 +2,8 @@
 
 morkStep — a modern Android (Wear OS) fitness app for **Interval Walking Training (IWT)**.
 IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep guides a
-session through a configurable plan, gives live pace and heart-rate feedback, plays audio
-cues when you drift from your pace/HR targets, and records every completed workout to a
+session through a configurable plan, gives live speed and heart-rate feedback, plays audio
+cues when you drift from your speed/HR targets, and records every completed workout to a
 history log.
 
 Built with Kotlin coroutines (`kotlinx.coroutines`) + `androidx.compose` (Material 3). No
@@ -30,13 +30,13 @@ MainActivity → MorkApp (Scaffold + bottom nav) → Home/Config/History/Workout
                                        │ read StateFlows from
                                  MainViewModel  ◀── owns EVERYTHING
    config in:  ConfigStore (DataStore Flows) → rebuildSources()/setupEngine()
-   sensors:    PaceSource/HeartRateSource StateFlow<Float?/Int?> hot streams
-                 • GpsPaceSource  (Play Services Fused Location, 1 Hz)
+   sensors:    SpeedSource/HeartRateSource StateFlow<Float?/Int?> hot streams
+                 • GpsSpeedSource  (Play Services Fused Location, 1 Hz)
                  • BleHeartRateSource (BLE strap HR service 0x180D/0x2A37)
                  • WearHeartRateSource (HR relayed from paired watch, /morkstep/hr)
                  • SimulatedSensors (dev toggle, seeded Random(42), phase-driven)
-   engine:     SessionEngine(profile, paceSrc, hrSrc, SpeakerSink)
-                 • start() combines pace+hr into LiveState StateFlow
+   engine:     SessionEngine(profile, speedSrc, hrSrc, SpeakerSink)
+                 • start() combines speed+hr into LiveState StateFlow
                  • MainViewModel.tickerJob: viewModelScope.launch { delay(1000); engine.tick() }
    output:     CueSink → CueSpeaker (TTS + beeps) + phone Vibrator haptics + watch haptics
    finish:     onFinished() → Room WorkoutEntity row → Health-Connect HR backfill → Baseline re-derive
@@ -61,7 +61,7 @@ happens on the phone.
 |---|---|
 | `app/src/main/java/com/morkstep/` | Phone app, grouped by responsibility |
 | `…/engine/` | `SessionEngine` — pure IWT state machine + cues; `CueSink`/`CueVibration` interfaces |
-| `…/sensing/` | `PaceSource` / `HeartRateSource` interfaces + GPS/BLE/Wear/Simulated/Health-Connect providers |
+| `…/sensing/` | `SpeedSource` / `HeartRateSource` interfaces + GPS/BLE/Wear/Simulated/Health-Connect providers |
 | `…/data/` | `ConfigStore` (DataStore), `WorkoutHistory` (Room DB), `Config.kt` models/enums, `Baseline.kt`, `Transfer.kt` (JSON backup) |
 | `…/ui/` | Compose screens + `MainViewModel` (state hub) |
 | `…/audio/` | `CueSpeaker` (TTS + tones) |
@@ -110,7 +110,7 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
   (`phaseAt(t, profile, …)`, `planFor(p)`, `progressAt(…)` are `internal fun`s — unit-testable).
   It is advanced by a manual 1 Hz ticker, not a timer. Pause excludes paused wall-clock.
   Transient phase transitions are detected by `phaseAt().phase != lastPhase`, not an enum.
-- **Sensor contract**: anything providing pace implements `PaceSource { val pace: StateFlow<Float?> }`;
+- **Sensor contract**: anything providing speed implements `SpeedSource { val speed: StateFlow<Float?> }`;
   HR implements `HeartRateSource { val hr: StateFlow<Int?> }` (in `sensing/Sensors.kt`).
 - **Output contract**: engine emits into `CueSink` (`beep()` / `speak(text)` / `vibrate(kind)`);
   `SpeakerSink` (in `MainViewModel`) bridges to `CueSpeaker` + haptics. Haptics are gated by
@@ -122,9 +122,9 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
 - **Naming**: tests `camelCase_describesBehavior`; parse helpers and pure functions are
   top-level `fun`s; enums `UPPER_SNAKE`. Background coroutines use `…Job` /
   `viewModelScope.launch { … }`.
-- **Known historical naming**: `paceCeilingMph` caps *recovery* ("Slow down"),
-  `paceFloorMph` floors *push* ("Speed up"). `Consume` for signal validity floors:
-  `MIN_VALID_HR_BPM`, `MIN_VALID_PACE_MPH`.
+- **Known historical naming**: `speedCeilingMph` caps *recovery* ("Slow down"),
+  `speedFloorMph` floors *push* ("Speed up"). `Consume` for signal validity floors:
+  `MIN_VALID_HR_BPM`, `MIN_VALID_SPEED_MPH`.
 - **Versioning**: per-module `versionCode`/`versionName` in each `build.gradle.kts`;
   releases tagged `v<versionName>`. `VerifyVersionTag` (app, release variants) fails
   `packageRelease` if the git tag already exists — bump version before release. `VersionApk`
@@ -183,7 +183,7 @@ it via `:app/:wear:connectedDebugAndroidTest`.
   `ext:junit` 1.2.1, Compose `ui-test-junit4`, espresso-core 3.7.0 (pinned override — 3.5.1
   crashes on Android 15/16). No Kotest/Mockito/Robolectric.
 - **Unit test patterns**: pure helpers and the engine are tested directly with fakes —
-  `FakeClock (SessionClock)`, `FakeSensors (PaceSource+HeartRateSource via MutableStateFlow)`,
+  `FakeClock (SessionClock)`, `FakeSensors (SpeedSource+HeartRateSource via MutableStateFlow)`,
   `RecordingCue (CueSink)`. This is the idiomatic way to test logic without Android APIs.
 - **Instrumented patterns**: `createAndroidComposeRule<MainActivity>` + Compose
   `onNodeWithText`/`performClick`/`waitUntil`; `testOptions animationsDisabled=true`;
@@ -191,7 +191,7 @@ it via `:app/:wear:connectedDebugAndroidTest`.
 - **Coverage today**: `engine/` (SessionEngine) is exhaustively covered; pure parsers
   (BLE HR, Wear 35-byte decode) and `Transfer`/`Baseline` logic are covered. **Gaps**:
   `audio/CueSpeaker`, `WorkoutService`, `MainViewModel`, `data/Store` +
-  `WorkoutHistory`, `GpsPaceSource`, `WearHeartRateSource`, and the live-session phone UI
+  `WorkoutHistory`, `GpsSpeedSource`, `WearHeartRateSource`, and the live-session phone UI
   (`WorkoutScreen`, `WorkoutPhasePanel`) have no direct tests. Follow the fake-based unit
   pattern for logic; use instrumented tests for real Compose surface behavior that needs a
   device.

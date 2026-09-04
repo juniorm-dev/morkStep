@@ -21,18 +21,18 @@ class WearGraphicsPanelTest {
     @get:Rule
     val rule = createComposeRule()
 
-    // FAST phase, on target: pace 4.8 >= ceiling 4.5.
+    // FAST phase, on target: speed 4.8 >= ceiling 4.5.
     private val session = WearSessionState(
         phaseOrd = 2,
         running = true,
         secondsInPhase = 30,
-        pace = 4.8f,
+        speed = 4.8f,
         fastDone = 1,
         fastTotal = 5,
         fastSec = 60,
         slowSec = 60,
-        paceFloor = 3.2f,
-        paceCeiling = 4.5f,
+        speedFloor = 3.2f,
+        speedCeiling = 4.5f,
     )
 
     @Test
@@ -48,13 +48,13 @@ class WearGraphicsPanelTest {
     }
 
     @Test
-    fun bandShowsPaceAndBandCaption() {
+    fun bandShowsSpeedAndBandCaption() {
         rule.setContent {
             MaterialTheme {
                 WearWorkoutGraphicsPanel(session = session, view = WearGraphicsView.BAND, onViewChange = {})
             }
         }
-        rule.onNodeWithText("pace 4.8", substring = true).assertExists()
+        rule.onNodeWithText("speed 4.8", substring = true).assertExists()
         rule.onNodeWithText("On target", substring = true).assertExists()
     }
 

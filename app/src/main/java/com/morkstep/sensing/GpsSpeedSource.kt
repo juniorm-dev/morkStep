@@ -18,17 +18,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Real walking-pace source from GPS (Fused Location Provider, Play Services).
+ * Real walking-speed source from GPS (Fused Location Provider, Play Services).
  *
- * Emits instantaneous pace in mph derived from `Location.getSpeed()`.
- * If location permission was not granted at construction time, [pace] simply
+ * Emits instantaneous speed in mph derived from `Location.getSpeed()`.
+ * If location permission was not granted at construction time, [speed] simply
  * stays `null` — there is NO simulated fallback; callers must treat `null`
  * as "unknown", never as fake data.
  */
-class GpsPaceSource(context: Context) : PaceSource {
+class GpsSpeedSource(context: Context) : SpeedSource {
     private val appContext = context.applicationContext
-    private val _pace = MutableStateFlow<Float?>(null)
-    override val pace: StateFlow<Float?> = _pace.asStateFlow()
+    private val _speed = MutableStateFlow<Float?>(null)
+    override val speed: StateFlow<Float?> = _speed.asStateFlow()
 
     private val client: FusedLocationProviderClient? =
         if (hasPermission()) LocationServices.getFusedLocationProviderClient(appContext) else null
@@ -40,7 +40,7 @@ class GpsPaceSource(context: Context) : PaceSource {
             val mph = mps * Constants.MPH_PER_MPS
             // Strictly-positive junk filter: reject zero/negative speed reads
             // (GPS standing-still noise) but keep showing real slow walking.
-            if (mph > 0f) _pace.value = mph
+            if (mph > 0f) _speed.value = mph
         }
     }
 
