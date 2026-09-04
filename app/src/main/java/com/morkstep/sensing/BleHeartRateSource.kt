@@ -20,6 +20,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,7 +60,9 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
     fun start() {
         if (started) return
         started = true
-        if (!canScan()) return
+        // isEnabled() is BLUETOOTH_CONNECT-gated on API 31+, so require both
+        // grants before touching the adapter (a scan-only grant would throw).
+        if (!canScan() || !canConnect()) return
         val adapter = adapter ?: return
         if (!adapter.isEnabled) return
         scanForStrap()
@@ -89,7 +92,13 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         scanning = true
         try {
             scanner.startScan(listOf(filter), settings, scanCallback)
-        } catch (_: SecurityException) {
+        } catch (e: RuntimeException) {
+            // Some platforms throw here even with the scan permission granted:
+            // SecurityException (permission race) and, on Android 16 emulator
+            // stacks, IllegalArgumentException ("callback is null"). BLE is
+            // best-effort: degrade to an unknown HR, never crash.
+            scanning = false
+            Log.w(TAG, "BLE scan start failed; heart rate unavailable", e)
             return
         }
         // Give up after 60s rather than drain battery forever.
@@ -102,7 +111,8 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         scanning = false
         try {
             adapter?.bluetoothLeScanner?.stopScan(scanCallback)
-        } catch (_: SecurityException) {
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "BLE scan stop failed", e)
         }
     }
 
@@ -133,7 +143,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
                     g.close()
                     gatt = null
                     // Re-scan so a reconnect can happen automatically.
-                    handler.post { if (started && canScan()) scanForStrap() }
+                    handler.post { if (started && canScan() && canConnect()) scanForStrap() }
                 }
             }
         }
@@ -178,6 +188,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
             PackageManager.PERMISSION_GRANTED
 
     companion object {
+        private const val TAG = "BleHeartRateSource"
         val HR_SERVICE: UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
         val HR_MEASUREMENT: UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb")
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
