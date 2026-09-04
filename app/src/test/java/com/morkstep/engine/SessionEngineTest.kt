@@ -101,7 +101,7 @@ class SessionEngineTest {
     }
 
     @Test
-    fun completedFastIn_isPlanRelative() {
+    fun completedPushIn_isPlanRelative() {
         val p = roundsProfile
         assertEquals(0, completedPushIn(60, p))
         assertEquals(0, completedPushIn(119, p))
