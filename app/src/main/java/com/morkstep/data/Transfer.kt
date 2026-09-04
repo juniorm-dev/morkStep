@@ -7,13 +7,21 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** Backup envelope for saved workout profiles. */
+/**
+ * Versioned backup envelope for saved workout profiles. [version] is carried
+ * for forward compatibility so a future schema can migrate old exports; it is
+ * currently 1 with no migration logic (the app has not shipped).
+ */
 @Serializable
-data class ProfileExport(val profiles: List<WorkoutProfile>)
+data class ProfileExport(val version: Int = 1, val profiles: List<WorkoutProfile>)
 
-/** Backup envelope for completed workout history. */
+/**
+ * Versioned backup envelope for completed workout history. [version] is
+ * carried for forward compatibility so a future schema can migrate old
+ * exports; it is currently 1 with no migration logic (the app has not shipped).
+ */
 @Serializable
-data class WorkoutExport(val workouts: List<WorkoutEntity>)
+data class WorkoutExport(val version: Int = 1, val workouts: List<WorkoutEntity>)
 
 /** Shared JSON codec for profile/history transfer files (pretty-printed for humans). */
 object TransferJson {

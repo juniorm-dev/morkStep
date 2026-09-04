@@ -108,6 +108,7 @@ class TransferTest {
         val text = json.encodeToString(ProfileExport(profiles = listOf(p)))
         assertTrue(text.contains("\"vibrationIntensity\""))
         val back = json.decodeFromString<ProfileExport>(text)
+        assertEquals(1, back.version)
         assertEquals(1, back.profiles.size)
         assertEquals("Hill", back.profiles[0].name)
         assertEquals(VibrationMode.ALL, back.profiles[0].vibrationMode)
