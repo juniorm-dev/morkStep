@@ -73,7 +73,7 @@ fun HomeScreen(
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${p.lengthLabel()} · speed ${p.speedFloorMph}–${p.speedCeilingMph} mph · pace ${p.paceFloorSpm}–${p.paceCeilingSpm} spm · HR ${p.hrRecoveryMax}–${p.hrPushMin}",
+                                "${p.lengthLabel()} · speed ${p.pushSpeedFloorMph}–${p.recoverySpeedCapMph} mph · pace ${p.pushPaceFloorSpm}–${p.recoveryPaceCapSpm} spm · HR ${p.hrRecoveryMax}–${p.hrPushMin}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -90,7 +90,7 @@ fun HomeScreen(
                     Text("Workout plan · ${p.name}", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${p.lengthLabel()} · ${formatSeconds(p.fastSec)} push / ${formatSeconds(p.slowSec)} recovery",
+                        "${p.lengthLabel()} · ${formatSeconds(p.pushSec)} push / ${formatSeconds(p.slowSec)} recovery",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(

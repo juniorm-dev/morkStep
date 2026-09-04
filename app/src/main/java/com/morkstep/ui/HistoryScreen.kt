@@ -108,7 +108,7 @@ private fun WorkoutRow(w: WorkoutEntity) {
             Text(formatDate(w.startTime), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "${formatDuration(w.durationSec)} · ${w.fastSegments} push intervals",
+                "${formatDuration(w.durationSec)} · ${w.pushSegments} push intervals",
                 style = MaterialTheme.typography.bodyMedium,
             )
             // Per-phase + overall averages (v3; older rows may be null).
@@ -149,10 +149,9 @@ private fun WorkoutRow(w: WorkoutEntity) {
                 )
             }
             val stats = buildList {
-                w.avgHeartRate?.let { add("avg HR $it bpm") }
                 if (w.minHr != null && w.maxHr != null) add("min–max HR ${w.minHr}–${w.maxHr}")
                 if (w.distanceMiles > 0f) add("%.2f mi".format(w.distanceMiles))
-                if (w.overCeilingSec > 0) add("above ceiling ${w.overCeilingSec}s")
+                if (w.overPushMinSec > 0) add("above push min ${w.overPushMinSec}s")
             }
             if (stats.isNotEmpty()) {
                 Text(stats.joinToString(" · "), style = MaterialTheme.typography.bodySmall)

@@ -103,7 +103,7 @@ fun WorkoutScreen(
         // overall workout end is open — so the toggle applies to every mode.
         var countUp by rememberSaveable { mutableStateOf(false) }
         val segSec = when (live.phase) {
-            com.morkstep.data.PhaseType.FAST -> profile.fastSec
+            com.morkstep.data.PhaseType.FAST -> profile.pushSec
             com.morkstep.data.PhaseType.SLOW -> profile.slowSec
             com.morkstep.data.PhaseType.WARMUP -> profile.warmupSec
             com.morkstep.data.PhaseType.COOLDOWN -> profile.cooldownSec
@@ -163,7 +163,7 @@ fun WorkoutScreen(
         Spacer(Modifier.height(12.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SensorCard("PUSH", "${live.fastSegmentsDone}", Modifier.weight(1f))
+            SensorCard("PUSH", "${live.pushSegmentsDone}", Modifier.weight(1f))
             SensorCard("DIST (mi)", "%.2f".format(live.distanceMiles), Modifier.weight(1f))
         }
 
