@@ -40,6 +40,8 @@ import com.morkstep.sensing.WearPaceSource
 import com.morkstep.sensing.healthConnectHrForWorkout
 import com.morkstep.sensing.SpeedSource
 import com.morkstep.sensing.SimulatedSensors
+import com.morkstep.sensing.FallbackPaceSource
+import com.morkstep.sensing.PhonePaceSource
 import com.morkstep.sensing.WearHeartRateSource
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.wearable.MessageClient
@@ -164,6 +166,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var ble: BleHeartRateSource? = null
     private var wear: WearHeartRateSource? = null
     private var wearPace: WearPaceSource? = null
+    private var phonePace: PhonePaceSource? = null
+    /** Merges watch pace (preferred) with the phone pedometer fallback. */
+    private var paceMerge: FallbackPaceSource? = null
     private var sim: SimulatedSensors? = null
 
     private val _profiles = MutableStateFlow(emptyList<WorkoutProfile>())
@@ -270,12 +275,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             gps = GpsSpeedSource(getApplication())
             ble = BleHeartRateSource(getApplication())
-            wearPace = WearPaceSource(getApplication())
+            wearPace = WearPaceSource(getApplication()).also { it.start() }
+            phonePace = PhonePaceSource(getApplication()).also { it.start() }
             if (_useWearHr.value) {
-                wear = WearHeartRateSource(getApplication())
+                wear = WearHeartRateSource(getApplication()).also { it.start() }
             }
             _sensorNote.value =
-                if (_useWearHr.value) "GPS speed · Wear pace & heart rate" else "GPS speed · Wear pace · BLE heart rate"
+                if (_useWearHr.value) "GPS speed · pace (watch or phone) · Wear heart rate"
+                else "GPS speed · pace (watch or phone) · BLE heart rate"
         }
         setupEngine()
     }
@@ -300,10 +307,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ble?.stop()
         wear?.stop()
         wearPace?.stop()
+        phonePace?.stop()
         gps = null
         ble = null
         wear = null
         wearPace = null
+        phonePace = null
         sim = null
     }
 
@@ -324,16 +333,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_simulated.value) sim!!
             else if (_useWearHr.value) wear ?: ble ?: return
             else ble ?: return
-        // Pace comes from the pedometer on the watch. In simulated mode the
-        // sim drives it; otherwise the Wear relay (always created in real
-        // mode). A missing watch just leaves the relay silent — no fallback.
-        val paceSrc: PaceSource = if (_simulated.value) sim!! else wearPace!!
+        // Pace: the Wear relay when the watch is streaming, else the phone's
+        // own step sensor (FallbackPaceSource switches after 15 s of watch
+        // silence, so a missing watch never leaves pace blank).
+        val paceSrc: PaceSource = if (_simulated.value) sim!!
+        else FallbackPaceSource(wearPace!!, phonePace!!).also { paceMerge = it }
         engineJob?.cancel()
         val e = SessionEngine(p, speedSrc, hrSrc, paceSrc, sink)
         engine = e
+        // The old merge (if any) was cancelled with engineJob; start the new one
+        // with the fresh engine's scope.
+        val merge = paceMerge
+        paceMerge = null
         engineJob = viewModelScope.launch {
             // Sensor observation and live-state fan-out share one job so a
             // replaced/discarded engine is fully torn down (no stale updates).
+            merge?.start(this)
             e.start(this)
             e.state.collect { _live.value = it }
         }
