@@ -63,7 +63,7 @@ default `assemble`/`test` lifecycle. Run them explicitly against a booted
 emulator when needed:
 
 ```bash
-./gradlew :app:connectedDebugAndroidTest   # phone app UI smoke tests (4)
+./gradlew :app:connectedDebugAndroidTest   # phone app UI smoke tests (12)
 ./gradlew :wear:connectedDebugAndroidTest  # Wear companion UI smoke tests (2)
 ```
 

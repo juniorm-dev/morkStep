@@ -50,13 +50,24 @@
         </activity>
 
         <!-- Shown by Health Connect before the permission grant so the user
-             understands why heart rate access is requested. -->
+             understands why heart rate access is requested. Two filters: the
+             legacy ACTION_SHOW_PERMISSIONS_RATIONALE (Android 13- Health Connect
+             app) and the Android 14+ platform controller's
+             VIEW_PERMISSION_USAGE with the HEALTH_PERMISSIONS category (without
+             it the controller aborts the grant with "App should support
+             rationale intent"). DEFAULT is required for MATCH_DEFAULT_ONLY
+             resolution. -->
         <activity
             android:name=".RationaleActivity"
             android:exported="true"
             android:theme="@style/Theme.morkStep">
             <intent-filter>
                 <action android:name="android.health.connect.action.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
