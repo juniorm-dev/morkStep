@@ -17,7 +17,7 @@ enum class DarkMode { SYSTEM, DARK, LIGHT }
 /**
  * One named workout configuration (profile).
  *
- * All pace values are miles per hour. [lengthMode] decides when the workout
+ * All speed values are miles per hour. [lengthMode] decides when the workout
  * ends; the phase cycle is always warm-up → (fast/slow) repeats → cool-down.
  */
 @Serializable
@@ -39,16 +39,16 @@ data class WorkoutProfile(
     val slowSec: Int = 180,
     val cooldownSec: Int = 120,
     /**
-     * Recovery-phase pace cap (mph): recovery cues "Slow down" while pace is
+     * Recovery-phase speed cap (mph): recovery cues "Slow down" while speed is
      * above this. (Named "ceiling" for historical reasons; it caps recovery,
-     * while [paceFloorMph] floors push — the naming may change in a future update.)
+     * while [speedFloorMph] floors push — the naming may change in a future update.)
      */
-    val paceCeilingMph: Double = 4.5,
+    val speedCeilingMph: Double = 4.5,
     /**
-     * Push-phase pace floor (mph): push cues "Speed up" while pace is below
-     * this. (Named "floor" for historical reasons; see [paceCeilingMph].)
+     * Push-phase speed floor (mph): push cues "Speed up" while speed is below
+     * this. (Named "floor" for historical reasons; see [speedCeilingMph].)
      */
-    val paceFloorMph: Double = 3.2,
+    val speedFloorMph: Double = 3.2,
     /**
      * Heart rate (bpm) — Recovery Max: the upper HR bound. Push cues
      * "Speed up" while HR is below this; recovery keeps HR below this.
@@ -60,7 +60,7 @@ data class WorkoutProfile(
      */
     val hrFloor: Int = 120,
     /**
-     * Seconds between repeats of the same pace/HR warning cue, shared by push
+     * Seconds between repeats of the same speed/HR warning cue, shared by push
      * and recovery cues. A cue repeats at most once per interval while the
      * condition holds.
      */
@@ -76,7 +76,7 @@ data class WorkoutProfile(
         get() = when (lengthMode) {
             WorkoutLength.ROUNDS -> warmupSec.toLong() + rounds.toLong() * (fastSec + slowSec) + cooldownSec
             WorkoutLength.TIME -> timeMinutes.toLong() * 60
-            WorkoutLength.DISTANCE, WorkoutLength.ADHOC -> Long.MAX_VALUE // pace-dependent / indefinite
+            WorkoutLength.DISTANCE, WorkoutLength.ADHOC -> Long.MAX_VALUE // speed-dependent / indefinite
         }
 
     /** Short human description of the length, e.g. "5 rounds" / "2.0 mi" / "35 min" / "Adhoc". */

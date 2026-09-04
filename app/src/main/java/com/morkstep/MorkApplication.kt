@@ -20,11 +20,9 @@ class MorkApplication : Application() {
 class AppContainer(context: Context) {
     val configStore = ConfigStore(context)
     val database: MorkDatabase = Room.databaseBuilder(context, MorkDatabase::class.java, "mork.db")
-        .addMigrations(
-            MorkDatabase.MIGRATION_1_2,
-            MorkDatabase.MIGRATION_2_3,
-            MorkDatabase.MIGRATION_3_4,
-        )
+        // No migrations: the app has not shipped, so any pre-release workout
+        // history is discarded rather than migrated (schema changed in v5).
+        .fallbackToDestructiveMigration(dropAllTables = true)
         .build()
     val workoutDao = database.workoutDao()
 }

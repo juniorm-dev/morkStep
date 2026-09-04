@@ -52,13 +52,13 @@ data class WearSessionState(
     val paused: Boolean = false,
     val running: Boolean = false,
     val secondsInPhase: Int = 0,
-    val pace: Float? = null,
+    val speed: Float? = null,
     val fastDone: Int = 0,
     val fastTotal: Int? = null,
     val fastSec: Int = Constants.DEFAULT_FAST_SEC,
     val slowSec: Int = Constants.DEFAULT_SLOW_SEC,
-    val paceFloor: Float = Constants.DEFAULT_PACE_FLOOR_MPH,
-    val paceCeiling: Float = Constants.DEFAULT_PACE_CEILING_MPH,
+    val speedFloor: Float = Constants.DEFAULT_SPEED_FLOOR_MPH,
+    val speedCeiling: Float = Constants.DEFAULT_SPEED_CEILING_MPH,
 )
 
 /** Decode the phone's state payload; a short/empty payload yields defaults. */
@@ -71,13 +71,13 @@ fun decodeWearSessionState(data: ByteArray): WearSessionState {
             paused = buf.get().toInt() == 1,
             running = buf.get().toInt() == 1,
             secondsInPhase = buf.int,
-            pace = buf.float.takeIf { !it.isNaN() },
+            speed = buf.float.takeIf { !it.isNaN() },
             fastDone = buf.int,
             fastTotal = buf.int.takeIf { it >= 0 },
             fastSec = buf.int,
             slowSec = buf.int,
-            paceFloor = buf.float,
-            paceCeiling = buf.float,
+            speedFloor = buf.float,
+            speedCeiling = buf.float,
         )
     }.getOrDefault(WearSessionState())
 }
@@ -85,29 +85,29 @@ fun decodeWearSessionState(data: ByteArray): WearSessionState {
 private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 
 private fun WearSessionState.targetStatus(): TargetStatus {
-    val p = pace ?: return TargetStatus.NONE
+    val p = speed ?: return TargetStatus.NONE
     return when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> if (p >= paceFloor) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        WearPhase.SLOW -> if (p <= paceCeiling) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        WearPhase.FAST -> if (p >= speedFloor) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
+        WearPhase.SLOW -> if (p <= speedCeiling) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
         else -> TargetStatus.NONE
     }
 }
 
 private fun WearSessionState.statusCaption(): String = when (targetStatus()) {
     TargetStatus.NONE -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "Push — target $paceFloor mph floor"
-        WearPhase.SLOW -> "Recovery — target $paceCeiling mph ceiling"
-        WearPhase.WARMUP -> "Warm-up — no pace target"
-        WearPhase.COOLDOWN -> "Cooldown — no pace target"
+        WearPhase.FAST -> "Push — target $speedFloor mph floor"
+        WearPhase.SLOW -> "Recovery — target $speedCeiling mph ceiling"
+        WearPhase.WARMUP -> "Warm-up — no speed target"
+        WearPhase.COOLDOWN -> "Cooldown — no speed target"
         null -> ""
     }
     TargetStatus.ON_TARGET -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "On target — pace ≥ $paceFloor mph floor"
-        else -> "On target — pace ≤ $paceCeiling mph ceiling"
+        WearPhase.FAST -> "On target — speed ≥ $speedFloor mph floor"
+        else -> "On target — speed ≤ $speedCeiling mph ceiling"
     }
     TargetStatus.OFF_TARGET -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "Speed up — pace < $paceFloor mph floor"
-        else -> "Slow down — pace > $paceCeiling mph ceiling"
+        WearPhase.FAST -> "Speed up — speed < $speedFloor mph floor"
+        else -> "Slow down — speed > $speedCeiling mph ceiling"
     }
 }
 
@@ -203,7 +203,7 @@ private fun WearBarRow(label: String, frac: Float, color: Color) {
 @Suppress("FunctionName")
 @Composable
 private fun WearBand(s: WearSessionState) {
-    val maxMph = maxOf(s.paceCeiling, s.paceFloor, s.pace ?: 0f) * Constants.SCALE_HEADROOM
+    val maxMph = maxOf(s.speedCeiling, s.speedFloor, s.speed ?: 0f) * Constants.SCALE_HEADROOM
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val captionColor = statusColor(s.targetStatus(), onSurfaceVariant)
@@ -227,8 +227,8 @@ private fun WearBand(s: WearSessionState) {
                 color = surfaceVariant,
                 cornerRadius = CornerRadius(12.dp.toPx()),
             )
-            val xLow = minOf(s.paceFloor, s.paceCeiling) / maxMph * w
-            val xHigh = maxOf(s.paceFloor, s.paceCeiling) / maxMph * w
+            val xLow = minOf(s.speedFloor, s.speedCeiling) / maxMph * w
+            val xHigh = maxOf(s.speedFloor, s.speedCeiling) / maxMph * w
             drawRoundRect(
                 color = targetColor.copy(alpha = 0.22f),
                 topLeft = Offset(xLow.coerceIn(0f, w), bandTop),
@@ -236,8 +236,8 @@ private fun WearBand(s: WearSessionState) {
                 cornerRadius = CornerRadius(8.dp.toPx()),
             )
             val targetFrac = when (WearPhase.from(s.phaseOrd)) {
-                WearPhase.FAST -> s.paceFloor / maxMph
-                WearPhase.SLOW -> s.paceCeiling / maxMph
+                WearPhase.FAST -> s.speedFloor / maxMph
+                WearPhase.SLOW -> s.speedCeiling / maxMph
                 else -> null
             }
             targetFrac?.let { fx ->
@@ -249,7 +249,7 @@ private fun WearBand(s: WearSessionState) {
                     strokeWidth = 2.dp.toPx(),
                 )
             }
-            val nx = ((s.pace ?: 0f) / maxMph * w).coerceIn(0f, w)
+            val nx = ((s.speed ?: 0f) / maxMph * w).coerceIn(0f, w)
             drawLine(
                 color = Color.White,
                 start = Offset(nx, bandTop),
@@ -258,7 +258,7 @@ private fun WearBand(s: WearSessionState) {
             )
         }
         Text(
-            "pace ${s.pace?.let { "%.1f".format(it) } ?: "--"} mph · band ${s.paceFloor}–${s.paceCeiling}",
+            "speed ${s.speed?.let { "%.1f".format(it) } ?: "--"} mph · band ${s.speedFloor}–${s.speedCeiling}",
             style = MaterialTheme.typography.labelSmall,
             color = onSurfaceVariant,
         )
@@ -318,8 +318,8 @@ private fun WearGauge(s: WearSessionState) {
                 size = arcSize,
                 style = stroke,
             )
-            val scaleMax = maxOf(s.paceCeiling, s.paceFloor) * Constants.SCALE_HEADROOM
-            listOf(s.paceFloor, s.paceCeiling).forEach { mph ->
+            val scaleMax = maxOf(s.speedCeiling, s.speedFloor) * Constants.SCALE_HEADROOM
+            listOf(s.speedFloor, s.speedCeiling).forEach { mph ->
                 val frac = (mph / scaleMax).coerceIn(0f, 1f)
                 val angle = Math.toRadians((startAngle + sweepTotal * frac).toDouble())
                 val r0 = size.width / 2 - 9.dp.toPx()
@@ -349,7 +349,7 @@ private fun WearGauge(s: WearSessionState) {
                 textSize = 24.sp.toPx()
             }
             drawContext.canvas.nativeCanvas.drawText(
-                s.pace?.let { "%.1f".format(it) } ?: "--",
+                s.speed?.let { "%.1f".format(it) } ?: "--",
                 cx,
                 cy - 2.dp.toPx(),
                 valuePaint,

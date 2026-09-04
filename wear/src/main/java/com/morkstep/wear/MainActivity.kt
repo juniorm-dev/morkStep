@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
             var phase by remember { mutableStateOf<WearPhase?>(null) }
             var paused by remember { mutableStateOf(false) }
             var workoutActive by remember { mutableStateOf(false) }
-            // Full session data for the graphics panel (pace, progress, targets).
+            // Full session data for the graphics panel (speed, progress, targets).
             var session by remember { mutableStateOf(WearSessionState()) }
             var graphicsView by rememberSaveable { mutableStateOf(WearGraphicsView.BARS) }
             // Watch-local haptics mute: the phone keeps sending its vibrations,

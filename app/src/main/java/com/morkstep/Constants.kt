@@ -11,12 +11,12 @@ object Constants {
     const val MPH_PER_MPS = 2.23694f
 
     /**
-     * Lowest instantaneous pace (mph) that counts as a meaningful signal.
+     * Lowest instantaneous speed (mph) that counts as a meaningful signal.
      * Readings at or below this are treated like "no signal": they never
      * trigger a Speed up / Slow down warning cue (GPS noise while standing
      * still or walking unrealistically slowly).
      */
-    const val MIN_VALID_PACE_MPH = 1.5f
+    const val MIN_VALID_SPEED_MPH = 1.5f
     /**
      * Lowest heart rate (bpm) that counts as a meaningful signal. Readings
      * below this are treated like "no signal": they never trigger a Speed up /
@@ -24,7 +24,7 @@ object Constants {
      */
     const val MIN_VALID_HR_BPM = 1
 
-    /** Fused-location update cadence (ms) for the GPS pace source. */
+    /** Fused-location update cadence (ms) for the GPS speed source. */
     const val GPS_UPDATE_INTERVAL_MS = 1_000L
     /** Fused-location minimum update interval (ms). */
     const val GPS_MIN_UPDATE_INTERVAL_MS = 1_000L
@@ -78,15 +78,15 @@ object Constants {
     const val BASELINE_UPDATED_WARMUP_SEC = 30
     /** Baseline calibrated: cool-down in seconds. */
     const val BASELINE_UPDATED_COOLDOWN_SEC = 30
-    // Pace-target clamp bounds, matching the Config screen sliders so a derived
+    // Speed-target clamp bounds, matching the Config screen sliders so a derived
     // average can never put a slider out of range (ceiling = recovery cap,
     // floor = push floor).
-    /** Baseline calibrated: recovery-pace ceiling (mph) lower bound. */
+    /** Baseline calibrated: recovery-speed ceiling (mph) lower bound. */
     const val BASELINE_MIN_PACE_CEILING_MPH = 2.0
-    /** Baseline calibrated: recovery-pace ceiling (mph) upper bound. */
+    /** Baseline calibrated: recovery-speed ceiling (mph) upper bound. */
     const val BASELINE_MAX_PACE_CEILING_MPH = 8.0
-    /** Baseline calibrated: push-pace floor (mph) lower bound. */
+    /** Baseline calibrated: push-speed floor (mph) lower bound. */
     const val BASELINE_MIN_PACE_FLOOR_MPH = 1.5
-    /** Baseline calibrated: push-pace floor (mph) upper bound. */
+    /** Baseline calibrated: push-speed floor (mph) upper bound. */
     const val BASELINE_MAX_PACE_FLOOR_MPH = 7.0
 }

@@ -70,7 +70,7 @@ class WorkoutService : Service() {
         }
     }
 
-    /** location (GPS pace) + connectedDevice (BLE strap), subset to granted permissions. */
+    /** location (GPS speed) + connectedDevice (BLE strap), subset to granted permissions. */
     private fun grantedTypes(): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
         var type = 0
@@ -166,10 +166,10 @@ class WorkoutService : Service() {
             }
             val min = live.totalSeconds / 60
             val sec = live.totalSeconds % 60
-            val pace = live.pace?.let { String.format("%.1f", it) } ?: "-"
+            val speed = live.speed?.let { String.format("%.1f", it) } ?: "-"
             val hr = live.hr?.toString() ?: "-"
             val pause = if (live.paused) " · Paused" else ""
-            return String.format("%s %d:%02d · pace %s mph · HR %s%s", phase, min, sec, pace, hr, pause)
+            return String.format("%s %d:%02d · speed %s mph · HR %s%s", phase, min, sec, speed, hr, pause)
         }
     }
 }

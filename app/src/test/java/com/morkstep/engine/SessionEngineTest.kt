@@ -4,7 +4,7 @@ import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
 import com.morkstep.sensing.HeartRateSource
-import com.morkstep.sensing.PaceSource
+import com.morkstep.sensing.SpeedSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,12 +17,12 @@ class FakeClock(private var now: Long) : SessionClock {
     fun advance(ms: Long) { now += ms }
 }
 
-class FakeSensors(initPace: Float?, initHr: Int?) : PaceSource, HeartRateSource {
-    private val _pace = MutableStateFlow(initPace)
-    override val pace: kotlinx.coroutines.flow.StateFlow<Float?> = _pace
+class FakeSensors(initSpeed: Float?, initHr: Int?) : SpeedSource, HeartRateSource {
+    private val _speed = MutableStateFlow(initSpeed)
+    override val speed: kotlinx.coroutines.flow.StateFlow<Float?> = _speed
     private val _hr = MutableStateFlow(initHr)
     override val hr: kotlinx.coroutines.flow.StateFlow<Int?> = _hr
-    fun setPace(p: Float?) { _pace.value = p }
+    fun setSpeed(p: Float?) { _speed.value = p }
     fun setHr(h: Int?) { _hr.value = h }
 }
 
@@ -46,14 +46,14 @@ class SessionEngineTest {
         fastSec = 60,
         slowSec = 60,
         cooldownSec = 60,
-        paceCeilingMph = 4.5,
-        paceFloorMph = 3.2,
+        speedCeilingMph = 4.5,
+        speedFloorMph = 3.2,
         hrCeiling = 150,
         hrFloor = 120,
     )
 
-    private fun engineWith(profile: WorkoutProfile, clock: FakeClock, cue: RecordingCue, pace: Float? = 4.0f, hr: Int? = 130) =
-        SessionEngine(profile, FakeSensors(pace, hr), FakeSensors(pace, hr), cue, clock)
+    private fun engineWith(profile: WorkoutProfile, clock: FakeClock, cue: RecordingCue, speed: Float? = 4.0f, hr: Int? = 130) =
+        SessionEngine(profile, FakeSensors(speed, hr), FakeSensors(speed, hr), cue, clock)
 
     // ---- pure helpers ----
 
@@ -233,7 +233,7 @@ class SessionEngineTest {
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(p, clock, cue, pace = 4.0f, hr = 120)
+        val eng = engineWith(p, clock, cue, speed = 4.0f, hr = 120)
         eng.run()
         clock.advance(226_000) // 4.0 mph × 225s = 0.25 mi
         eng.tick()
@@ -241,10 +241,10 @@ class SessionEngineTest {
     }
 
     @Test
-    fun fastPaceBelowCeiling_cues() {
+    fun fastSpeedBelowCeiling_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 2.8f, hr = 128)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 2.8f, hr = 128)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -259,7 +259,7 @@ class SessionEngineTest {
     fun fastHighHr_countsOverCeilingNoCue() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 165) // at/over ceiling: no push cue
+        val eng = engineWith(roundsProfile, clock, cue, speed = 5.0f, hr = 165) // at/over ceiling: no push cue
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -273,7 +273,7 @@ class SessionEngineTest {
     fun fastHrBelowCeiling_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrCeiling 150
+        val eng = engineWith(roundsProfile, clock, cue, speed = 4.0f, hr = 100) // < hrCeiling 150
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -288,7 +288,7 @@ class SessionEngineTest {
     fun slowHrAboveFloor_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 165) // > hrFloor 120
+        val eng = engineWith(roundsProfile, clock, cue, speed = 2.0f, hr = 165) // > hrFloor 120
         eng.run()
         clock.advance(121_000)
         eng.tick()
@@ -300,10 +300,10 @@ class SessionEngineTest {
     }
 
     @Test
-    fun slowPaceAboveFloor_cues() {
+    fun slowSpeedAboveFloor_cues() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 128) // > paceFloor 3.2
+        val eng = engineWith(roundsProfile, clock, cue, speed = 5.0f, hr = 128) // > speedFloor 3.2
         eng.run()
         clock.advance(121_000)
         eng.tick()
@@ -319,7 +319,7 @@ class SessionEngineTest {
         val p = roundsProfile.copy(warningThresholdSec = 5)
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(p, clock, cue, pace = 2.8f, hr = 128) // below pace ceiling
+        val eng = engineWith(p, clock, cue, speed = 2.8f, hr = 128) // below speed ceiling
         eng.run()
         clock.advance(60_001) // t=60 → FAST entry
         eng.tick()
@@ -337,14 +337,14 @@ class SessionEngineTest {
     }
 
     @Test
-    fun distance_accumulatesFromPace() {
+    fun distance_accumulatesFromSpeed() {
         val timeProfile = WorkoutProfile(
             id = 8, name = "T4", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
             warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(timeProfile, clock, cue, pace = 4.0f, hr = 120)
+        val eng = engineWith(timeProfile, clock, cue, speed = 4.0f, hr = 120)
         eng.run()
         clock.advance(10_001)
         eng.tick()
@@ -353,23 +353,23 @@ class SessionEngineTest {
     }
 
     @Test
-    fun phaseAverages_paceAndHrPerBucket() {
+    fun phaseAverages_speedAndHrPerBucket() {
         val p = roundsProfile // warmup 60, fast 60, slow 60
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val sensors = FakeSensors(3.0f, 100)
         val eng = SessionEngine(p, sensors, sensors, cue, clock)
         eng.run() // t=0 warmup sample: 3.0 / 100
-        sensors.setPace(3.0f); sensors.setHr(100)
+        sensors.setSpeed(3.0f); sensors.setHr(100)
         clock.advance(10_000); eng.tick() // warmup sample 3.0 / 100
-        sensors.setPace(4.0f); sensors.setHr(140)
+        sensors.setSpeed(4.0f); sensors.setHr(140)
         clock.advance(60_000); eng.tick() // t=70 → FAST, sample 4.0 / 140
-        sensors.setPace(2.0f); sensors.setHr(110)
+        sensors.setSpeed(2.0f); sensors.setHr(110)
         clock.advance(60_000); eng.tick() // t=130 → SLOW, sample 2.0 / 110
 
-        assertEquals(4.0f, eng.snapshot.avgPushPaceMph!!, 0.01f)
-        assertEquals(2.0f, eng.snapshot.avgRecoveryPaceMph!!, 0.01f)
-        assertEquals(3.0f, eng.snapshot.avgOverallPaceMph!!, 0.01f) // (3+3+4+2)/4
+        assertEquals(4.0f, eng.snapshot.avgPushSpeedMph!!, 0.01f)
+        assertEquals(2.0f, eng.snapshot.avgRecoverySpeedMph!!, 0.01f)
+        assertEquals(3.0f, eng.snapshot.avgOverallSpeedMph!!, 0.01f) // (3+3+4+2)/4
         assertEquals(140, eng.snapshot.avgPushHr!!)
         assertEquals(110, eng.snapshot.avgRecoveryHr!!)
         assertEquals(112, eng.snapshot.avgOverallHr!!) // (100+100+140+110)/4 = 112.5 → 112
@@ -512,7 +512,7 @@ class SessionEngineTest {
         // Same for recovery: entering SLOW suppresses the first warning.
         val clock2 = FakeClock(1_000)
         val cue2 = RecordingCue()
-        val eng2 = engineWith(roundsProfile, clock2, cue2, pace = 2.0f, hr = 165) // > hrFloor 120
+        val eng2 = engineWith(roundsProfile, clock2, cue2, speed = 2.0f, hr = 165) // > hrFloor 120
         eng2.run()
         clock2.advance(121_000) // t=121 → entry into SLOW
         eng2.tick()
@@ -574,7 +574,7 @@ class SessionEngineTest {
     fun warningCue_vibratesGuidance() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 4.0f, hr = 100) // < hrCeiling 150
+        val eng = engineWith(roundsProfile, clock, cue, speed = 4.0f, hr = 100) // < hrCeiling 150
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -593,7 +593,7 @@ class SessionEngineTest {
         val p = roundsProfile.copy(audioCues = false)
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(p, clock, cue, pace = 4.0f, hr = 100) // < hrCeiling 150
+        val eng = engineWith(p, clock, cue, speed = 4.0f, hr = 100) // < hrCeiling 150
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -611,7 +611,7 @@ class SessionEngineTest {
         // still below the ceiling and must cue.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 130)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 5.0f, hr = 130)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -628,7 +628,7 @@ class SessionEngineTest {
         // is still above the floor and must cue.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 130)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 2.0f, hr = 130)
         eng.run()
         clock.advance(121_000) // t=121 → SLOW
         eng.tick()
@@ -644,7 +644,7 @@ class SessionEngineTest {
         // HR 0 (no signal) must not cue even though it is far below the ceiling.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 0)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 5.0f, hr = 0)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -657,11 +657,11 @@ class SessionEngineTest {
 
     @Test
     fun hrAtMinValidThreshold_triggersHrCue() {
-        // 1 bpm is the min valid signal: pace is over the ceiling (5.0 > 4.5)
+        // 1 bpm is the min valid signal: speed is over the ceiling (5.0 > 4.5)
         // so only the HR condition can cue — and it must.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 5.0f, hr = 1)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 5.0f, hr = 1)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -673,12 +673,12 @@ class SessionEngineTest {
     }
 
     @Test
-    fun noSignalPace_suppressesPaceCue() {
-        // Pace at/below the 1.5 mph min-signal threshold (e.g. 0, GPS not
+    fun noSignalSpeed_suppressesSpeedCue() {
+        // Speed at/below the 1.5 mph min-signal threshold (e.g. 0, GPS not
         // reporting) must not cue even though HR is below the ceiling.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 1.5f, hr = 160)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 1.5f, hr = 160)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -690,12 +690,12 @@ class SessionEngineTest {
     }
 
     @Test
-    fun paceJustAboveThreshold_triggersPaceCue() {
+    fun speedJustAboveThreshold_triggersSpeedCue() {
         // 1.6 mph is above the 1.5 mph min-signal threshold: HR is over the
-        // ceiling (160 > 150) so only the pace condition can cue — and it must.
+        // ceiling (160 > 150) so only the speed condition can cue — and it must.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 1.6f, hr = 160)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 1.6f, hr = 160)
         eng.run()
         clock.advance(61_000)
         eng.tick()
@@ -710,7 +710,7 @@ class SessionEngineTest {
     fun zeroReadings_neverCueOnRecovery() {
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 0f, hr = 0)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 0f, hr = 0)
         eng.run()
         clock.advance(121_000) // t=121 → SLOW
         eng.tick()
@@ -722,11 +722,11 @@ class SessionEngineTest {
     }
 
     @Test
-    fun bothHrAndPaceTrigger_singleCue() {
+    fun bothHrAndSpeedTrigger_singleCue() {
         // Both sensors below the push ceiling: exactly one cue and one vibration.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
-        val eng = engineWith(roundsProfile, clock, cue, pace = 2.0f, hr = 100)
+        val eng = engineWith(roundsProfile, clock, cue, speed = 2.0f, hr = 100)
         eng.run()
         clock.advance(61_000)
         eng.tick()

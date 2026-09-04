@@ -33,7 +33,7 @@ class BaselineTest {
     @Test
     fun updatedBaselineProfile_appliesCalibratedValues() {
         val cal = baselineCalibrationProfile(id = 7)
-        val updated = updatedBaselineProfile(cal, pushPaceMph = 4.0, recoveryPaceMph = 2.5)
+        val updated = updatedBaselineProfile(cal, pushSpeedMph = 4.0, recoverySpeedMph = 2.5)
         assertEquals(WorkoutLength.TIME, updated.lengthMode)
         assertEquals(30, updated.timeMinutes)
         assertEquals(120, updated.fastSec)
@@ -42,8 +42,8 @@ class BaselineTest {
         assertEquals(30, updated.cooldownSec)
         // Literal spec: ceiling = recovery avg (keep walking slower during recovery),
         // floor = push avg (keep walking faster during push).
-        assertEquals(2.5, updated.paceCeilingMph, 1e-9)
-        assertEquals(4.0, updated.paceFloorMph, 1e-9)
+        assertEquals(2.5, updated.speedCeilingMph, 1e-9)
+        assertEquals(4.0, updated.speedFloorMph, 1e-9)
         assertEquals(30 * 60L, updated.totalSeconds)
         assertEquals("30 min", updated.lengthLabel())
     }
@@ -58,11 +58,11 @@ class BaselineTest {
     }
 
     @Test
-    fun updatedBaselineProfile_keepsPaceTargetsWithoutAverages() {
-        val cal = baselineCalibrationProfile(id = 7).copy(paceCeilingMph = 5.0, paceFloorMph = 3.0)
-        val updated = updatedBaselineProfile(cal, pushPaceMph = null, recoveryPaceMph = null)
-        assertEquals(5.0, updated.paceCeilingMph, 1e-9)
-        assertEquals(3.0, updated.paceFloorMph, 1e-9)
+    fun updatedBaselineProfile_keepsSpeedTargetsWithoutAverages() {
+        val cal = baselineCalibrationProfile(id = 7).copy(speedCeilingMph = 5.0, speedFloorMph = 3.0)
+        val updated = updatedBaselineProfile(cal, pushSpeedMph = null, recoverySpeedMph = null)
+        assertEquals(5.0, updated.speedCeilingMph, 1e-9)
+        assertEquals(3.0, updated.speedFloorMph, 1e-9)
         // The rest of the calibrated profile still applies.
         assertEquals(WorkoutLength.TIME, updated.lengthMode)
         assertEquals(30, updated.timeMinutes)
@@ -71,14 +71,14 @@ class BaselineTest {
     @Test
     fun updatedBaselineProfile_clampsToSliderRanges() {
         val weird = baselineCalibrationProfile(id = 1)
-            .copy(paceCeilingMph = 1.0, paceFloorMph = 9.0)
+            .copy(speedCeilingMph = 1.0, speedFloorMph = 9.0)
         // Ceiling (recovery avg) clamps to [2.0, 8.0]; floor (push avg) to [1.5, 7.0].
-        val withAvg = updatedBaselineProfile(weird, pushPaceMph = 12.0, recoveryPaceMph = 0.5)
-        assertEquals(2.0, withAvg.paceCeilingMph, 1e-9)
-        assertEquals(7.0, withAvg.paceFloorMph, 1e-9)
+        val withAvg = updatedBaselineProfile(weird, pushSpeedMph = 12.0, recoverySpeedMph = 0.5)
+        assertEquals(2.0, withAvg.speedCeilingMph, 1e-9)
+        assertEquals(7.0, withAvg.speedFloorMph, 1e-9)
         // Pre-existing out-of-range defaults also clamp when averages are missing.
         val noAvg = updatedBaselineProfile(weird, null, null)
-        assertEquals(2.0, noAvg.paceCeilingMph, 1e-9)
-        assertEquals(7.0, noAvg.paceFloorMph, 1e-9)
+        assertEquals(2.0, noAvg.speedCeilingMph, 1e-9)
+        assertEquals(7.0, noAvg.speedFloorMph, 1e-9)
     }
 }
