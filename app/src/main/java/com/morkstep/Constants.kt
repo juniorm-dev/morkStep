@@ -31,6 +31,21 @@ object Constants {
      */
     const val MIN_VALID_PACE_SPM = 1
 
+    /**
+     * Rolling window (ms) for the phone pedometer's cadence estimate
+     * ([com.morkstep.sensing.PaceWindowCalculator]).
+     *
+     * Tradeoff: lower = more responsive, higher = more stable.
+     * - 10_000 (10 s): very stable; value updates ~2 s after a step-rate change.
+     * - 5_000 (5 s): responsive yet stable; updates ~1-2 s after a step-rate
+     *   change (recommended default).
+     * - 3_000 (3 s): quick-reacting; starts to flicker on irregular steps.
+     * - 1_000-2_000 (1-2 s): noisier; cue flicker possible — not recommended
+     *   for the pace floor/ceiling cues.
+     * The estimator cannot emit below ~2 steps / ~1 s of span (hard floor).
+     */
+    const val PACE_WINDOW_MS = 5_000L
+
     /** Fused-location update cadence (ms) for the GPS speed source. */
     const val GPS_UPDATE_INTERVAL_MS = 1_000L
     /** Fused-location minimum update interval (ms). */
