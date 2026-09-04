@@ -27,7 +27,7 @@ data class WorkoutEntity(
     val avgFastSpeed: Float?,
     /** Average heart rate over the workout (bpm), or null. */
     val avgHeartRate: Int?,
-    /** Seconds spent above the Recovery Max bpm during push segments. */
+    /** Seconds spent above the Push Min bpm during push segments. */
     val overCeilingSec: Int,
     /** Distance covered, in miles. */
     val distanceMiles: Float,
@@ -39,6 +39,10 @@ data class WorkoutEntity(
     val avgPushHr: Int?,
     val avgRecoveryHr: Int?,
     val avgOverallHr: Int?,
+    /** Average pedometer cadence (spm) during push / recovery / overall. */
+    val avgPushPace: Int? = null,
+    val avgRecoveryPace: Int? = null,
+    val avgOverallPace: Int? = null,
     /** Min / max heart rate (bpm) — from Health Connect backfill when no real-time source was live. */
     val minHr: Int? = null,
     val maxHr: Int? = null,
@@ -66,7 +70,7 @@ interface WorkoutDao {
     suspend fun clear()
 }
 
-@Database(entities = [WorkoutEntity::class], version = 5, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 7, exportSchema = false)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
 }

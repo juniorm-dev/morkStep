@@ -34,19 +34,27 @@ fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
 /**
  * Re-derive [baseline] after a workout: fixed 30-minute time length, 120 s /
  * 120 s / 30 s / 30 s intervals, recovery-speed ceiling and push-speed floor
- * taken from the session's averages. Speed targets only update when both
- * averages were recorded; otherwise the previous targets are kept. The result
- * is clamped to the Config slider ranges so it can never be edited away.
+ * taken from the session's speed averages, and the recovery-pace ceiling and
+ * push-pace floor taken from the session's pace (steps/min) averages. Targets
+ * only update when the relevant averages were recorded; otherwise the previous
+ * targets are kept. Results are clamped to the Config slider ranges so they can
+ * never be edited away.
  */
 fun updatedBaselineProfile(
     baseline: WorkoutProfile,
     pushSpeedMph: Double?,
     recoverySpeedMph: Double?,
+    pushPaceSpm: Int? = null,
+    recoveryPaceSpm: Int? = null,
 ): WorkoutProfile {
     val ceiling = (recoverySpeedMph ?: baseline.speedCeilingMph)
         .coerceIn(Constants.BASELINE_MIN_PACE_CEILING_MPH, Constants.BASELINE_MAX_PACE_CEILING_MPH)
     val floor = (pushSpeedMph ?: baseline.speedFloorMph)
         .coerceIn(Constants.BASELINE_MIN_PACE_FLOOR_MPH, Constants.BASELINE_MAX_PACE_FLOOR_MPH)
+    val paceCeiling = (recoveryPaceSpm ?: baseline.paceCeilingSpm)
+        .coerceIn(Constants.BASELINE_MIN_PACE_CEILING_SPM, Constants.BASELINE_MAX_PACE_CEILING_SPM)
+    val paceFloor = (pushPaceSpm ?: baseline.paceFloorSpm)
+        .coerceIn(Constants.BASELINE_MIN_PACE_FLOOR_SPM, Constants.BASELINE_MAX_PACE_FLOOR_SPM)
     return baseline.copy(
         lengthMode = WorkoutLength.TIME,
         timeMinutes = Constants.BASELINE_UPDATED_TIME_MIN,
@@ -56,5 +64,7 @@ fun updatedBaselineProfile(
         cooldownSec = Constants.BASELINE_UPDATED_COOLDOWN_SEC,
         speedCeilingMph = ceiling,
         speedFloorMph = floor,
+        paceCeilingSpm = paceCeiling,
+        paceFloorSpm = paceFloor,
     )
 }

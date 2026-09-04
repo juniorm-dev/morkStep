@@ -49,6 +49,8 @@ import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var relay: HrRelay? = null
+    private var paceRelay: PaceRelay? = null
     private var vibrateRelay: VibrateRelay? = null
     private var stateRelay: StateRelay? = null
 
@@ -99,6 +102,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             var hr by remember { mutableStateOf<Int?>(null) }
+            var pace by remember { mutableStateOf<Int?>(null) }
             var status by remember { mutableStateOf<String?>(null) }
             // Session state relayed from the paired phone while a workout runs.
             var phase by remember { mutableStateOf<WearPhase?>(null) }
@@ -119,6 +123,9 @@ class MainActivity : ComponentActivity() {
                 val relay = HrRelay(context, scope) { value, s -> hr = value; s?.let { status = it } }
                 this@MainActivity.relay = relay
                 if (granted) relay.start() else launcher.launch(Manifest.permission.BODY_SENSORS)
+                val paceRelay = PaceRelay(context, scope) { value, s -> pace = value; s?.let { status = it } }
+                this@MainActivity.paceRelay = paceRelay
+                if (granted) paceRelay.start() else launcher.launch(Manifest.permission.BODY_SENSORS)
                 val vibrateRelay = VibrateRelay(context) { suppressVibrations }
                 this@MainActivity.vibrateRelay = vibrateRelay
                 vibrateRelay.start()
@@ -132,6 +139,7 @@ class MainActivity : ComponentActivity() {
                 stateRelay.start()
                 onDispose {
                     relay.stop()
+                    paceRelay.stop()
                     vibrateRelay.stop()
                     stateRelay.stop()
                 }
@@ -165,6 +173,12 @@ class MainActivity : ComponentActivity() {
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Bold,
                         color = if (hr == null) Color.Gray else MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "PACE: ${pace?.toString() ?: "--"} spm",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (pace == null) Color.Gray else MaterialTheme.colorScheme.primary,
                     )
                     status?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall)
@@ -217,6 +231,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         relay?.stop()
+        paceRelay?.stop()
         vibrateRelay?.stop()
         stateRelay?.stop()
         scope.cancel()
@@ -286,6 +301,79 @@ class MainActivity : ComponentActivity() {
             val payload = byteArrayOf(bpm.toByte())
             nodes.forEach { node ->
                 runCatching { messageClient.sendMessage(node.id, Constants.HR_PATH, payload).await() }
+            }
+        }
+    }
+
+    /**
+     * Reads pedometer cadence (steps per minute) on the watch and pushes each
+     * sample to the paired phone over the Wearable message layer (same BODY_SENSORS
+     * grant as heart rate — no extra permission needed for the exercise measure).
+     */
+    private class PaceRelay(
+        private val context: android.content.Context,
+        private val scope: CoroutineScope,
+        private val onPace: (Int?, String?) -> Unit,
+    ) {
+        private val measureClient by lazy { HealthServices.getClient(context).measureClient }
+        private var registered = false
+
+        private val callback = object : MeasureCallback {
+            override fun onRegistered() {
+                registered = true
+            }
+
+            override fun onRegistrationFailed(throwable: Throwable) {
+                onPace(null, "Pedometer service unavailable on this device")
+            }
+
+            override fun onAvailabilityChanged(
+                dataType: DeltaDataType<*, *>,
+                availability: Availability,
+            ) = Unit
+
+            override fun onDataReceived(data: DataPointContainer) {
+                val spm = data.getData(DataType.STEPS_PER_MINUTE).lastOrNull()?.value
+                    ?.toInt()
+                if (spm != null && spm > 0) {
+                    onPace(spm, "Streaming to connected phone…")
+                    scope.launch { sendPace(spm) }
+                }
+            }
+        }
+
+        fun start() {
+            if (registered) return
+            try {
+                measureClient.registerMeasureCallback(
+                    DataType.STEPS_PER_MINUTE,
+                    androidx.core.content.ContextCompat.getMainExecutor(context),
+                    callback,
+                )
+            } catch (_: Exception) {
+                onPace(null, "Failed to start pedometer measurement")
+            }
+        }
+
+        fun stop() {
+            if (!registered) return
+            registered = false
+            try {
+                measureClient.unregisterMeasureCallbackAsync(
+                    DataType.STEPS_PER_MINUTE,
+                    callback,
+                )
+            } catch (_: Exception) {
+            }
+        }
+
+        private fun sendPace(spm: Int) {
+            val nodes: List<Node> = Wearable.getNodeClient(context).connectedNodes.await()
+            val messageClient: MessageClient = Wearable.getMessageClient(context)
+            // 4-byte big-endian steps-per-minute sample, matching the phone's decoder.
+            val payload = ByteBuffer.allocate(java.lang.Integer.BYTES).order(ByteOrder.BIG_ENDIAN).putInt(spm).array()
+            nodes.forEach { node ->
+                runCatching { messageClient.sendMessage(node.id, Constants.PACE_PATH, payload).await() }
             }
         }
     }

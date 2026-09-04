@@ -33,7 +33,10 @@ class BaselineTest {
     @Test
     fun updatedBaselineProfile_appliesCalibratedValues() {
         val cal = baselineCalibrationProfile(id = 7)
-        val updated = updatedBaselineProfile(cal, pushSpeedMph = 4.0, recoverySpeedMph = 2.5)
+        val updated = updatedBaselineProfile(
+            cal, pushSpeedMph = 4.0, recoverySpeedMph = 2.5,
+            pushPaceSpm = 120, recoveryPaceSpm = 95,
+        )
         assertEquals(WorkoutLength.TIME, updated.lengthMode)
         assertEquals(30, updated.timeMinutes)
         assertEquals(120, updated.fastSec)
@@ -44,8 +47,32 @@ class BaselineTest {
         // floor = push avg (keep walking faster during push).
         assertEquals(2.5, updated.speedCeilingMph, 1e-9)
         assertEquals(4.0, updated.speedFloorMph, 1e-9)
+        assertEquals(95, updated.paceCeilingSpm)
+        assertEquals(120, updated.paceFloorSpm)
         assertEquals(30 * 60L, updated.totalSeconds)
         assertEquals("30 min", updated.lengthLabel())
+    }
+
+    @Test
+    fun updatedBaselineProfile_keepsPaceTargetsWithoutAverages() {
+        val cal = baselineCalibrationProfile(id = 7).copy(paceCeilingSpm = 105, paceFloorSpm = 118)
+        val updated = updatedBaselineProfile(cal, pushSpeedMph = null, recoverySpeedMph = null)
+        assertEquals(105, updated.paceCeilingSpm)
+        assertEquals(118, updated.paceFloorSpm)
+    }
+
+    @Test
+    fun updatedBaselineProfile_clampsPaceToSliderRanges() {
+        val weird = baselineCalibrationProfile(id = 1)
+            .copy(paceCeilingSpm = 200, paceFloorSpm = 10)
+        val withAvg = updatedBaselineProfile(weird, null, null, pushPaceSpm = 200, recoveryPaceSpm = 10)
+        // Ceiling (recovery pace 10) clamps to [90,140] → 90; floor (push pace 200) to [80,130] → 130.
+        assertEquals(90, withAvg.paceCeilingSpm)
+        assertEquals(130, withAvg.paceFloorSpm)
+        // Pre-existing out-of-range defaults (200 / 10) also clamp when averages are missing.
+        val noAvg = updatedBaselineProfile(weird, null, null)
+        assertEquals(140, noAvg.paceCeilingSpm)
+        assertEquals(80, noAvg.paceFloorSpm)
     }
 
     @Test

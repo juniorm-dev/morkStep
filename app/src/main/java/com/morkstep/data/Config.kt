@@ -17,8 +17,9 @@ enum class DarkMode { SYSTEM, DARK, LIGHT }
 /**
  * One named workout configuration (profile).
  *
- * All speed values are miles per hour. [lengthMode] decides when the workout
- * ends; the phase cycle is always warm-up → (fast/slow) repeats → cool-down.
+ * Speed values are miles per hour; pace values are steps per minute
+ * (pedometer cadence). [lengthMode] decides when the workout ends; the phase
+ * cycle is always warm-up → (fast/slow) repeats → cool-down.
  */
 @Serializable
 data class WorkoutProfile(
@@ -43,22 +44,35 @@ data class WorkoutProfile(
      * above this. (Named "ceiling" for historical reasons; it caps recovery,
      * while [speedFloorMph] floors push — the naming may change in a future update.)
      */
-    val speedCeilingMph: Double = 4.5,
+    val speedCeilingMph: Double = 3.2,
     /**
      * Push-phase speed floor (mph): push cues "Speed up" while speed is below
      * this. (Named "floor" for historical reasons; see [speedCeilingMph].)
      */
-    val speedFloorMph: Double = 3.2,
+    val speedFloorMph: Double = 4.5,
     /**
-     * Heart rate (bpm) — Recovery Max: the upper HR bound. Push cues
-     * "Speed up" while HR is below this; recovery keeps HR below this.
+     * Recovery-phase pace cap (steps per minute): recovery cues "Slow down"
+     * while pace stays above this. Pedometer cadence, mirroring [speedCeilingMph].
      */
-    val hrCeiling: Int = 150,
+    val paceCeilingSpm: Int = 100,
     /**
-     * Heart rate (bpm) — Push Min: the lower HR bound. Recovery cues
-     * "Slow down" while HR is above this; a push keeps HR above this.
+     * Push-phase pace floor (steps per minute): push cues "Speed up" while pace
+     * stays below this. Pedometer cadence, mirroring [speedFloorMph].
      */
-    val hrFloor: Int = 120,
+    val paceFloorSpm: Int = 110,
+    /**
+     * Heart rate (bpm) — Push Min: the lower HR bound during push. Push cues
+     * "Speed up" while HR is below this, so a push keeps HR at or above it
+     * (higher effort than recovery).
+     */
+    val hrPushMin: Int = 150,
+    /**
+     * Heart rate (bpm) — Recovery Max: the upper HR bound during recovery.
+     * Recovery cues "Slow down" while HR is above this, so recovery keeps HR
+     * at or below it. Lower than [hrPushMin] by design: recovery targets a
+     * lower HR than push.
+     */
+    val hrRecoveryMax: Int = 120,
     /**
      * Seconds between repeats of the same speed/HR warning cue, shared by push
      * and recovery cues. A cue repeats at most once per interval while the

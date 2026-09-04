@@ -168,8 +168,9 @@ class WorkoutService : Service() {
             val sec = live.totalSeconds % 60
             val speed = live.speed?.let { String.format("%.1f", it) } ?: "-"
             val hr = live.hr?.toString() ?: "-"
+            val pace = live.pace?.toString() ?: "-"
             val pause = if (live.paused) " · Paused" else ""
-            return String.format("%s %d:%02d · speed %s mph · HR %s%s", phase, min, sec, speed, hr, pause)
+            return String.format("%s %d:%02d · speed %s mph · pace %s spm · HR %s%s", phase, min, sec, speed, pace, hr, pause)
         }
     }
 }

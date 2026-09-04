@@ -124,6 +124,18 @@ private fun WorkoutRow(w: WorkoutEntity) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            val paceAvgs = buildList {
+                w.avgPushPace?.let { add("push $it") }
+                w.avgRecoveryPace?.let { add("rec $it") }
+                w.avgOverallPace?.let { add("overall $it") }
+            }
+            if (paceAvgs.isNotEmpty()) {
+                Text(
+                    "pace spm:  " + paceAvgs.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             val hrAvgs = buildList {
                 w.avgPushHr?.let { add("push $it") }
                 w.avgRecoveryHr?.let { add("rec $it") }

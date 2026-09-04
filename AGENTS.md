@@ -111,6 +111,7 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
   It is advanced by a manual 1 Hz ticker, not a timer. Pause excludes paused wall-clock.
   Transient phase transitions are detected by `phaseAt().phase != lastPhase`, not an enum.
 - **Sensor contract**: anything providing speed implements `SpeedSource { val speed: StateFlow<Float?> }`;
+  pace implements `PaceSource { val pace: StateFlow<Int?> }` (steps/min, from the Wear pedometer);
   HR implements `HeartRateSource { val hr: StateFlow<Int?> }` (in `sensing/Sensors.kt`).
 - **Output contract**: engine emits into `CueSink` (`beep()` / `speak(text)` / `vibrate(kind)`);
   `SpeakerSink` (in `MainViewModel`) bridges to `CueSpeaker` + haptics. Haptics are gated by
@@ -123,8 +124,12 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
   top-level `fun`s; enums `UPPER_SNAKE`. Background coroutines use `…Job` /
   `viewModelScope.launch { … }`.
 - **Known historical naming**: `speedCeilingMph` caps *recovery* ("Slow down"),
-  `speedFloorMph` floors *push* ("Speed up"). `Consume` for signal validity floors:
-  `MIN_VALID_HR_BPM`, `MIN_VALID_SPEED_MPH`.
+  `speedFloorMph` floors *push* ("Speed up"). Pace mirrors these as `paceCeilingSpm` /
+  `paceFloorSpm`. Heart rate mirrors the same phase roles but is named by target
+  instead: `hrPushMin` (push keeps HR at/above, default 150), `hrRecoveryMax`
+  (recovery keeps HR at/below, default 120 — lower than the push min by design).
+  `Consume` for signal validity floors:
+  `MIN_VALID_HR_BPM`, `MIN_VALID_SPEED_MPH`, `MIN_VALID_PACE_SPM`.
 - **Versioning**: per-module `versionCode`/`versionName` in each `build.gradle.kts`;
   releases tagged `v<versionName>`. `VerifyVersionTag` (app, release variants) fails
   `packageRelease` if the git tag already exists — bump version before release. `VersionApk`

@@ -21,18 +21,21 @@ class WearGraphicsPanelTest {
     @get:Rule
     val rule = createComposeRule()
 
-    // FAST phase, on target: speed 4.8 >= ceiling 4.5.
+    // FAST phase, on target: speed 4.8 >= ceiling 4.5, pace 115 >= floor 100.
     private val session = WearSessionState(
         phaseOrd = 2,
         running = true,
         secondsInPhase = 30,
         speed = 4.8f,
+        pace = 115,
         fastDone = 1,
         fastTotal = 5,
         fastSec = 60,
         slowSec = 60,
         speedFloor = 3.2f,
         speedCeiling = 4.5f,
+        paceFloor = 100,
+        paceCeiling = 110,
     )
 
     @Test
@@ -55,6 +58,7 @@ class WearGraphicsPanelTest {
             }
         }
         rule.onNodeWithText("speed 4.8", substring = true).assertExists()
+        rule.onNodeWithText("pace 115", substring = true).assertExists()
         rule.onNodeWithText("On target", substring = true).assertExists()
     }
 

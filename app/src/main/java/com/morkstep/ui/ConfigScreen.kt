@@ -202,8 +202,10 @@ fun ConfigScreen(
         var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
         var speedCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.speedCeilingMph.toFloat()) }
         var speedFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.speedFloorMph.toFloat()) }
-        var hrCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrCeiling) }
-        var hrFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrFloor) }
+        var paceCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.paceCeilingSpm) }
+        var paceFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.paceFloorSpm) }
+        var hrRecoveryMax by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrRecoveryMax) }
+        var hrPushMin by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrPushMin) }
         var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
         var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
@@ -345,11 +347,24 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        Text("Pace (steps/min)", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SliderRow("Recovery Max spm", "$paceCeil", paceCeil.toFloat(), 90f..140f, 10) { paceCeil = it.toInt() }
+                SliderRow("Push Min spm", "$paceFloor", paceFloor.toFloat(), 80f..130f, 10) { paceFloor = it.toInt() }
+                Text(
+                    "Pedometer cadence from the paired Wear watch. Push cues \"Speed up\" while pace stays below Push Min; recovery cues \"Slow down\" while pace stays above Recovery Max. Pace shares one cue with speed and heart rate.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         Text("Heart rate (bpm)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow("Recovery Max bpm", "$hrCeil", hrCeil.toFloat(), 90f..200f, 22) { hrCeil = it.toInt() }
-                SliderRow("Push Min bpm", "$hrFloor", hrFloor.toFloat(), 70f..190f, 24) { hrFloor = it.toInt() }
+                SliderRow("Recovery Max bpm", "$hrRecoveryMax", hrRecoveryMax.toFloat(), 70f..190f, 24) { hrRecoveryMax = it.toInt() }
+                SliderRow("Push Min bpm", "$hrPushMin", hrPushMin.toFloat(), 90f..200f, 22) { hrPushMin = it.toInt() }
             }
         }
 
@@ -359,9 +374,9 @@ fun ConfigScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
                 Text(
-                    "Push cues \"Speed up\" while speed is below Push Min mph, or heart rate below Recovery Max bpm; recovery cues " +
-                        "\"Slow down\" while speed is above Recovery Max mph, or heart rate above Push Min bpm. A cue repeats at most once " +
-                        "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue.",
+                    "Push cues \"Speed up\" while speed is below Push Min mph, pace below Push Min spm, or heart rate below Push Min bpm; recovery cues " +
+                        "\"Slow down\" while speed is above Recovery Max mph, pace above Recovery Max spm, or heart rate above Recovery Max bpm. A cue repeats at most once " +
+                        "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue; phase-change cues take precedence over all other cues — warnings and workout-length cues wait until the following tick.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -428,7 +443,7 @@ fun ConfigScreen(
                     Switch(checked = simulated, onCheckedChange = onSimulatedChange)
                 }
                 Text(
-                    "Off uses real hardware: GPS speed and a Bluetooth heart-rate strap. " +
+                    "Off uses real hardware: GPS speed, pedometer pace from the Wear watch, and a Bluetooth heart-rate strap. " +
                         "No automatic fallback — if off and a signal is missing, readings stay blank.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -529,8 +544,10 @@ fun ConfigScreen(
                         cooldownSec = cooldownSec,
                         speedCeilingMph = (speedCeil * 10).roundToInt() / 10.0,
                         speedFloorMph = (speedFloor * 10).roundToInt() / 10.0,
-                        hrCeiling = hrCeil,
-                        hrFloor = hrFloor,
+                        paceCeilingSpm = paceCeil,
+                        paceFloorSpm = paceFloor,
+                        hrPushMin = hrPushMin,
+                        hrRecoveryMax = hrRecoveryMax,
                         warningThresholdSec = warnSec,
                         audioCues = audio,
                         vibrationMode = vibration,

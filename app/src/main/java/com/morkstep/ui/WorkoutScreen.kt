@@ -157,6 +157,7 @@ fun WorkoutScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SensorCard("SPEED", live.speed?.let { "%.1f".format(it) + " mph" } ?: "–", Modifier.weight(1f))
             SensorCard("HEART", live.hr?.let { "$it bpm" } ?: "–", Modifier.weight(1f))
+            SensorCard("PACE", live.pace?.let { "$it spm" } ?: "–", Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(12.dp))

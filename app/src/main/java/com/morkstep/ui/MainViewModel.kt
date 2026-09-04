@@ -35,6 +35,8 @@ import com.morkstep.engine.SessionEngine
 import com.morkstep.sensing.GpsSpeedSource
 import com.morkstep.sensing.BleHeartRateSource
 import com.morkstep.sensing.HeartRateSource
+import com.morkstep.sensing.PaceSource
+import com.morkstep.sensing.WearPaceSource
 import com.morkstep.sensing.healthConnectHrForWorkout
 import com.morkstep.sensing.SpeedSource
 import com.morkstep.sensing.SimulatedSensors
@@ -161,6 +163,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var gps: GpsSpeedSource? = null
     private var ble: BleHeartRateSource? = null
     private var wear: WearHeartRateSource? = null
+    private var wearPace: WearPaceSource? = null
     private var sim: SimulatedSensors? = null
 
     private val _profiles = MutableStateFlow(emptyList<WorkoutProfile>())
@@ -267,11 +270,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             gps = GpsSpeedSource(getApplication())
             ble = BleHeartRateSource(getApplication())
+            wearPace = WearPaceSource(getApplication())
             if (_useWearHr.value) {
                 wear = WearHeartRateSource(getApplication())
             }
             _sensorNote.value =
-                if (_useWearHr.value) "GPS speed · Wear companion heart rate" else "GPS speed · BLE heart rate"
+                if (_useWearHr.value) "GPS speed · Wear pace & heart rate" else "GPS speed · Wear pace · BLE heart rate"
         }
         setupEngine()
     }
@@ -295,9 +299,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         gps?.stop()
         ble?.stop()
         wear?.stop()
+        wearPace?.stop()
         gps = null
         ble = null
         wear = null
+        wearPace = null
         sim = null
     }
 
@@ -318,8 +324,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_simulated.value) sim!!
             else if (_useWearHr.value) wear ?: ble ?: return
             else ble ?: return
+        // Pace comes from the pedometer on the watch. In simulated mode the
+        // sim drives it; otherwise the Wear relay (always created in real
+        // mode). A missing watch just leaves the relay silent — no fallback.
+        val paceSrc: PaceSource = if (_simulated.value) sim!! else wearPace!!
         engineJob?.cancel()
-        val e = SessionEngine(p, speedSrc, hrSrc, sink)
+        val e = SessionEngine(p, speedSrc, hrSrc, paceSrc, sink)
         engine = e
         engineJob = viewModelScope.launch {
             // Sensor observation and live-state fan-out share one job so a
@@ -516,8 +526,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     /** Mirror the live session snapshot to the paired watch (phase, paused, running),
-     *  seconds-in-phase, speed, push progress and the profile's phase lengths and
-     *  speed targets — everything the watch graphics (Bars/Band/Gauge) render. */
+     *  seconds-in-phase, speed & pace, push progress and the profile's phase lengths and
+     *  speed/pace targets — everything the watch graphics (Bars/Band/Gauge) render. */
     private fun sendWatchState(ls: LiveState) {
         val p = _activeProfile.value ?: return
         val phaseOrd = when (ls.phase) {
@@ -532,12 +542,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .put((if (ls.running) 1 else 0).toByte())
             .putInt(ls.secondsInPhase)
             .putFloat(ls.speed ?: Float.NaN)
+            .putInt(ls.pace ?: -1)
             .putInt(ls.fastSegmentsDone)
             .putInt(ls.fastRoundsTotal ?: -1)
             .putInt(p.fastSec)
             .putInt(p.slowSec)
             .putFloat(p.speedFloorMph.toFloat())
             .putFloat(p.speedCeilingMph.toFloat())
+            .putInt(p.paceFloorSpm)
+            .putInt(p.paceCeilingSpm)
             .array()
         if (payload.contentEquals(lastWatchState)) return
         lastWatchState = payload
@@ -572,6 +585,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 avgPushHr = ls.avgPushHr,
                 avgRecoveryHr = ls.avgRecoveryHr,
                 avgOverallHr = ls.avgOverallHr,
+                avgPushPace = ls.avgPushPace,
+                avgRecoveryPace = ls.avgRecoveryPace,
+                avgOverallPace = ls.avgOverallPace,
             )
             val id = container.workoutDao.insert(entity)
             // Health Connect backfill: only when the Wear relay is off; real-time
@@ -602,6 +618,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 baseline = active,
                 pushSpeedMph = ls.avgPushSpeedMph?.toDouble(),
                 recoverySpeedMph = ls.avgRecoverySpeedMph?.toDouble(),
+                pushPaceSpm = ls.avgPushPace,
+                recoveryPaceSpm = ls.avgRecoveryPace,
             )
             if (updated != active) {
                 viewModelScope.launch {
@@ -661,7 +679,7 @@ class MainViewModelFactory(
 private const val WEAR_PAUSE_PATH = "/morkstep/pause"
 private const val WEAR_STATE_PATH = "/morkstep/state"
 /** Bytes of the /morkstep/state payload; the watch decodes exactly this many. */
-private const val WATCH_STATE_BYTES = 35
+private const val WATCH_STATE_BYTES = 47
 
 /** Await a Google Play Services [Task] (mirrors the wear app). */
 private fun <T> com.google.android.gms.tasks.Task<T>.await(): T =
