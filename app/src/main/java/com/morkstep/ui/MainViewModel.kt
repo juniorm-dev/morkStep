@@ -502,7 +502,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startWorkout() {
         val p = _activeProfile.value ?: return
-        if (p.fastSec <= 0 || p.slowSec <= 0) return
+        if (p.pushSec <= 0 || p.slowSec <= 0) return
         // A discarded engine is gone and a finished engine refuses to re-run;
         // every workout must start from a fresh one.
         if (engine == null || engine?.snapshot?.finished == true) setupEngine()
@@ -543,14 +543,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .putInt(ls.secondsInPhase)
             .putFloat(ls.speed ?: Float.NaN)
             .putInt(ls.pace ?: -1)
-            .putInt(ls.fastSegmentsDone)
-            .putInt(ls.fastRoundsTotal ?: -1)
-            .putInt(p.fastSec)
+            .putInt(ls.pushSegmentsDone)
+            .putInt(ls.pushRoundsTotal ?: -1)
+            .putInt(p.pushSec)
             .putInt(p.slowSec)
-            .putFloat(p.speedFloorMph.toFloat())
-            .putFloat(p.speedCeilingMph.toFloat())
-            .putInt(p.paceFloorSpm)
-            .putInt(p.paceCeilingSpm)
+            .putFloat(p.pushSpeedFloorMph.toFloat())
+            .putFloat(p.recoverySpeedCapMph.toFloat())
+            .putInt(p.pushPaceFloorSpm)
+            .putInt(p.recoveryPaceCapSpm)
             .array()
         if (payload.contentEquals(lastWatchState)) return
         lastWatchState = payload
@@ -574,10 +574,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 startTime = started,
                 endTime = ended,
                 durationSec = ls.totalSeconds,
-                fastSegments = ls.fastSegmentsDone,
-                avgFastSpeed = ls.avgOverallSpeedMph,
-                avgHeartRate = ls.avgOverallHr,
-                overCeilingSec = ls.overCeilingSec,
+                pushSegments = ls.pushSegmentsDone,
+                overPushMinSec = ls.overPushMinSec,
                 distanceMiles = ls.distanceMiles.toFloat(),
                 avgPushSpeed = ls.avgPushSpeedMph,
                 avgRecoverySpeed = ls.avgRecoverySpeedMph,
@@ -599,7 +597,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrNull() ?: return@launch
                 val merged = entity.copy(
                     id = id,
-                    avgHeartRate = entity.avgHeartRate ?: hc.avgOverall,
                     avgOverallHr = entity.avgOverallHr ?: hc.avgOverall,
                     avgPushHr = entity.avgPushHr ?: hc.avgPush,
                     avgRecoveryHr = entity.avgRecoveryHr ?: hc.avgRecovery,

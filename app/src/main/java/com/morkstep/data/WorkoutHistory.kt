@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -21,14 +20,10 @@ data class WorkoutEntity(
     val endTime: Long,
     /** Total active duration in seconds. */
     val durationSec: Int,
-    /** Completed fast (push) segment count. */
-    val fastSegments: Int,
-    /** Average push speed over the workout (mph), or null if none. */
-    val avgFastSpeed: Float?,
-    /** Average heart rate over the workout (bpm), or null. */
-    val avgHeartRate: Int?,
+    /** Completed push segment count. */
+    val pushSegments: Int,
     /** Seconds spent above the Push Min bpm during push segments. */
-    val overCeilingSec: Int,
+    val overPushMinSec: Int,
     /** Distance covered, in miles. */
     val distanceMiles: Float,
     /** Average speed (mph) during push / recovery / overall. */
@@ -53,8 +48,8 @@ interface WorkoutDao {
     @Insert
     suspend fun insert(workout: WorkoutEntity): Long
 
-    /** Bulk import from an export file; imported ids win over existing rows (restore semantics). */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /** Bulk import from an export file; imported ids are pre-reassigned on collision, so plain insert. */
+    @Insert
     suspend fun insertAll(workouts: List<WorkoutEntity>)
 
     @Update
@@ -62,15 +57,9 @@ interface WorkoutDao {
 
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun observeAll(): Flow<List<WorkoutEntity>>
-
-    @Query("SELECT * FROM workouts ORDER BY startTime DESC LIMIT 1")
-    fun observeLatest(): Flow<WorkoutEntity?>
-
-    @Query("DELETE FROM workouts")
-    suspend fun clear()
 }
 
-@Database(entities = [WorkoutEntity::class], version = 7, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 1, exportSchema = false)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
 }

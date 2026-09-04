@@ -86,22 +86,22 @@ object Constants {
     /** Baseline calibrated: cool-down in seconds. */
     const val BASELINE_UPDATED_COOLDOWN_SEC = 30
     // Speed-target clamp bounds, matching the Config screen sliders so a derived
-    // average can never put a slider out of range (ceiling = recovery cap,
+    // average can never put a slider out of range (cap = recovery cap,
     // floor = push floor).
-    /** Baseline calibrated: recovery-speed ceiling (mph) lower bound. */
-    const val BASELINE_MIN_PACE_CEILING_MPH = 2.0
-    /** Baseline calibrated: recovery-speed ceiling (mph) upper bound. */
-    const val BASELINE_MAX_PACE_CEILING_MPH = 8.0
+    /** Baseline calibrated: recovery-speed cap (mph) lower bound. */
+    const val BASELINE_MIN_RECOVERY_SPEED_CAP_MPH = 2.0
+    /** Baseline calibrated: recovery-speed cap (mph) upper bound. */
+    const val BASELINE_MAX_RECOVERY_SPEED_CAP_MPH = 8.0
     /** Baseline calibrated: push-speed floor (mph) lower bound. */
-    const val BASELINE_MIN_PACE_FLOOR_MPH = 1.5
+    const val BASELINE_MIN_PUSH_SPEED_FLOOR_MPH = 1.5
     /** Baseline calibrated: push-speed floor (mph) upper bound. */
-    const val BASELINE_MAX_PACE_FLOOR_MPH = 7.0
-    /** Baseline calibrated: recovery-pace ceiling (spm) lower bound. */
-    const val BASELINE_MIN_PACE_CEILING_SPM = 90
-    /** Baseline calibrated: recovery-pace ceiling (spm) upper bound. */
-    const val BASELINE_MAX_PACE_CEILING_SPM = 140
+    const val BASELINE_MAX_PUSH_SPEED_FLOOR_MPH = 7.0
+    /** Baseline calibrated: recovery-pace cap (spm) lower bound. */
+    const val BASELINE_MIN_RECOVERY_PACE_CAP_SPM = 90
+    /** Baseline calibrated: recovery-pace cap (spm) upper bound. */
+    const val BASELINE_MAX_RECOVERY_PACE_CAP_SPM = 140
     /** Baseline calibrated: push-pace floor (spm) lower bound. */
-    const val BASELINE_MIN_PACE_FLOOR_SPM = 80
+    const val BASELINE_MIN_PUSH_PACE_FLOOR_SPM = 80
     /** Baseline calibrated: push-pace floor (spm) upper bound. */
-    const val BASELINE_MAX_PACE_FLOOR_SPM = 130
+    const val BASELINE_MAX_PUSH_PACE_FLOOR_SPM = 130
 }

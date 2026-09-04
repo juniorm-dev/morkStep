@@ -36,30 +36,29 @@ data class WorkoutProfile(
     /** ADHOC: speak a cue on every Nth completed push round (0 = off). */
     val adhocCueEveryNPush: Int = 3,
     val warmupSec: Int = 180,
-    val fastSec: Int = 180,
+    val pushSec: Int = 180,
     val slowSec: Int = 180,
     val cooldownSec: Int = 120,
     /**
      * Recovery-phase speed cap (mph): recovery cues "Slow down" while speed is
-     * above this. (Named "ceiling" for historical reasons; it caps recovery,
-     * while [speedFloorMph] floors push — the naming may change in a future update.)
+     * above this cap, while [pushSpeedFloorMph] floors push.
      */
-    val speedCeilingMph: Double = 3.2,
+    val recoverySpeedCapMph: Double = 3.2,
     /**
      * Push-phase speed floor (mph): push cues "Speed up" while speed is below
-     * this. (Named "floor" for historical reasons; see [speedCeilingMph].)
+     * this; see [recoverySpeedCapMph].
      */
-    val speedFloorMph: Double = 4.5,
+    val pushSpeedFloorMph: Double = 4.5,
     /**
      * Recovery-phase pace cap (steps per minute): recovery cues "Slow down"
-     * while pace stays above this. Pedometer cadence, mirroring [speedCeilingMph].
+     * while pace stays above this. Pedometer cadence, mirroring [recoverySpeedCapMph].
      */
-    val paceCeilingSpm: Int = 100,
+    val recoveryPaceCapSpm: Int = 100,
     /**
      * Push-phase pace floor (steps per minute): push cues "Speed up" while pace
-     * stays below this. Pedometer cadence, mirroring [speedFloorMph].
+     * stays below this. Pedometer cadence, mirroring [pushSpeedFloorMph].
      */
-    val paceFloorSpm: Int = 110,
+    val pushPaceFloorSpm: Int = 110,
     /**
      * Heart rate (bpm) — Push Min: the lower HR bound during push. Push cues
      * "Speed up" while HR is below this, so a push keeps HR at or above it
@@ -88,7 +87,7 @@ data class WorkoutProfile(
     ) {
     val totalSeconds: Long
         get() = when (lengthMode) {
-            WorkoutLength.ROUNDS -> warmupSec.toLong() + rounds.toLong() * (fastSec + slowSec) + cooldownSec
+            WorkoutLength.ROUNDS -> warmupSec.toLong() + rounds.toLong() * (pushSec + slowSec) + cooldownSec
             WorkoutLength.TIME -> timeMinutes.toLong() * 60
             WorkoutLength.DISTANCE, WorkoutLength.ADHOC -> Long.MAX_VALUE // speed-dependent / indefinite
         }

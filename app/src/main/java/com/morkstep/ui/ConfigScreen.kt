@@ -196,14 +196,14 @@ fun ConfigScreen(
         var distanceMiles by rememberSaveable(profile.id) { mutableFloatStateOf(profile.distanceMiles.toFloat()) }
         var timeMinutes by rememberSaveable(profile.id) { mutableIntStateOf(profile.timeMinutes) }
         var adhocCueEveryNPush by rememberSaveable(profile.id) { mutableIntStateOf(profile.adhocCueEveryNPush) }
-        var fastSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.fastSec) }
+        var fastSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.pushSec) }
         var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
         var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
         var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
-        var speedCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.speedCeilingMph.toFloat()) }
-        var speedFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.speedFloorMph.toFloat()) }
-        var paceCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.paceCeilingSpm) }
-        var paceFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.paceFloorSpm) }
+        var speedCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.recoverySpeedCapMph.toFloat()) }
+        var speedFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.pushSpeedFloorMph.toFloat()) }
+        var paceCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.recoveryPaceCapSpm) }
+        var paceFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.pushPaceFloorSpm) }
         var hrRecoveryMax by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrRecoveryMax) }
         var hrPushMin by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrPushMin) }
         var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
@@ -538,14 +538,14 @@ fun ConfigScreen(
                         distanceMiles = distanceMiles.toDouble(),
                         timeMinutes = timeMinutes,
                         adhocCueEveryNPush = adhocCueEveryNPush,
-                        fastSec = fastSec,
+                        pushSec = fastSec,
                         slowSec = slowSec,
                         warmupSec = warmupSec,
                         cooldownSec = cooldownSec,
-                        speedCeilingMph = (speedCeil * 10).roundToInt() / 10.0,
-                        speedFloorMph = (speedFloor * 10).roundToInt() / 10.0,
-                        paceCeilingSpm = paceCeil,
-                        paceFloorSpm = paceFloor,
+                        recoverySpeedCapMph = (speedCeil * 10).roundToInt() / 10.0,
+                        pushSpeedFloorMph = (speedFloor * 10).roundToInt() / 10.0,
+                        recoveryPaceCapSpm = paceCeil,
+                        pushPaceFloorSpm = paceFloor,
                         hrPushMin = hrPushMin,
                         hrRecoveryMax = hrRecoveryMax,
                         warningThresholdSec = warnSec,

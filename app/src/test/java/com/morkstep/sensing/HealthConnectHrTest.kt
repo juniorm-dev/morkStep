@@ -14,7 +14,7 @@ class HealthConnectHrTest {
         lengthMode = WorkoutLength.ROUNDS,
         rounds = 2,
         warmupSec = 60,
-        fastSec = 60,
+        pushSec = 60,
         slowSec = 60,
         cooldownSec = 60,
     )

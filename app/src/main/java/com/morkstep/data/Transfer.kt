@@ -7,11 +7,19 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** Versioned backup envelope for saved workout profiles. */
+/**
+ * Versioned backup envelope for saved workout profiles. [version] is carried
+ * for forward compatibility so a future schema can migrate old exports; it is
+ * currently 1 with no migration logic (the app has not shipped).
+ */
 @Serializable
 data class ProfileExport(val version: Int = 1, val profiles: List<WorkoutProfile>)
 
-/** Versioned backup envelope for completed workout history. */
+/**
+ * Versioned backup envelope for completed workout history. [version] is
+ * carried for forward compatibility so a future schema can migrate old
+ * exports; it is currently 1 with no migration logic (the app has not shipped).
+ */
 @Serializable
 data class WorkoutExport(val version: Int = 1, val workouts: List<WorkoutEntity>)
 
@@ -27,7 +35,9 @@ object TransferJson {
 /**
  * Reads and writes profile/history backup files through the SAF URIs the UI
  * produces (CreateDocument/OpenDocument). Import replaces the profile list
- * (restore semantics); history rows are merged, imported ids winning.
+ * (restore semantics); history rows are merged. An imported id that collides
+ * with an existing row is reassigned to a fresh id so an import over a
+ * partially-same device never silently clobbers the existing active row.
  */
 class TransferIO(
     private val resolver: ContentResolver,
@@ -63,8 +73,10 @@ class TransferIO(
     /** Parse a workout-history export and merge it in; returns the imported count. */
     suspend fun readWorkouts(uri: Uri): Int {
         val export = parse<WorkoutExport>(uri, "workout history")
-        if (export.workouts.isNotEmpty()) dao.insertAll(export.workouts)
-        return export.workouts.size
+        if (export.workouts.isEmpty()) throw IllegalArgumentException("file contains no workouts")
+        val merged = mergeWorkouts(dao.observeAll().first(), export.workouts)
+        dao.insertAll(merged)
+        return merged.size
     }
 
     private inline fun <reified T> parse(uri: Uri, what: String): T {
@@ -87,14 +99,43 @@ class TransferIO(
 }
 
 /**
- * Imported profiles replace the list (restore semantics). An imported id that
- * collides with an existing one is reassigned to a fresh id so an import over
- * a partially-same device never silently clobbers the existing active row.
+ * Reassigns [imported] ids that collide with any [existing] (or already-seen
+ * imported) id to fresh values above every existing id, preserving order and
+ * keeping every id unique in the merged result. Pure.
  */
-internal fun mergeProfiles(existing: List<WorkoutProfile>, imported: List<WorkoutProfile>): List<WorkoutProfile> {
-    val existingIds = existing.map { it.id }.toMutableSet()
-    var nextId = (existingIds.maxOrNull() ?: 0L) + 1
-    return imported.map { p ->
-        if (p.id in existingIds) p.copy(id = nextId++) else p
+private inline fun <reified T> reassignCollidingIds(
+    existing: List<T>,
+    imported: List<T>,
+    idOf: (T) -> Long,
+    withId: (T, Long) -> T,
+): List<T> {
+    val taken = existing.map { idOf(it) }.toMutableSet()
+    var nextId = (taken.maxOrNull() ?: 0L) + 1
+    return imported.map { item ->
+        if (idOf(item) in taken) {
+            val fresh = nextId++
+            taken.add(fresh)
+            withId(item, fresh)
+        } else {
+            taken.add(idOf(item))
+            item
+        }
     }
 }
+
+/**
+ * Imported profiles replace the list (restore semantics). An imported id that
+ * collides with an existing (or earlier-imported) one is reassigned to a fresh
+ * id so an import over a partially-same device never silently clobbers the
+ * existing active row.
+ */
+internal fun mergeProfiles(existing: List<WorkoutProfile>, imported: List<WorkoutProfile>): List<WorkoutProfile> =
+    reassignCollidingIds(existing, imported, idOf = { it.id }, withId = { p, id -> p.copy(id = id) })
+
+/**
+ * Imported history rows are merged in. An imported id that collides with an
+ * existing (or earlier-imported) row is reassigned to a fresh id, so importing
+ * a backup from a second device never silently replaces local workouts.
+ */
+internal fun mergeWorkouts(existing: List<WorkoutEntity>, imported: List<WorkoutEntity>): List<WorkoutEntity> =
+    reassignCollidingIds(existing, imported, idOf = { it.id }, withId = { w, id -> w.copy(id = id) })

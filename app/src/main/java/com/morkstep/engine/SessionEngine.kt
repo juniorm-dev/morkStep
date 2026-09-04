@@ -41,15 +41,15 @@ data class LiveState(
     val hr: Int? = null,
     /** Pedometer cadence (steps per minute). Null when unknown. */
     val pace: Int? = null,
-    val overCeilingSec: Int = 0,
+    val overPushMinSec: Int = 0,
     /** Completed fast (push) segments. */
-    val fastSegmentsDone: Int = 0,
+    val pushSegmentsDone: Int = 0,
     /** Distance covered in miles (integrated from speed). */
     val distanceMiles: Double = 0.0,
     /** 0..1 completion for finite modes; null for ADHOC. */
     val progress: Float? = null,
     /** Number of push rounds in the plan (ROUNDS mode) or null. */
-    val fastRoundsTotal: Int? = null,
+    val pushRoundsTotal: Int? = null,
     /** Human length label, e.g. "5 rounds", "35 min", "Adhoc". */
     val lengthLabel: String = "",
     /** 1 Hz moving averages: speed in mph during push/recovery/overall. */
@@ -80,7 +80,7 @@ internal data class Plan(val coreEndSec: Long, val finishSec: Long)
 
 internal fun planFor(p: WorkoutProfile): Plan = when (p.lengthMode) {
     WorkoutLength.ROUNDS -> {
-        val core = p.warmupSec.toLong() + p.rounds.toLong() * (p.fastSec + p.slowSec)
+        val core = p.warmupSec.toLong() + p.rounds.toLong() * (p.pushSec + p.slowSec)
         Plan(core, core + p.cooldownSec)
     }
     WorkoutLength.TIME -> {
@@ -92,9 +92,9 @@ internal fun planFor(p: WorkoutProfile): Plan = when (p.lengthMode) {
 }
 
 /** Count of fully-completed FAST phases by elapsed [t] (plan-relative, tick-cadence independent). */
-internal fun completedFastIn(t: Int, p: WorkoutProfile): Int {
+internal fun completedPushIn(t: Int, p: WorkoutProfile): Int {
     val w = p.warmupSec
-    val f = p.fastSec
+    val f = p.pushSec
     val s = p.slowSec
     if (t <= w) return 0
     val pair = f + s
@@ -107,15 +107,15 @@ internal data class PhaseAt(
     val phase: PhaseType,
     val secondsInPhase: Int,
     val phaseOrdinal: Int,
-    val fastDone: Int,
+    val pushDone: Int,
 )
 
 internal fun phaseAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: Long): PhaseAt {
     val w = p.warmupSec
-    val f = p.fastSec
+    val f = p.pushSec
     val s = p.slowSec
     val pair = f + s
-    fun coreFast(): Int = completedFastIn(coreEndSec.coerceAtMost(Long.MAX_VALUE).toInt(), p)
+    fun coreFast(): Int = completedPushIn(coreEndSec.coerceAtMost(Long.MAX_VALUE).toInt(), p)
     if (t >= finishSec) return PhaseAt(PhaseType.COOLDOWN, 0, 1, coreFast())
     if (p.cooldownSec > 0 && t >= coreEndSec) {
         return PhaseAt(PhaseType.COOLDOWN, (t - coreEndSec).toInt(), 1, coreFast())
@@ -182,21 +182,21 @@ class SessionEngine(
     private val cueCooldownMs: Long get() = profile.warningThresholdSec.coerceAtLeast(1) * Constants.MILLIS_PER_SECOND
 
     // Phase-average accumulators (speed in mph, HR in bpm).
-    private var fastSpeedSum = 0.0
-    private var fastSpeedCnt = 0
+    private var pushSpeedSum = 0.0
+    private var pushSpeedCnt = 0
     private var slowSpeedSum = 0.0
     private var slowSpeedCnt = 0
     private var allSpeedSum = 0.0
     private var allSpeedCnt = 0
-    private var fastHrSum = 0L
-    private var fastHrCnt = 0
+    private var pushHrSum = 0L
+    private var pushHrCnt = 0
     private var slowHrSum = 0L
     private var slowHrCnt = 0
     private var allHrSum = 0L
     private var allHrCnt = 0
     // Phase-average pace accumulators (steps per minute).
-    private var fastPaceSum = 0L
-    private var fastPaceCnt = 0
+    private var pushPaceSum = 0L
+    private var pushPaceCnt = 0
     private var slowPaceSum = 0L
     private var slowPaceCnt = 0
     private var allPaceSum = 0L
@@ -228,19 +228,19 @@ class SessionEngine(
         lastPhase = null
         lastQuarter = 0
         lastAdhocCueN = 0
-        fastSpeedSum = 0.0; fastSpeedCnt = 0
+        pushSpeedSum = 0.0; pushSpeedCnt = 0
         slowSpeedSum = 0.0; slowSpeedCnt = 0
         allSpeedSum = 0.0; allSpeedCnt = 0
-        fastHrSum = 0L; fastHrCnt = 0
+        pushHrSum = 0L; pushHrCnt = 0
         slowHrSum = 0L; slowHrCnt = 0
         allHrSum = 0L; allHrCnt = 0
-        fastPaceSum = 0L; fastPaceCnt = 0
+        pushPaceSum = 0L; pushPaceCnt = 0
         slowPaceSum = 0L; slowPaceCnt = 0
         allPaceSum = 0L; allPaceCnt = 0
         _state.value = snapshot.copy(
             running = true, finished = false, paused = false, totalSeconds = 0, secondsInPhase = 0,
             phase = PhaseType.WARMUP,
-            phaseOrdinal = 1, fastSegmentsDone = 0, overCeilingSec = 0, distanceMiles = 0.0,
+            phaseOrdinal = 1, pushSegmentsDone = 0, overPushMinSec = 0, distanceMiles = 0.0,
             progress = null, speed = speedSource.speed.value, hr = hrSource.hr.value,
             pace = paceSource.pace.value,
             lengthLabel = profile.lengthLabel(),
@@ -272,7 +272,7 @@ class SessionEngine(
         if (entered) {
             cue.beep()
             cue.vibrate(CueVibration.TRANSITION)
-            announce(pa.phase, pa.fastDone + 1)
+            announce(pa.phase, pa.pushDone + 1)
             lastPhase = pa.phase
             lastCueAt.clear()
             firstWarningCuePending = true
@@ -282,7 +282,7 @@ class SessionEngine(
         speedSource.speed.value?.let { p ->
             allSpeedSum += p; allSpeedCnt++
             when (pa.phase) {
-                PhaseType.FAST -> { fastSpeedSum += p; fastSpeedCnt++ }
+                PhaseType.FAST -> { pushSpeedSum += p; pushSpeedCnt++ }
                 PhaseType.SLOW -> { slowSpeedSum += p; slowSpeedCnt++ }
                 else -> Unit
             }
@@ -290,7 +290,7 @@ class SessionEngine(
         hrSource.hr.value?.let { h ->
             allHrSum += h; allHrCnt++
             when (pa.phase) {
-                PhaseType.FAST -> { fastHrSum += h; fastHrCnt++ }
+                PhaseType.FAST -> { pushHrSum += h; pushHrCnt++ }
                 PhaseType.SLOW -> { slowHrSum += h; slowHrCnt++ }
                 else -> Unit
             }
@@ -298,18 +298,18 @@ class SessionEngine(
         paceSource.pace.value?.let { c ->
             allPaceSum += c; allPaceCnt++
             when (pa.phase) {
-                PhaseType.FAST -> { fastPaceSum += c; fastPaceCnt++ }
+                PhaseType.FAST -> { pushPaceSum += c; pushPaceCnt++ }
                 PhaseType.SLOW -> { slowPaceSum += c; slowPaceCnt++ }
                 else -> Unit
             }
         }
-        val avgPushSpeed = if (fastSpeedCnt > 0) (fastSpeedSum / fastSpeedCnt).toFloat() else null
+        val avgPushSpeed = if (pushSpeedCnt > 0) (pushSpeedSum / pushSpeedCnt).toFloat() else null
         val avgRecoverySpeed = if (slowSpeedCnt > 0) (slowSpeedSum / slowSpeedCnt).toFloat() else null
         val avgOverallSpeed = if (allSpeedCnt > 0) (allSpeedSum / allSpeedCnt).toFloat() else null
-        val avgPushHr = if (fastHrCnt > 0) (fastHrSum / fastHrCnt).toInt() else null
+        val avgPushHr = if (pushHrCnt > 0) (pushHrSum / pushHrCnt).toInt() else null
         val avgRecoveryHr = if (slowHrCnt > 0) (slowHrSum / slowHrCnt).toInt() else null
         val avgOverallHr = if (allHrCnt > 0) (allHrSum / allHrCnt).toInt() else null
-        val avgPushPace = if (fastPaceCnt > 0) (fastPaceSum / fastPaceCnt).toInt() else null
+        val avgPushPace = if (pushPaceCnt > 0) (pushPaceSum / pushPaceCnt).toInt() else null
         val avgRecoveryPace = if (slowPaceCnt > 0) (slowPaceSum / slowPaceCnt).toInt() else null
         val avgOverallPace = if (allPaceCnt > 0) (allPaceSum / allPaceCnt).toInt() else null
 
@@ -322,9 +322,9 @@ class SessionEngine(
                 val target = profile.rounds
                 when {
                     target <= 0 -> 0
-                    pa.fastDone >= ceil(target * 0.75).toInt() -> 3
-                    pa.fastDone >= ceil(target * 0.50).toInt() -> 2
-                    pa.fastDone >= ceil(target * 0.25).toInt() -> 1
+                    pa.pushDone >= ceil(target * 0.75).toInt() -> 3
+                    pa.pushDone >= ceil(target * 0.50).toInt() -> 2
+                    pa.pushDone >= ceil(target * 0.25).toInt() -> 1
                     else -> 0
                 }
             }
@@ -352,11 +352,11 @@ class SessionEngine(
 
             // ADHOC: cue on every Nth completed push round.
             val n = profile.adhocCueEveryNPush
-            if (profile.lengthMode == WorkoutLength.ADHOC && n > 0 && pa.fastDone > lastAdhocCueN &&
-                pa.fastDone % n == 0
+            if (profile.lengthMode == WorkoutLength.ADHOC && n > 0 && pa.pushDone > lastAdhocCueN &&
+                pa.pushDone % n == 0
             ) {
-                lastAdhocCueN = pa.fastDone
-                speak("Push round ${pa.fastDone} complete")
+                lastAdhocCueN = pa.pushDone
+                speak("Push round ${pa.pushDone} complete")
                 cue.vibrate(CueVibration.GUIDANCE)
             }
         }
@@ -368,7 +368,7 @@ class SessionEngine(
             phase = pa.phase,
             phaseOrdinal = pa.phaseOrdinal,
             secondsInPhase = pa.secondsInPhase,
-            fastSegmentsDone = pa.fastDone,
+            pushSegmentsDone = pa.pushDone,
             distanceMiles = distance,
             progress = prog,
             finished = finished,
@@ -444,7 +444,7 @@ class SessionEngine(
         when (s.phase) {
             PhaseType.FAST -> {
                 if (s.hr != null && s.hr > profile.hrPushMin) {
-                    _state.value = s.copy(overCeilingSec = s.overCeilingSec + 1)
+                    _state.value = s.copy(overPushMinSec = s.overPushMinSec + 1)
                 }
                 // The first warning cue after a phase transition is suppressed:
                 // the sensor value carried over from the previous phase is stale.
@@ -455,8 +455,8 @@ class SessionEngine(
                     // HR below the min-signal threshold, speed at/below its
                     // min-signal threshold, or pace at/below its own.
                     val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrPushMin
-                    val speedBelow = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed < profile.speedFloorMph.toFloat()
-                    val paceBelow = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace < profile.paceFloorSpm
+                    val speedBelow = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed < profile.pushSpeedFloorMph.toFloat()
+                    val paceBelow = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace < profile.pushPaceFloorSpm
                     if (hrBelow || speedBelow || paceBelow) cueIf("speedUp", "Speed up")
                 }
             }
@@ -464,8 +464,8 @@ class SessionEngine(
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
                     // Slow down while the recovery target (Recovery Max bpm / Recovery Max mph / Recovery Max spm) is unmet.
                     val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrRecoveryMax
-                    val speedAbove = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed > profile.speedCeilingMph.toFloat()
-                    val paceAbove = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace > profile.paceCeilingSpm
+                    val speedAbove = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed > profile.recoverySpeedCapMph.toFloat()
+                    val paceAbove = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace > profile.recoveryPaceCapSpm
                     if (hrAbove || speedAbove || paceAbove) cueIf("slowDown", "Slow down")
                 }
             }

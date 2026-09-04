@@ -47,13 +47,13 @@ class SessionEngineTest {
         lengthMode = WorkoutLength.ROUNDS,
         rounds = 2,
         warmupSec = 60,
-        fastSec = 60,
+        pushSec = 60,
         slowSec = 60,
         cooldownSec = 60,
-        speedCeilingMph = 4.5,
-        speedFloorMph = 3.2,
-        paceCeilingSpm = 110,
-        paceFloorSpm = 100,
+        recoverySpeedCapMph = 4.5,
+        pushSpeedFloorMph = 3.2,
+        recoveryPaceCapSpm = 110,
+        pushPaceFloorSpm = 100,
         hrPushMin = 150,
         hrRecoveryMax = 120,
     )
@@ -101,13 +101,13 @@ class SessionEngineTest {
     }
 
     @Test
-    fun completedFastIn_isPlanRelative() {
+    fun completedPushIn_isPlanRelative() {
         val p = roundsProfile
-        assertEquals(0, completedFastIn(60, p))
-        assertEquals(0, completedFastIn(119, p))
-        assertEquals(1, completedFastIn(120, p))
-        assertEquals(1, completedFastIn(180, p))
-        assertEquals(2, completedFastIn(240, p))
+        assertEquals(0, completedPushIn(60, p))
+        assertEquals(0, completedPushIn(119, p))
+        assertEquals(1, completedPushIn(120, p))
+        assertEquals(1, completedPushIn(180, p))
+        assertEquals(2, completedPushIn(240, p))
     }
 
     @Test
@@ -144,12 +144,12 @@ class SessionEngineTest {
         clock.advance(121_000 - 61_000)
         eng.tick()
         assertEquals(PhaseType.SLOW, eng.snapshot.phase)
-        assertEquals(1, eng.snapshot.fastSegmentsDone)
+        assertEquals(1, eng.snapshot.pushSegmentsDone)
 
         clock.advance(364_000 - 121_000)
         eng.tick()
         assertTrue(eng.snapshot.finished)
-        assertEquals(2, eng.snapshot.fastSegmentsDone)
+        assertEquals(2, eng.snapshot.pushSegmentsDone)
         assertEquals(PhaseType.COOLDOWN, eng.snapshot.phase)
         assertEquals(1.0f, eng.snapshot.progress!!, 0.01f)
     }
@@ -158,7 +158,7 @@ class SessionEngineTest {
     fun tick_time_profile_finishesAtTarget() {
         val timeProfile = WorkoutProfile(
             id = 6, name = "T3", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
-            warmupSec = 10, fastSec = 20, slowSec = 20, cooldownSec = 10,
+            warmupSec = 10, pushSec = 20, slowSec = 20, cooldownSec = 10,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -172,7 +172,7 @@ class SessionEngineTest {
 
     @Test
     fun tick_adhoc_runsUntilEndNow() {
-        val adhoc = WorkoutProfile(id = 7, name = "A", lengthMode = WorkoutLength.ADHOC, fastSec = 60, slowSec = 60, adhocCueEveryNPush = 2)
+        val adhoc = WorkoutProfile(id = 7, name = "A", lengthMode = WorkoutLength.ADHOC, pushSec = 60, slowSec = 60, adhocCueEveryNPush = 2)
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(adhoc, clock, cue)
@@ -188,7 +188,7 @@ class SessionEngineTest {
         eng.tick() // phase change announced; ADHOC cue sits until the next tick
         clock.advance(1_000) // t=441
         eng.tick()
-        assertEquals(2, eng.snapshot.fastSegmentsDone)
+        assertEquals(2, eng.snapshot.pushSegmentsDone)
         assertTrue(cue.spoken.any { it.contains("Push round 2") })
         eng.endNow()
         assertTrue(eng.snapshot.finished)
@@ -199,7 +199,7 @@ class SessionEngineTest {
     fun roundsMode_quarterCuesByPushCount() {
         val p = WorkoutProfile(
             id = 20, name = "QR", lengthMode = WorkoutLength.ROUNDS, rounds = 4,
-            warmupSec = 60, fastSec = 60, slowSec = 60, cooldownSec = 0,
+            warmupSec = 60, pushSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -222,7 +222,7 @@ class SessionEngineTest {
     fun timeMode_quarterCuesByTime() {
         val p = WorkoutProfile(
             id = 21, name = "QT", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
-            warmupSec = 0, fastSec = 30, slowSec = 30, cooldownSec = 0,
+            warmupSec = 0, pushSec = 30, slowSec = 30, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -244,7 +244,7 @@ class SessionEngineTest {
     fun distanceMode_quarterCuesByMiles() {
         val p = WorkoutProfile(
             id = 22, name = "QD", lengthMode = WorkoutLength.DISTANCE, distanceMiles = 1.0,
-            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+            warmupSec = 0, pushSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -282,7 +282,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // over-push-min counts on ticks after phase entry
         eng.tick()
-        assertTrue(eng.snapshot.overCeilingSec >= 1)
+        assertTrue(eng.snapshot.overPushMinSec >= 1)
         assertFalse(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -357,7 +357,7 @@ class SessionEngineTest {
     fun distance_accumulatesFromSpeed() {
         val timeProfile = WorkoutProfile(
             id = 8, name = "T4", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
-            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+            warmupSec = 0, pushSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -519,7 +519,7 @@ class SessionEngineTest {
         // and the quarter follows on the next tick.
         val p = WorkoutProfile(
             id = 30, name = "QPD", lengthMode = WorkoutLength.ROUNDS, rounds = 4,
-            warmupSec = 60, fastSec = 60, slowSec = 60, cooldownSec = 0,
+            warmupSec = 60, pushSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -540,7 +540,7 @@ class SessionEngineTest {
         // wait until the following tick, exactly like the quarter cues.
         val p = WorkoutProfile(
             id = 31, name = "ADHOCP", lengthMode = WorkoutLength.ADHOC,
-            fastSec = 60, slowSec = 60, adhocCueEveryNPush = 2, warmupSec = 180,
+            pushSec = 60, slowSec = 60, adhocCueEveryNPush = 2, warmupSec = 180,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -604,7 +604,7 @@ class SessionEngineTest {
     fun finish_vibratesTransition() {
         val p = WorkoutProfile(
             id = 9, name = "T1", lengthMode = WorkoutLength.TIME, timeMinutes = 1,
-            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+            warmupSec = 0, pushSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
@@ -621,7 +621,7 @@ class SessionEngineTest {
     fun quarter_vibratesGuidance() {
         val p = WorkoutProfile(
             id = 10, name = "T2", lengthMode = WorkoutLength.TIME, timeMinutes = 2,
-            warmupSec = 0, fastSec = 60, slowSec = 60, cooldownSec = 0,
+            warmupSec = 0, pushSec = 60, slowSec = 60, cooldownSec = 0,
         )
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
