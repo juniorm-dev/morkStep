@@ -107,6 +107,28 @@ If `keystore.properties` is absent/incomplete, `assembleRelease` still succeeds 
 
 The package name is read from the same `app/build.gradle.kts` the guard checked and the tag is created from, so the tag can never describe a different version than the APK it points at. **Bump `versionCode`/`versionName` together in `app/build.gradle.kts` before running it** — if you forget, the guard stops `assembleRelease` with a clear message.
 
+### Sideload the Wear app onto a real watch
+
+The wear companion (`wear/`) is installed on a Wear OS watch (Wear OS 3+, e.g. OnePlus Watch 3) over `adb` — no Play console needed for testing.
+
+```bash
+./gradlew :wear:assembleDebug     # build — wear/build/outputs/apk/debug/morkStep-wear-debug-<version>.apk
+```
+
+1. **On the watch**, unlock developer options: Settings → About → tap the build/version number 7×, then enable **ADB debugging** and **Wi-Fi debugging** in Settings → Developer options. The watch shows an `IP:PORT` and a 6-digit pairing code. (OnePlus Watch 3: same route under its Settings.)
+2. **On the PC** (watch and PC on the same Wi-Fi):
+
+   ```bash
+   adb pair <watch-ip>:<pair-port>       # enter the 6-digit code shown on the watch
+   adb connect <watch-ip>:<debug-port>   # the port shown after pairing (different from the pair port)
+   adb install -r wear/build/outputs/apk/debug/morkStep-wear-debug-<version>.apk
+   adb -s <watch-ip>:<debug-port> shell am start -n com.morkstep.wear/.MainActivity
+   ```
+
+3. **To exercise the relays** (heart-rate up, session state/pause/vibrate down), pair the watch to the phone running the phone app — OnePlus Watch 3 pairs through the **OHealth** app — and grant the watch app the **body-sensor** permission when it prompts. Watch and phone must stay on the same Wi-Fi for the Wearable Data Layer.
+
+Notes: `adb pair`/`connect` handle the secure handshake, so a mismatched debug build is the main failure mode — uninstall any previous `com.morkstep.wear` install first (`adb uninstall com.morkstep.wear`). A real watch reports live HR (Health Services), unlike the AOSP emulator which has no HR sensor.
+
 ---
 ## Architecture
 
