@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import com.morkstep.Constants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,9 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * No runtime permission is required: step sensors are not permission-gated
  * (unlike activity recognition, which is only needed for classification).
  *
- * Cadence is derived by [PaceWindowCalculator] over a rolling 10-second
- * window, mirroring the watch's STEPS_PER_MINUTE semantics closely enough for
- * the pace floor/ceiling cues.
+ * Cadence is derived by [PaceWindowCalculator] over a rolling
+ * [Constants.PACE_WINDOW_MS] window (default 5 s), mirroring the watch's
+ * STEPS_PER_MINUTE semantics closely enough for the pace floor/ceiling cues.
+ * See the constant's doc for the responsiveness-vs-stability tradeoff.
  */
 class PhonePaceSource(context: Context) : PaceSource {
     private val _pace = MutableStateFlow<Int?>(null)
@@ -29,7 +31,7 @@ class PhonePaceSource(context: Context) : PaceSource {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val stepDetector: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
     private val stepCounter: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-    private val calculator = PaceWindowCalculator()
+    private val calculator = PaceWindowCalculator(windowMs = Constants.PACE_WINDOW_MS)
 
     private var registered = false
 
