@@ -8,7 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Decode tests for the phone's 35-byte `/morkstep/state` relay payload. */
+/** Decode tests for the phone's 47-byte `/morkstep/state` relay payload. */
 class WearSessionStateTest {
 
     private fun encodePhonePayload(
@@ -17,25 +17,31 @@ class WearSessionStateTest {
         running: Boolean = true,
         secondsInPhase: Int = 45,
         speed: Float = 4.8f,
+        pace: Int = 118,
         fastDone: Int = 3,
         fastTotal: Int = 5,
         fastSec: Int = 180,
         slowSec: Int = 120,
         floor: Float = 3.2f,
         ceiling: Float = 4.5f,
+        paceFloor: Int = 100,
+        paceCeiling: Int = 110,
     ): ByteArray {
-        val buf = ByteBuffer.allocate(35).order(ByteOrder.BIG_ENDIAN)
+        val buf = ByteBuffer.allocate(47).order(ByteOrder.BIG_ENDIAN)
         buf.put(phaseOrd.toByte())
         buf.put((if (paused) 1 else 0).toByte())
         buf.put((if (running) 1 else 0).toByte())
         buf.putInt(secondsInPhase)
         buf.putFloat(speed)
+        buf.putInt(pace)
         buf.putInt(fastDone)
         buf.putInt(fastTotal)
         buf.putInt(fastSec)
         buf.putInt(slowSec)
         buf.putFloat(floor)
         buf.putFloat(ceiling)
+        buf.putInt(paceFloor)
+        buf.putInt(paceCeiling)
         return buf.array()
     }
 
@@ -44,8 +50,8 @@ class WearSessionStateTest {
         val st = decodeWearSessionState(
             encodePhonePayload(
                 phaseOrd = 3, paused = true, running = true, secondsInPhase = 30,
-                speed = 2.9f, fastDone = 4, fastTotal = 6, fastSec = 200, slowSec = 100,
-                floor = 3.0f, ceiling = 4.2f,
+                speed = 2.9f, pace = 96, fastDone = 4, fastTotal = 6, fastSec = 200, slowSec = 100,
+                floor = 3.0f, ceiling = 4.2f, paceFloor = 95, paceCeiling = 105,
             )
         )
         assertEquals(3, st.phaseOrd)
@@ -53,18 +59,27 @@ class WearSessionStateTest {
         assertTrue(st.running)
         assertEquals(30, st.secondsInPhase)
         assertEquals(2.9f, st.speed!!, 0.001f)
+        assertEquals(96, st.pace!!)
         assertEquals(4, st.fastDone)
         assertEquals(6, st.fastTotal!!)
         assertEquals(200, st.fastSec)
         assertEquals(100, st.slowSec)
         assertEquals(3.0f, st.speedFloor, 0.001f)
         assertEquals(4.2f, st.speedCeiling, 0.001f)
+        assertEquals(95, st.paceFloor)
+        assertEquals(105, st.paceCeiling)
     }
 
     @Test
     fun decode_nanSpeedBecomesNull() {
         val st = decodeWearSessionState(encodePhonePayload(speed = Float.NaN))
         assertNull(st.speed)
+    }
+
+    @Test
+    fun decode_negativePaceBecomesNull() {
+        val st = decodeWearSessionState(encodePhonePayload(pace = -1))
+        assertNull(st.pace)
     }
 
     @Test
@@ -79,6 +94,8 @@ class WearSessionStateTest {
         assertEquals(0, st.phaseOrd)
         assertFalse(st.running)
         assertNull(st.speed)
+        assertNull(st.pace)
         assertEquals(180, st.fastSec)
+        assertEquals(Constants.DEFAULT_PACE_FLOOR_SPM, st.paceFloor)
     }
 }

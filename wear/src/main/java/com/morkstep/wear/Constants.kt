@@ -11,6 +11,8 @@ object Constants {
     // ---- Relay protocol (paths must match the phone app) ----
     /** Heart-rate samples are pushed to the phone on this path. */
     const val HR_PATH = "/morkstep/hr"
+    /** Pedometer pace samples (steps per minute) are pushed to the phone on this path. */
+    const val PACE_PATH = "/morkstep/pace"
     /** The phone relays gated cue vibrations on this path. */
     const val VIBRATE_PATH = "/morkstep/vibrate"
     /** The phone streams its live session state on this path. */
@@ -18,7 +20,7 @@ object Constants {
     /** Pause/resume commands are sent back to the phone on this path. */
     const val PAUSE_PATH = "/morkstep/pause"
     /** Full size of the phone's `/morkstep/state` payload, in bytes. */
-    const val STATE_PAYLOAD_BYTES = 35
+    const val STATE_PAYLOAD_BYTES = 47
     /** Smallest accepted state payload before decoding is even attempted. */
     const val STATE_MIN_PAYLOAD_BYTES = 3
     /** Pause-command payload markers: 1 = pause, 0 = resume. */
@@ -39,9 +41,13 @@ object Constants {
     /** Default recovery-segment length in seconds, shown before the first state relay. */
     const val DEFAULT_SLOW_SEC = 180
     /** Default push speed floor (mph), mirroring the phone's profile default. */
-    const val DEFAULT_SPEED_FLOOR_MPH = 3.2f
+    const val DEFAULT_SPEED_FLOOR_MPH = 4.5f
     /** Default recovery speed ceiling (mph), mirroring the phone's profile default. */
-    const val DEFAULT_SPEED_CEILING_MPH = 4.5f
+    const val DEFAULT_SPEED_CEILING_MPH = 3.2f
+    /** Default push pace floor (spm), mirroring the phone's profile default. */
+    const val DEFAULT_PACE_FLOOR_SPM = 110
+    /** Default recovery pace ceiling (spm), mirroring the phone's profile default. */
+    const val DEFAULT_PACE_CEILING_SPM = 100
 
     // ---- Phase palette (mirrors the phone tracker) ----
     val PHASE_WARMUP_COLOR = Color(0xFF58A05C)

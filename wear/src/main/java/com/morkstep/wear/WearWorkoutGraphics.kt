@@ -45,7 +45,7 @@ enum class WearGraphicsView(val label: String) {
 
 /**
  * Session state for the watch graphics, decoded from the phone's `/morkstep/state`
- * relay (35-byte payload; see MainViewModel.sendWatchState in the app module).
+ * relay (47-byte payload; see MainViewModel.sendWatchState in the app module).
  */
 data class WearSessionState(
     val phaseOrd: Int = 0,
@@ -53,12 +53,15 @@ data class WearSessionState(
     val running: Boolean = false,
     val secondsInPhase: Int = 0,
     val speed: Float? = null,
+    val pace: Int? = null,
     val fastDone: Int = 0,
     val fastTotal: Int? = null,
     val fastSec: Int = Constants.DEFAULT_FAST_SEC,
     val slowSec: Int = Constants.DEFAULT_SLOW_SEC,
     val speedFloor: Float = Constants.DEFAULT_SPEED_FLOOR_MPH,
     val speedCeiling: Float = Constants.DEFAULT_SPEED_CEILING_MPH,
+    val paceFloor: Int = Constants.DEFAULT_PACE_FLOOR_SPM,
+    val paceCeiling: Int = Constants.DEFAULT_PACE_CEILING_SPM,
 )
 
 /** Decode the phone's state payload; a short/empty payload yields defaults. */
@@ -72,42 +75,59 @@ fun decodeWearSessionState(data: ByteArray): WearSessionState {
             running = buf.get().toInt() == 1,
             secondsInPhase = buf.int,
             speed = buf.float.takeIf { !it.isNaN() },
+            pace = buf.int.takeIf { it >= 0 },
             fastDone = buf.int,
             fastTotal = buf.int.takeIf { it >= 0 },
             fastSec = buf.int,
             slowSec = buf.int,
             speedFloor = buf.float,
             speedCeiling = buf.float,
+            paceFloor = buf.int,
+            paceCeiling = buf.int,
         )
     }.getOrDefault(WearSessionState())
 }
 
 private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 
+/**
+ * Whether the live reading meets the phase target (floor in PUSH, ceiling in
+ * RECOVERY). Like the phone's shared rate cue, both speed and pace count: the
+ * target is met only when every present reading is in range; NONE when no rate
+ * signal is available.
+ */
 private fun WearSessionState.targetStatus(): TargetStatus {
-    val p = speed ?: return TargetStatus.NONE
-    return when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> if (p >= speedFloor) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        WearPhase.SLOW -> if (p <= speedCeiling) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        else -> TargetStatus.NONE
-    }
+    val phase = WearPhase.from(phaseOrd)
+    if (phase != WearPhase.FAST && phase != WearPhase.SLOW) return TargetStatus.NONE
+    val s = speed
+    val p = pace
+    if (s == null && p == null) return TargetStatus.NONE
+    // A target counts as met only when every present reading is in range; a
+    // missing signal never makes the target un-met (mirrors the phone tracker).
+    val speedOk = (phase == WearPhase.FAST && s != null && s >= speedFloor) ||
+        (phase == WearPhase.SLOW && s != null && s <= speedCeiling) ||
+        s == null
+    val paceOk = (phase == WearPhase.FAST && p != null && p >= paceFloor) ||
+        (phase == WearPhase.SLOW && p != null && p <= paceCeiling) ||
+        p == null
+    return if (speedOk && paceOk) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
 }
 
 private fun WearSessionState.statusCaption(): String = when (targetStatus()) {
     TargetStatus.NONE -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "Push — target $speedFloor mph floor"
-        WearPhase.SLOW -> "Recovery — target $speedCeiling mph ceiling"
-        WearPhase.WARMUP -> "Warm-up — no speed target"
-        WearPhase.COOLDOWN -> "Cooldown — no speed target"
+        WearPhase.FAST -> "Push — target $speedFloor mph floor · $paceFloor spm floor"
+        WearPhase.SLOW -> "Recovery — target $speedCeiling mph ceiling · $paceCeiling spm ceiling"
+        WearPhase.WARMUP -> "Warm-up — no target"
+        WearPhase.COOLDOWN -> "Cooldown — no target"
         null -> ""
     }
     TargetStatus.ON_TARGET -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "On target — speed ≥ $speedFloor mph floor"
-        else -> "On target — speed ≤ $speedCeiling mph ceiling"
+        WearPhase.FAST -> "On target — speed ≥ $speedFloor mph · pace ≥ $paceFloor spm"
+        else -> "On target — speed ≤ $speedCeiling mph · pace ≤ $paceCeiling spm"
     }
     TargetStatus.OFF_TARGET -> when (WearPhase.from(phaseOrd)) {
-        WearPhase.FAST -> "Speed up — speed < $speedFloor mph floor"
-        else -> "Slow down — speed > $speedCeiling mph ceiling"
+        WearPhase.FAST -> "Speed up — below push targets (speed · pace)"
+        else -> "Slow down — above recovery targets (speed · pace)"
     }
 }
 
@@ -259,6 +279,11 @@ private fun WearBand(s: WearSessionState) {
         }
         Text(
             "speed ${s.speed?.let { "%.1f".format(it) } ?: "--"} mph · band ${s.speedFloor}–${s.speedCeiling}",
+            style = MaterialTheme.typography.labelSmall,
+            color = onSurfaceVariant,
+        )
+        Text(
+            "pace ${s.pace ?: "--"} spm · targets ${s.paceFloor}–${s.paceCeiling}",
             style = MaterialTheme.typography.labelSmall,
             color = onSurfaceVariant,
         )

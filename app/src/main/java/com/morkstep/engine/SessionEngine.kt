@@ -5,6 +5,7 @@ import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
 import com.morkstep.sensing.HeartRateSource
+import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.SpeedSource
 import kotlin.math.ceil
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +39,8 @@ data class LiveState(
     val totalSeconds: Int = 0,
     val speed: Float? = null,
     val hr: Int? = null,
+    /** Pedometer cadence (steps per minute). Null when unknown. */
+    val pace: Int? = null,
     val overCeilingSec: Int = 0,
     /** Completed fast (push) segments. */
     val fastSegmentsDone: Int = 0,
@@ -57,6 +60,10 @@ data class LiveState(
     val avgPushHr: Int? = null,
     val avgRecoveryHr: Int? = null,
     val avgOverallHr: Int? = null,
+    /** 1 Hz moving averages: pedometer cadence in spm during push/recovery/overall. */
+    val avgPushPace: Int? = null,
+    val avgRecoveryPace: Int? = null,
+    val avgOverallPace: Int? = null,
 )
 
 /** Wall-clock abstraction so the ticker is unit-testable. */
@@ -138,13 +145,16 @@ internal fun progressAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: 
  * Interval Walking Training session engine with pluggable length modes.
  *
  * ROUNDS/TIME/DISTANCE run to a natural end; ADHOC runs until [endNow].
- * Emits phase-change beeps + announcements, speed/HR warning cues, quarter
- * progress cues (finite modes), and every-Nth-push cues (ADHOC).
+ * Emits phase-change beeps + announcements, speed/HR/pace warning cues, quarter
+ * progress cues (finite modes), and every-Nth-push cues (ADHOC). Phase-change
+ * cues take precedence: warnings and workout-length cues that coincide with a
+ * transition are deferred to the following tick.
  */
 class SessionEngine(
     val profile: WorkoutProfile,
     private val speedSource: SpeedSource,
     private val hrSource: HeartRateSource,
+    private val paceSource: PaceSource,
     private val cue: CueSink,
     private val clock: SessionClock = SystemClock,
 ) {
@@ -184,15 +194,22 @@ class SessionEngine(
     private var slowHrCnt = 0
     private var allHrSum = 0L
     private var allHrCnt = 0
+    // Phase-average pace accumulators (steps per minute).
+    private var fastPaceSum = 0L
+    private var fastPaceCnt = 0
+    private var slowPaceSum = 0L
+    private var slowPaceCnt = 0
+    private var allPaceSum = 0L
+    private var allPaceCnt = 0
 
     val snapshot: LiveState get() = _state.value
 
     /** Start observing sensor values. Call once when the engine is owned. */
     fun start(scope: CoroutineScope) {
         scope.launch {
-            combine(speedSource.speed, hrSource.hr) { p, h -> p to h }.collect { (p, h) ->
+            combine(speedSource.speed, hrSource.hr, paceSource.pace) { p, h, c -> Triple(p, h, c) }.collect { (p, h, c) ->
                 if (snapshot.running && !snapshot.finished) {
-                    _state.value = snapshot.copy(speed = p, hr = h)
+                    _state.value = snapshot.copy(speed = p, hr = h, pace = c)
                 }
             }
         }
@@ -217,11 +234,15 @@ class SessionEngine(
         fastHrSum = 0L; fastHrCnt = 0
         slowHrSum = 0L; slowHrCnt = 0
         allHrSum = 0L; allHrCnt = 0
+        fastPaceSum = 0L; fastPaceCnt = 0
+        slowPaceSum = 0L; slowPaceCnt = 0
+        allPaceSum = 0L; allPaceCnt = 0
         _state.value = snapshot.copy(
             running = true, finished = false, paused = false, totalSeconds = 0, secondsInPhase = 0,
             phase = PhaseType.WARMUP,
             phaseOrdinal = 1, fastSegmentsDone = 0, overCeilingSec = 0, distanceMiles = 0.0,
             progress = null, speed = speedSource.speed.value, hr = hrSource.hr.value,
+            pace = paceSource.pace.value,
             lengthLabel = profile.lengthLabel(),
         )
         tick()
@@ -274,12 +295,23 @@ class SessionEngine(
                 else -> Unit
             }
         }
+        paceSource.pace.value?.let { c ->
+            allPaceSum += c; allPaceCnt++
+            when (pa.phase) {
+                PhaseType.FAST -> { fastPaceSum += c; fastPaceCnt++ }
+                PhaseType.SLOW -> { slowPaceSum += c; slowPaceCnt++ }
+                else -> Unit
+            }
+        }
         val avgPushSpeed = if (fastSpeedCnt > 0) (fastSpeedSum / fastSpeedCnt).toFloat() else null
         val avgRecoverySpeed = if (slowSpeedCnt > 0) (slowSpeedSum / slowSpeedCnt).toFloat() else null
         val avgOverallSpeed = if (allSpeedCnt > 0) (allSpeedSum / allSpeedCnt).toFloat() else null
         val avgPushHr = if (fastHrCnt > 0) (fastHrSum / fastHrCnt).toInt() else null
         val avgRecoveryHr = if (slowHrCnt > 0) (slowHrSum / slowHrCnt).toInt() else null
         val avgOverallHr = if (allHrCnt > 0) (allHrSum / allHrCnt).toInt() else null
+        val avgPushPace = if (fastPaceCnt > 0) (fastPaceSum / fastPaceCnt).toInt() else null
+        val avgRecoveryPace = if (slowPaceCnt > 0) (slowPaceSum / slowPaceCnt).toInt() else null
+        val avgOverallPace = if (allPaceCnt > 0) (allPaceSum / allPaceCnt).toInt() else null
 
         // Quarter cues keyed to the length dimension the user chose:
         // ROUNDS → quarters of the round count; DISTANCE/TIME → quarters of
@@ -306,20 +338,27 @@ class SessionEngine(
             }
             WorkoutLength.ADHOC -> 0
         }
-        if (q > lastQuarter) {
-            lastQuarter = q
-            speak(qText(q))
-            cue.vibrate(CueVibration.GUIDANCE)
-        }
+        // Workout-length cues — quarters of the chosen length dimension and the
+        // ADHOC every-Nth-push cue. Phase-change cues take precedence over every
+        // other cue: when a length cue falls on the same tick as a phase change
+        // it is deferred to the next tick (the threshold is still unmet, so it
+        // fires then), mirroring the warning-cue precedence below.
+        if (!entered) {
+            if (q > lastQuarter) {
+                lastQuarter = q
+                speak(qText(q))
+                cue.vibrate(CueVibration.GUIDANCE)
+            }
 
-        // ADHOC: cue on every Nth completed push round.
-        val n = profile.adhocCueEveryNPush
-        if (profile.lengthMode == WorkoutLength.ADHOC && n > 0 && pa.fastDone > lastAdhocCueN &&
-            pa.fastDone % n == 0
-        ) {
-            lastAdhocCueN = pa.fastDone
-            speak("Push round ${pa.fastDone} complete")
-            cue.vibrate(CueVibration.GUIDANCE)
+            // ADHOC: cue on every Nth completed push round.
+            val n = profile.adhocCueEveryNPush
+            if (profile.lengthMode == WorkoutLength.ADHOC && n > 0 && pa.fastDone > lastAdhocCueN &&
+                pa.fastDone % n == 0
+            ) {
+                lastAdhocCueN = pa.fastDone
+                speak("Push round ${pa.fastDone} complete")
+                cue.vibrate(CueVibration.GUIDANCE)
+            }
         }
 
         val finished = t >= finishSec
@@ -339,6 +378,9 @@ class SessionEngine(
             avgPushHr = avgPushHr,
             avgRecoveryHr = avgRecoveryHr,
             avgOverallHr = avgOverallHr,
+            avgPushPace = avgPushPace,
+            avgRecoveryPace = avgRecoveryPace,
+            avgOverallPace = avgOverallPace,
         )
 
         if (finished) {
@@ -395,31 +437,36 @@ class SessionEngine(
     }
 
     private fun ratePhase() {
+        // Phase-change cues take precedence over warning cues: tick() only calls
+        // ratePhase() on non-entry ticks, so a transition announcement is never
+        // clobbered by a rate warning on the same moment.
         val s = snapshot
         when (s.phase) {
             PhaseType.FAST -> {
-                if (s.hr != null && s.hr > profile.hrCeiling) {
+                if (s.hr != null && s.hr > profile.hrPushMin) {
                     _state.value = s.copy(overCeilingSec = s.overCeilingSec + 1)
                 }
                 // The first warning cue after a phase transition is suppressed:
                 // the sensor value carried over from the previous phase is stale.
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Speed up while the push target (Recovery Max bpm / Push Min mph) is unmet.
-                    // HR and speed share one cue so they never double-fire, and a
+                    // Speed up while the push target (Push Min bpm / Push Min mph / Push Min spm) is unmet.
+                    // HR, speed and pace share one cue so they never double-fire, and a
                     // reading without a meaningful signal never triggers a cue:
-                    // HR below the min-signal threshold, or speed at/below its
-                    // min-signal threshold.
-                    val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrCeiling
+                    // HR below the min-signal threshold, speed at/below its
+                    // min-signal threshold, or pace at/below its own.
+                    val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrPushMin
                     val speedBelow = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed < profile.speedFloorMph.toFloat()
-                    if (hrBelow || speedBelow) cueIf("speedUp", "Speed up")
+                    val paceBelow = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace < profile.paceFloorSpm
+                    if (hrBelow || speedBelow || paceBelow) cueIf("speedUp", "Speed up")
                 }
             }
             PhaseType.SLOW -> {
                 if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Slow down while the recovery target (Push Min bpm / Recovery Max mph) is unmet.
-                    val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrFloor
+                    // Slow down while the recovery target (Recovery Max bpm / Recovery Max mph / Recovery Max spm) is unmet.
+                    val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrRecoveryMax
                     val speedAbove = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed > profile.speedCeilingMph.toFloat()
-                    if (hrAbove || speedAbove) cueIf("slowDown", "Slow down")
+                    val paceAbove = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace > profile.paceCeilingSpm
+                    if (hrAbove || speedAbove || paceAbove) cueIf("slowDown", "Slow down")
                 }
             }
             else -> Unit

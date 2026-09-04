@@ -23,6 +23,13 @@ object Constants {
      * Slow down warning cue (a 0 reading = sensor detached / no contact).
      */
     const val MIN_VALID_HR_BPM = 1
+    /**
+     * Lowest pedometer pace (steps per minute) that counts as a meaningful
+     * signal. Readings below this are treated like "no signal": they never
+     * trigger a Speed up / Slow down warning cue (a 0 reading = sensor
+     * detached / no contact).
+     */
+    const val MIN_VALID_PACE_SPM = 1
 
     /** Fused-location update cadence (ms) for the GPS speed source. */
     const val GPS_UPDATE_INTERVAL_MS = 1_000L
@@ -89,4 +96,12 @@ object Constants {
     const val BASELINE_MIN_PACE_FLOOR_MPH = 1.5
     /** Baseline calibrated: push-speed floor (mph) upper bound. */
     const val BASELINE_MAX_PACE_FLOOR_MPH = 7.0
+    /** Baseline calibrated: recovery-pace ceiling (spm) lower bound. */
+    const val BASELINE_MIN_PACE_CEILING_SPM = 90
+    /** Baseline calibrated: recovery-pace ceiling (spm) upper bound. */
+    const val BASELINE_MAX_PACE_CEILING_SPM = 140
+    /** Baseline calibrated: push-pace floor (spm) lower bound. */
+    const val BASELINE_MIN_PACE_FLOOR_SPM = 80
+    /** Baseline calibrated: push-pace floor (spm) upper bound. */
+    const val BASELINE_MAX_PACE_FLOOR_SPM = 130
 }

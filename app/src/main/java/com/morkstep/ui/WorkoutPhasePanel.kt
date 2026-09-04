@@ -102,30 +102,45 @@ private fun segmentProgress(live: LiveState, profile: WorkoutProfile): Float {
 
 private enum class TargetStatus { NONE, ON_TARGET, OFF_TARGET }
 
-/** Compare the live speed to the phase target (floor in PUSH, ceiling in RECOVERY). */
+/**
+ * Whether the live reading meets the phase target (floor in PUSH, ceiling in
+ * RECOVERY). Like the engine's shared rate cue, both speed and pace are
+ * considered: the target is met only when every present reading is in range;
+ * NONE when no rate signal is available.
+ */
 private fun targetStatus(live: LiveState, profile: WorkoutProfile): TargetStatus {
-    val speed = live.speed ?: return TargetStatus.NONE
-    return when (live.phase) {
-        PhaseType.FAST -> if (speed >= profile.speedFloorMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        PhaseType.SLOW -> if (speed <= profile.speedCeilingMph.toFloat()) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
-        else -> TargetStatus.NONE
-    }
+    val phase = live.phase
+    if (phase != PhaseType.FAST && phase != PhaseType.SLOW) return TargetStatus.NONE
+    if (live.speed == null && live.pace == null) return TargetStatus.NONE
+    val speed = live.speed
+    val pace = live.pace
+    val speedFloor = profile.speedFloorMph.toFloat()
+    val speedCeiling = profile.speedCeilingMph.toFloat()
+    // A target counts as met only when every present reading is in range; a
+    // missing signal never makes the target un-met (mirrors the engine's shared cue).
+    val speedOk = (phase == PhaseType.FAST && speed != null && speed >= speedFloor) ||
+        (phase == PhaseType.SLOW && speed != null && speed <= speedCeiling) ||
+        speed == null
+    val paceOk = (phase == PhaseType.FAST && pace != null && pace >= profile.paceFloorSpm) ||
+        (phase == PhaseType.SLOW && pace != null && pace <= profile.paceCeilingSpm) ||
+        pace == null
+    return if (speedOk && paceOk) TargetStatus.ON_TARGET else TargetStatus.OFF_TARGET
 }
 
 private fun statusCaption(live: LiveState, profile: WorkoutProfile): String = when (targetStatus(live, profile)) {
     TargetStatus.NONE -> when (live.phase) {
-        PhaseType.FAST -> "Push — target ${profile.speedFloorMph} mph floor"
-        PhaseType.SLOW -> "Recovery — target ${profile.speedCeilingMph} mph ceiling"
-        PhaseType.WARMUP -> "Warm-up — no speed target"
-        PhaseType.COOLDOWN -> "Cooldown — no speed target"
+        PhaseType.FAST -> "Push — target ${profile.speedFloorMph} mph floor · ${profile.paceFloorSpm} spm floor"
+        PhaseType.SLOW -> "Recovery — target ${profile.speedCeilingMph} mph ceiling · ${profile.paceCeilingSpm} spm ceiling"
+        PhaseType.WARMUP -> "Warm-up — no target"
+        PhaseType.COOLDOWN -> "Cooldown — no target"
     }
     TargetStatus.ON_TARGET -> when (live.phase) {
-        PhaseType.FAST -> "On target — speed ≥ ${profile.speedFloorMph} mph floor"
-        else -> "On target — speed ≤ ${profile.speedCeilingMph} mph ceiling"
+        PhaseType.FAST -> "On target — speed ≥ ${profile.speedFloorMph} mph · pace ≥ ${profile.paceFloorSpm} spm"
+        else -> "On target — speed ≤ ${profile.speedCeilingMph} mph · pace ≤ ${profile.paceCeilingSpm} spm"
     }
     TargetStatus.OFF_TARGET -> when (live.phase) {
-        PhaseType.FAST -> "Speed up — speed < ${profile.speedFloorMph} mph floor"
-        else -> "Slow down — speed > ${profile.speedCeilingMph} mph ceiling"
+        PhaseType.FAST -> "Speed up — below push targets (speed · pace)"
+        else -> "Slow down — above recovery targets (speed · pace)"
     }
 }
 

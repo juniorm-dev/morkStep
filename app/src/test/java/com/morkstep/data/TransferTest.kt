@@ -99,6 +99,7 @@ class TransferTest {
             avgFastSpeed = 4.5f, avgHeartRate = 130, overCeilingSec = 0, distanceMiles = 0.2f,
             avgPushSpeed = 4.5f, avgRecoverySpeed = 3.1f, avgOverallSpeed = null,
             avgPushHr = 132, avgRecoveryHr = 120, avgOverallHr = null,
+            avgPushPace = 122, avgRecoveryPace = 98, avgOverallPace = null,
         )
         val text = json.encodeToString(WorkoutExport(workouts = listOf(w)))
         val back = json.decodeFromString<WorkoutExport>(text)
@@ -107,5 +108,7 @@ class TransferTest {
         assertEquals(60, row.durationSec)
         assertEquals(4.5f, row.avgPushSpeed!!, 0.001f)
         assertEquals(120, row.avgRecoveryHr!!)
+        assertEquals(122, row.avgPushPace!!)
+        assertEquals(98, row.avgRecoveryPace!!)
     }
 }
