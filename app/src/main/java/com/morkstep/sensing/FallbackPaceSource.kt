@@ -37,6 +37,9 @@ class FallbackPaceSource(
                     lastWearAtMs = nowMs()
                     _pace.value = v
                 }
+                // null watch samples are heartbeats, not pace data;
+                // they must not reset the staleness timer or the
+                // phone fallback never gets to drive pace.
             }
         }
         scope.launch {

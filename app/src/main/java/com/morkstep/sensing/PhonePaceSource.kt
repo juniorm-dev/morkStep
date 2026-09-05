@@ -53,7 +53,8 @@ class PhonePaceSource(context: Context) : PaceSource {
     /** Begin listening to the phone's step sensor; no-op if neither sensor exists. */
     fun start() {
         if (registered) return
-        val sensor = stepDetector ?: stepCounter ?: return
+        val sensor = stepDetector ?: stepCounter
+        if (sensor == null) return
         registered = true
         try {
             sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
