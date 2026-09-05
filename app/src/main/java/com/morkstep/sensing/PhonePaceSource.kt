@@ -3,8 +3,9 @@ package com.morkstep.sensing
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.SensorEventListener
+import android.util.Log
 import com.morkstep.Constants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,12 +55,17 @@ class PhonePaceSource(context: Context) : PaceSource {
     fun start() {
         if (registered) return
         val sensor = stepDetector ?: stepCounter
-        if (sensor == null) return
+        if (sensor == null) {
+            Log.d("PhonePaceSource", "start: no step sensor available")
+            return
+        }
+        Log.d("PhonePaceSource", "start: sensor=${sensor.type}; registered=$registered")
         registered = true
         try {
             sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
         } catch (_: Exception) {
             registered = false
+            Log.d("PhonePaceSource", "start: registration failed")
         }
     }
 
