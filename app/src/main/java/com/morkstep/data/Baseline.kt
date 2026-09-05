@@ -33,11 +33,12 @@ fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
 /**
  * Re-derive [baseline] after a workout: fixed 30-minute time length, 120 s /
  * 120 s / 30 s / 30 s intervals, recovery-speed ceiling and push-speed floor
- * taken from the session's speed averages, and the recovery-pace ceiling and
- * push-pace floor taken from the session's pace (steps/min) averages. Targets
- * only update when the relevant averages were recorded; otherwise the previous
- * targets are kept. Results are clamped to the Config slider ranges so they can
- * never be edited away.
+ * taken from the session's speed averages, the recovery-pace ceiling and
+ * push-pace floor taken from the session's pace (steps/min) averages, and the
+ * recovery-HR cap and push-HR floor taken from the session's bpm averages.
+ * Targets only update when the relevant averages were recorded; otherwise the
+ * previous targets are kept. Results are clamped to the Config slider ranges so
+ * they can never be edited away.
  */
 fun updatedBaselineProfile(
     baseline: WorkoutProfile,
@@ -45,6 +46,8 @@ fun updatedBaselineProfile(
     recoverySpeedMph: Double?,
     pushPaceSpm: Int? = null,
     recoveryPaceSpm: Int? = null,
+    pushHrBpm: Int? = null,
+    recoveryHrBpm: Int? = null,
 ): WorkoutProfile {
     val recoverySpeedCap = (recoverySpeedMph ?: baseline.recoverySpeedCapMph)
         .coerceIn(Constants.BASELINE_MIN_RECOVERY_SPEED_CAP_MPH, Constants.BASELINE_MAX_RECOVERY_SPEED_CAP_MPH)
@@ -54,6 +57,10 @@ fun updatedBaselineProfile(
         .coerceIn(Constants.BASELINE_MIN_RECOVERY_PACE_CAP_SPM, Constants.BASELINE_MAX_RECOVERY_PACE_CAP_SPM)
     val pushPaceFloor = (pushPaceSpm ?: baseline.pushPaceFloorSpm)
         .coerceIn(Constants.BASELINE_MIN_PUSH_PACE_FLOOR_SPM, Constants.BASELINE_MAX_PUSH_PACE_FLOOR_SPM)
+    val recoveryHrCap = (recoveryHrBpm ?: baseline.hrRecoveryMax)
+        .coerceIn(Constants.BASELINE_MIN_HR_RECOVERY_MAX_BPM, Constants.BASELINE_MAX_HR_RECOVERY_MAX_BPM)
+    val pushHrFloor = (pushHrBpm ?: baseline.hrPushMin)
+        .coerceIn(Constants.BASELINE_MIN_HR_PUSH_MIN_BPM, Constants.BASELINE_MAX_HR_PUSH_MIN_BPM)
     return baseline.copy(
         lengthMode = WorkoutLength.TIME,
         timeMinutes = Constants.BASELINE_UPDATED_TIME_MIN,
@@ -65,5 +72,7 @@ fun updatedBaselineProfile(
         pushSpeedFloorMph = pushSpeedFloor,
         recoveryPaceCapSpm = recoveryPaceCap,
         pushPaceFloorSpm = pushPaceFloor,
+        hrRecoveryMax = recoveryHrCap,
+        hrPushMin = pushHrFloor,
     )
 }

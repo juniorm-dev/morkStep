@@ -24,12 +24,13 @@ object Constants {
      */
     const val MIN_VALID_HR_BPM = 1
     /**
-     * Lowest pedometer pace (steps per minute) that counts as a meaningful
-     * signal. Readings below this are treated like "no signal": they never
-     * trigger a Speed up / Slow down warning cue (a 0 reading = sensor
-     * detached / no contact).
+     * Lowest pedometer pace (steps per minute) that can trigger a Speed up /
+     * Slow down warning cue. Readings at or below this never cue. Unlike the
+     * speed floor (which filters GPS sensor drift), a pace this low is
+     * deliberate — standing still or resting — so it is an intentional break,
+     * not a missed target, and warnings would just be noise.
      */
-    const val MIN_VALID_PACE_SPM = 1
+    const val MIN_VALID_PACE_SPM = 10
 
     /**
      * Rolling window (ms) for the phone pedometer's cadence estimate
@@ -119,4 +120,15 @@ object Constants {
     const val BASELINE_MIN_PUSH_PACE_FLOOR_SPM = 80
     /** Baseline calibrated: push-pace floor (spm) upper bound. */
     const val BASELINE_MAX_PUSH_PACE_FLOOR_SPM = 130
+    // Heart-rate-target clamp bounds, matching the Config screen sliders
+    // (Recovery Max 70..190, Push Min 90..200) so a derived average can never
+    // put a slider out of range (cap = recovery cap, floor = push floor).
+    /** Baseline calibrated: recovery-HR cap (bpm) lower bound. */
+    const val BASELINE_MIN_HR_RECOVERY_MAX_BPM = 70
+    /** Baseline calibrated: recovery-HR cap (bpm) upper bound. */
+    const val BASELINE_MAX_HR_RECOVERY_MAX_BPM = 190
+    /** Baseline calibrated: push-HR floor (bpm) lower bound. */
+    const val BASELINE_MIN_HR_PUSH_MIN_BPM = 90
+    /** Baseline calibrated: push-HR floor (bpm) upper bound. */
+    const val BASELINE_MAX_HR_PUSH_MIN_BPM = 200
 }

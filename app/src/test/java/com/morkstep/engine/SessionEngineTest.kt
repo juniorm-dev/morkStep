@@ -836,7 +836,7 @@ class SessionEngineTest {
         assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
-    @Test
+@Test
     fun noSignalPace_suppressesPaceCue() {
         // Pace 0 (no signal) must not cue even though speed/HR are on target
         // and only the pace condition could fire.
@@ -851,6 +851,38 @@ class SessionEngineTest {
         clock.advance(1_000)
         eng.tick()
         assertFalse(cue.spoken.any { it.contains("Speed up") })
+    }
+
+    @Test
+    fun deliberateStandstillPace_doesNotCue() {
+        // A pace at/below the standstill floor (10 spm) must not cue in either
+        // phase even though only the pace condition could fire — walking that
+        // slowly is intentional, so it is not a missed target. Speed/HR are on
+        // target so only the pace gate decides.
+        // Push side: pace below floor.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, speed = 4.0f, hr = 150, pace = 5)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        // Recovery side: pace below ceiling, speed/HR inside the recovery band.
+        val clock2 = FakeClock(1_000)
+        val cue2 = RecordingCue()
+        val eng2 = engineWith(roundsProfile, clock2, cue2, speed = 2.0f, hr = 115, pace = 5)
+        eng2.run()
+        clock2.advance(121_000) // t=121 → SLOW
+        eng2.tick()
+        clock2.advance(1_000) // first warning cue after entry suppressed
+        eng2.tick()
+        clock2.advance(1_000)
+        eng2.tick()
+        assertFalse(cue2.spoken.any { it.contains("Slow down") })
     }
 
     @Test

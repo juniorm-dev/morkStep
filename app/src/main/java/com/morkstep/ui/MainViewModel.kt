@@ -622,8 +622,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         // Baseline: after any baseline workout, re-derive the calibrated profile
-        // (fixed 30-minute length and 120 s intervals; the speed band comes from
-        // this session's push/recovery averages).
+        // (fixed 30-minute length and 120 s intervals; the speed, pace and HR
+        // bands come from this session's push/recovery averages).
         val active = _activeProfile.value
         if (active != null && isBaselineProfile(active)) {
             val updated = updatedBaselineProfile(
@@ -632,6 +632,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 recoverySpeedMph = ls.avgRecoverySpeedMph?.toDouble(),
                 pushPaceSpm = ls.avgPushPace,
                 recoveryPaceSpm = ls.avgRecoveryPace,
+                pushHrBpm = ls.avgPushHr,
+                recoveryHrBpm = ls.avgRecoveryHr,
             )
             if (updated != active) {
                 viewModelScope.launch {

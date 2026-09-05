@@ -36,6 +36,7 @@ class BaselineTest {
         val updated = updatedBaselineProfile(
             cal, pushSpeedMph = 4.0, recoverySpeedMph = 2.5,
             pushPaceSpm = 120, recoveryPaceSpm = 95,
+            pushHrBpm = 158, recoveryHrBpm = 132,
         )
         assertEquals(WorkoutLength.TIME, updated.lengthMode)
         assertEquals(30, updated.timeMinutes)
@@ -49,6 +50,9 @@ class BaselineTest {
         assertEquals(4.0, updated.pushSpeedFloorMph, 1e-9)
         assertEquals(95, updated.recoveryPaceCapSpm)
         assertEquals(120, updated.pushPaceFloorSpm)
+        // Literal spec: Recovery Max = recovery avg HR, Push Min = push avg HR.
+        assertEquals(132, updated.hrRecoveryMax)
+        assertEquals(158, updated.hrPushMin)
         assertEquals(30 * 60L, updated.totalSeconds)
         assertEquals("30 min", updated.lengthLabel())
     }
@@ -73,6 +77,28 @@ class BaselineTest {
         val noAvg = updatedBaselineProfile(weird, null, null)
         assertEquals(140, noAvg.recoveryPaceCapSpm)
         assertEquals(80, noAvg.pushPaceFloorSpm)
+    }
+
+    @Test
+    fun updatedBaselineProfile_keepsHrTargetsWithoutAverages() {
+        val cal = baselineCalibrationProfile(id = 7).copy(hrRecoveryMax = 105, hrPushMin = 118)
+        val updated = updatedBaselineProfile(cal, pushSpeedMph = null, recoverySpeedMph = null)
+        assertEquals(105, updated.hrRecoveryMax)
+        assertEquals(118, updated.hrPushMin)
+    }
+
+    @Test
+    fun updatedBaselineProfile_clampsHrToSliderRanges() {
+        val weird = baselineCalibrationProfile(id = 1)
+            .copy(hrRecoveryMax = 200, hrPushMin = 10)
+        val withAvg = updatedBaselineProfile(weird, null, null, pushHrBpm = 250, recoveryHrBpm = 40)
+        // Cap (recovery HR 40) clamps to [70,190] → 70; floor (push HR 250) to [90,200] → 200.
+        assertEquals(70, withAvg.hrRecoveryMax)
+        assertEquals(200, withAvg.hrPushMin)
+        // Pre-existing out-of-range defaults (200 / 10) also clamp when averages are missing.
+        val noAvg = updatedBaselineProfile(weird, null, null)
+        assertEquals(190, noAvg.hrRecoveryMax)
+        assertEquals(90, noAvg.hrPushMin)
     }
 
     @Test
