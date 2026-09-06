@@ -1,8 +1,29 @@
 # morkStep — Kotlin LSP usage
 
-- Kotlin code intelligence runs on `kotlin-lsp` = JetBrains `intellij-server` (2026.2 EAP),
-  launched via the `kotlin-lsp.cmd` wrapper on PATH. Configured in `~/.omp/agent/lsp.json`
-  (global) and `.omp/lsp.json` (project).
+This repo uses a **Kotlin-LSP-first development approach**. Kotlin code intelligence runs on
+`kotlin-lsp` = JetBrains `intellij-server` (2026.3 EAP, ILS-263.4421.0), launched via the
+`kotlin-lsp.cmd` wrapper on PATH. Configured in `~/.omp/agent/lsp.json` (global) and
+`.omp/lsp.json` (project).
+
+## Work is structured LSP-first — manual edits are the last resort
+
+Plan and execute every Kotlin change so the LSP server does as much of the editing as
+possible, not as a check performed after hand-editing:
+
+- **Choose edit orders that keep the server usable.** Rename/refactor first (while the
+  symbol graph is intact) via `lsp rename` / `lsp rename_file` / `lsp code_actions`
+  (imports, quick-fixes, intentions); only then make additive changes (new params, new
+  files) that LSP cannot invent. Do NOT hand-rename a declaration and then leave call sites
+  broken, because the server cannot rename a symbol whose usages are already unresolved.
+- **Reach for the text `edit` tool only when LSP cannot express the change**: brand-new
+  files, additive parameters/plumbing, large rewrites, moving members across types. Even
+  then, run `lsp references` first so no callsite is dropped, and follow the edit
+  immediately with `lsp diagnostics`.
+- **Batch imports through the server.** After any text-edit churn, restore import hygiene
+  with `lsp code_actions` → "Organize Imports" on the affected files rather than editing
+  import lines by hand.
+- The spirit: the server is the primary editing instrument; text tools fill the gaps LSP
+  cannot cover, then the server re-syncs and verifies.
 
 ## MANDATORY editing gate (do not skip)
 

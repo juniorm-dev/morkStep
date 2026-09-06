@@ -56,6 +56,11 @@ fun MorkApp(viewModel: MainViewModel) {
     val wearVibrate by viewModel.wearVibrate.collectAsStateWithLifecycle()
     val hcBackfillHr by viewModel.hcBackfillHr.collectAsStateWithLifecycle()
     val hcGranted by viewModel.hcGranted.collectAsStateWithLifecycle()
+    val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
+    val showDebugLog by viewModel.showDebugLog.collectAsStateWithLifecycle()
+    val forcePhonePace by viewModel.forcePhonePace.collectAsStateWithLifecycle()
+    val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
+    val activityRecognitionGranted by viewModel.activityRecognitionGranted.collectAsStateWithLifecycle()
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
     val locationGranted by viewModel.locationGranted.collectAsStateWithLifecycle()
     val bluetoothGranted by viewModel.bluetoothGranted.collectAsStateWithLifecycle()
@@ -78,6 +83,9 @@ fun MorkApp(viewModel: MainViewModel) {
     val openWorkoutDoc = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(viewModel::importWorkouts) }
+    val createLogDoc = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri -> uri?.let(viewModel::exportDebugLog) }
 
     fun launchProfileExport() {
         createProfileDoc.launch("morkStep-profiles-${System.currentTimeMillis()}.json")
@@ -129,6 +137,7 @@ fun MorkApp(viewModel: MainViewModel) {
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         viewModel.refreshPermissions()
+        viewModel.refreshActivityRecognitionState()
     }
 
     // Health Connect's own permission screen (a system activity, not a runtime prompt).
@@ -139,6 +148,11 @@ fun MorkApp(viewModel: MainViewModel) {
     ) {
         viewModel.refreshHealthConnectState()
     }
+    val batteryOptimizationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.refreshBatteryOptimizationState()
+    }
     val requestHealthConnectPermission = {
         healthConnectPermissionLauncher.launch(
             setOf("android.permission.health.READ_HEART_RATE")
@@ -148,12 +162,18 @@ fun MorkApp(viewModel: MainViewModel) {
     val requestPermissions = {
         val needed = buildList {
             add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACTIVITY_RECOGNITION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Manifest.permission.BLUETOOTH_SCAN)
                 add(Manifest.permission.BLUETOOTH_CONNECT)
             }
         }
         permissionLauncher.launch(needed.toTypedArray())
+    }
+    val maybeRequestActivityRecognition = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
+        }
     }
 
     val bottomTabs = listOf(
@@ -203,10 +223,15 @@ fun MorkApp(viewModel: MainViewModel) {
             }
             composable(Routes.WORKOUT) {
                 activeProfile?.let { profile ->
-                    WorkoutScreen(
+WorkoutScreen(
                         live = live,
                         profile = profile,
                         simulated = simulated,
+                        debugLog = debugEnabled,
+                        showDebugLog = showDebugLog,
+                        onExportLog = {
+                            createLogDoc.launch("morkStep-debug-${System.currentTimeMillis()}.txt")
+                        },
                                             onEnd = {
                         viewModel.endWorkout()
                         // Baseline: the finish event above returns Home itself.
@@ -241,6 +266,24 @@ fun MorkApp(viewModel: MainViewModel) {
                     onWearVibrateChange = viewModel::setWearVibrate,
                     hcBackfillHr = hcBackfillHr,
                     onHcBackfillChange = viewModel::setHcBackfillHr,
+                    debugLog = debugEnabled,
+                    onDebugLogChange = viewModel::setDebugLog,
+                    showDebugLog = showDebugLog,
+                    onShowDebugLogChange = viewModel::setShowDebugLog,
+                    forcePhonePace = forcePhonePace,
+                    onForcePhonePaceChange = viewModel::setForcePhonePace,
+                    batteryUnrestricted = batteryUnrestricted,
+                    onRequestBatteryUnrestricted = {
+                        batteryOptimizationLauncher.launch(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                android.net.Uri.parse("package:${viewModel.packageName()}"),
+                            )
+                        )
+                    },
+                    activityRecognitionGranted = activityRecognitionGranted,
+                    onRequestActivityRecognition = maybeRequestActivityRecognition,
+                    onMaybeRequestActivityRecognition = maybeRequestActivityRecognition,
                     hcGranted = hcGranted,
                     onHealthConnectPermission = { requestHealthConnectPermission() },
                     onDelete = viewModel::deleteProfile,

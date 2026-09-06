@@ -13,6 +13,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.morkstep.Constants
+import com.morkstep.DebugLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,13 +26,20 @@ import kotlinx.coroutines.flow.asStateFlow
  * stays `null` — there is NO simulated fallback; callers must treat `null`
  * as "unknown", never as fake data.
  */
-class GpsSpeedSource(context: Context) : SpeedSource {
+class GpsSpeedSource(
+    context: Context,
+    /** App-wide debug log; null disables logging. */
+    private val log: DebugLog? = null,
+) : SpeedSource {
     private val appContext = context.applicationContext
     private val _speed = MutableStateFlow<Float?>(null)
     override val speed: StateFlow<Float?> = _speed.asStateFlow()
 
     private val client: FusedLocationProviderClient? =
         if (hasPermission()) LocationServices.getFusedLocationProviderClient(appContext) else null
+
+    /** Last speed logged to the trace, so unchanged samples don't spam the screen. */
+    private var lastLogMph = -1f
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -40,7 +48,13 @@ class GpsSpeedSource(context: Context) : SpeedSource {
             val mph = mps * Constants.MPH_PER_MPS
             // Strictly-positive junk filter: reject zero/negative speed reads
             // (GPS standing-still noise) but keep showing real slow walking.
-            if (mph > 0f) _speed.value = mph
+            if (mph > 0f) {
+                _speed.value = mph
+                if (kotlin.math.abs(mph - lastLogMph) >= 0.2f) {
+                    lastLogMph = mph
+                    log?.log("[gps] speed %.1f mph".format(mph))
+                }
+            }
         }
     }
 
@@ -50,7 +64,11 @@ class GpsSpeedSource(context: Context) : SpeedSource {
 
     @SuppressLint("MissingPermission")
     fun start() {
-        client ?: return
+        if (client == null) {
+            log?.log("[gps] start skipped: location permission missing")
+            return
+        }
+        log?.log("[gps] requesting updates (1s)")
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, Constants.GPS_UPDATE_INTERVAL_MS)
             .setMinUpdateIntervalMillis(Constants.GPS_MIN_UPDATE_INTERVAL_MS)
             .setMaxUpdateDelayMillis(Constants.GPS_MAX_UPDATE_DELAY_MS)
@@ -60,6 +78,7 @@ class GpsSpeedSource(context: Context) : SpeedSource {
 
     fun stop() {
         client?.removeLocationUpdates(callback)
+        log?.log("[gps] updates stopped")
     }
 
     private fun hasPermission(): Boolean =

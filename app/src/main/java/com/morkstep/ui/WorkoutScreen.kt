@@ -55,6 +55,9 @@ fun WorkoutScreen(
     live: LiveState,
     profile: WorkoutProfile,
     simulated: Boolean,
+    debugLog: Boolean,
+    showDebugLog: Boolean,
+    onExportLog: () -> Unit,
     onEnd: () -> Unit,
     onStop: () -> Unit,
     onTogglePause: () -> Unit,
@@ -95,8 +98,24 @@ fun WorkoutScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
         }
-
-        Spacer(Modifier.height(8.dp))
+        // On-screen app debug log — only when its toggle is on AND debug tracing
+        // has captured content.
+        if (showDebugLog && live.debugText.isNotEmpty()) {
+            Text(
+                live.debugText,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF888888),
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            if (debugLog) {
+                OutlinedButton(
+                    onClick = onExportLog,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                ) {
+                    Text("Export log")
+                }
+            }
+        }
 
         // Timer display: count down (time left in phase) or count up (seconds
         // elapsed in phase). Adhoc phases have fixed lengths too — only the

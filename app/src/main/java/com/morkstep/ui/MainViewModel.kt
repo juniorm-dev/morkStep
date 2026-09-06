@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.morkstep.AppContainer
 import com.morkstep.Constants
+import com.morkstep.DebugLog
 import com.morkstep.MorkApplication
 import com.morkstep.WorkoutService
 import com.morkstep.audio.CueSpeaker
@@ -140,6 +141,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _hcGranted = MutableStateFlow(false)
     val hcGranted: StateFlow<Boolean> = _hcGranted.asStateFlow()
 
+    /** Debug tracing toggle: gates the app debug log, the on-screen debug text and log export. */
+    private val _debugEnabled = MutableStateFlow(false)
+    val debugEnabled: StateFlow<Boolean> = _debugEnabled.asStateFlow()
+
+    /** Whether the captured debug log is rendered on the workout screen. */
+    private val _showDebugLog = MutableStateFlow(false)
+    val showDebugLog: StateFlow<Boolean> = _showDebugLog.asStateFlow()
+
+    /** Debug: force the phone pedometer to drive pace instead of the watch-relay fallback. */
+    private val _forcePhonePace = MutableStateFlow(false)
+    val forcePhonePace: StateFlow<Boolean> = _forcePhonePace.asStateFlow()
+
+    /** Whether the app is exempt from battery optimization (sensors stay live in background). */
+    private val _batteryUnrestricted = MutableStateFlow(false)
+    val batteryUnrestricted: StateFlow<Boolean> = _batteryUnrestricted.asStateFlow()
+
+    /** Android 10+ runtime gate for step sensors; without it registerListener returns false. */
+    private val _activityRecognitionGranted = MutableStateFlow(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q)
+    val activityRecognitionGranted: StateFlow<Boolean> = _activityRecognitionGranted.asStateFlow()
+
+    /** Re-check the battery-optimization exemption state (call after the system settings screen). */
+    fun refreshBatteryOptimizationState() {
+        val app = getApplication<Application>()
+        _batteryUnrestricted.value = runCatching {
+            (app.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+                .isIgnoringBatteryOptimizations(app.packageName)
+        }.getOrDefault(false)
+    }
+
+    /** Package name, for the battery-optimization exemption request. */
+    fun packageName(): String = getApplication<Application>().packageName
+
+    /** Re-check the ACTIVITY_RECOGNITION grant; call after the permission screen. */
+    fun refreshActivityRecognitionState() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        _activityRecognitionGranted.value =
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                getApplication(), android.Manifest.permission.ACTIVITY_RECOGNITION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
     /** Cue-vibration strength 0..1 from the active profile. */
     private val _vibrationIntensity = MutableStateFlow(0.5f)
     val vibrationIntensity: StateFlow<Float> = _vibrationIntensity.asStateFlow()
@@ -158,8 +200,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (pause) engine?.pause() else engine?.resume()
         }
     }
+    /** Traces watch->phone message reception (state relays arrive ~1 Hz during a workout). */
+    private val watchMessageListener = object : com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener {
+        override fun onMessageReceived(event: com.google.android.gms.wearable.MessageEvent) {
+            if (event.path == WEAR_STATE_PATH) {
+                debugLog.log("[wear] watch ack ${event.sourceNodeId.takeLast(6)}")
+            }
+        }
+    }
     /** Last state payload sent to the watch; identical snapshots are not re-sent. */
     private var lastWatchState = byteArrayOf()
+
+    /** Trace snapshot from the moment the last workout started (for post-workout exports). */
+    private var lastWorkoutLogDump = ""
+
+    /** App-wide debug log (sensor/wearable diagnostics): on-screen + export. */
+    private val debugLog = DebugLog()
 
     // Real sources (only live while simulated mode is OFF).
     private var gps: GpsSpeedSource? = null
@@ -225,6 +281,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             com.google.android.gms.wearable.Wearable.getMessageClient(getApplication())
                 .addListener(wearPauseListener)
         }
+        runCatching {
+            com.google.android.gms.wearable.Wearable.getMessageClient(getApplication())
+                .addListener(watchMessageListener)
+        }
+        viewModelScope.launch {
+            val nodes = runCatching {
+                com.google.android.gms.wearable.Wearable.getNodeClient(getApplication())
+                    .connectedNodes.await()
+            }.getOrNull()
+            debugLog.log(
+                if (nodes.isNullOrEmpty()) "[wear] no wearables connected"
+                else "[wear] wearables connected: ${nodes.joinToString { it.displayName }}"
+            )
+        }
         viewModelScope.launch {
             container.configStore.simulatedSensors.collect { simOn ->
                 _simulated.value = simOn
@@ -247,7 +317,57 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _hcBackfillHr.value = on
             }
         }
+        viewModelScope.launch {
+            container.configStore.debugLog.collect { on ->
+                _debugEnabled.value = on
+                debugLog.enabled = on
+                if (on) {
+                    debugLog.log("[sys] debug tracing enabled · ${_sensorNote.value}")
+                    // Re-survey wearables so the trace reflects the current link.
+                    val nodes = runCatching {
+                        com.google.android.gms.wearable.Wearable.getNodeClient(getApplication())
+                            .connectedNodes.await()
+                    }.getOrNull()
+                    debugLog.log(
+                        if (nodes.isNullOrEmpty()) "[wear] no wearables connected"
+                        else "[wear] wearables connected: ${nodes.joinToString { it.displayName }}"
+                    )
+                } else {
+                    debugLog.clear()
+                }
+            }
+        }
+        viewModelScope.launch {
+            container.configStore.showDebugLog.collect { on ->
+                _showDebugLog.value = on
+            }
+        }
+        viewModelScope.launch {
+            container.configStore.forcePhonePace.collect { on ->
+                _forcePhonePace.value = on
+                // The merge uses the flag at construction time; rebuild it so the
+                // forced/staleness mode applies to the live pipeline immediately.
+                setupEngine()
+                if (on) {
+                    debugLog.log("[sys] phone pedometer forced (0s watch fallback)")
+                } else {
+                    debugLog.log("[sys] watch fallback restored (15s)")
+                }
+            }
+        }
         refreshHealthConnectState()
+        refreshBatteryOptimizationState()
+        refreshActivityRecognitionState()
+        if (_activityRecognitionGranted.value) {
+            debugLog.log("[sys] activity recognition: granted")
+        } else {
+            debugLog.log("[sys] activity recognition: NOT GRANTED — step sensors blocked")
+        }
+        if (_batteryUnrestricted.value) {
+            debugLog.log("[sys] battery: unrestricted")
+        } else {
+            debugLog.log("[sys] battery: OPTIMIZED — sensors may be gated")
+        }
         viewModelScope.launch {
             container.configStore.darkMode.collect { _darkMode.value = it }
         }
@@ -272,14 +392,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_simulated.value) {
             sim = SimulatedSensors()
             _sensorNote.value = "Simulated sensors (debug)"
+            debugLog.log("[sys] simulated sources active")
         } else {
-            gps = GpsSpeedSource(getApplication())
-            ble = BleHeartRateSource(getApplication())
-            wearPace = WearPaceSource(getApplication()).also { it.start() }
-            phonePace = PhonePaceSource(getApplication()).also { it.start() }
+            gps = GpsSpeedSource(getApplication(), debugLog)
+            ble = BleHeartRateSource(getApplication(), debugLog)
+            wearPace = WearPaceSource(getApplication(), debugLog).also { it.start() }
+            phonePace = PhonePaceSource(getApplication(), debugLog).also { it.start() }
             if (_useWearHr.value) {
-                wear = WearHeartRateSource(getApplication()).also { it.start() }
+                wear = WearHeartRateSource(getApplication(), debugLog).also { it.start() }
             }
+            debugLog.log("[sys] sources: GPS + pace (watch/phone) + ${if (_useWearHr.value) "Wear HR" else "BLE HR"}")
             _sensorNote.value =
                 if (_useWearHr.value) "GPS speed · pace (watch or phone) · Wear heart rate"
                 else "GPS speed · pace (watch or phone) · BLE heart rate"
@@ -335,11 +457,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             else ble ?: return
         // Pace: the Wear relay when the watch is streaming, else the phone's
         // own step sensor (FallbackPaceSource switches after 15 s of watch
-        // silence, so a missing watch never leaves pace blank).
+        // silence, so a missing watch never leaves pace blank). The debug
+        // "force phone pedometer" flag sets the staleness to 0, which makes
+        // the phone drive pace unconditionally (watch pace ignored).
         val paceSrc: PaceSource = if (_simulated.value) sim!!
-        else FallbackPaceSource(wearPace!!, phonePace!!).also { paceMerge = it }
+        else FallbackPaceSource(
+            wearPace!!, phonePace!!,
+            staleAfterMs = if (_forcePhonePace.value) 0L else 15_000L,
+            log = debugLog,
+        ).also { paceMerge = it }
         engineJob?.cancel()
-        val e = SessionEngine(p, speedSrc, hrSrc, paceSrc, sink)
+        val e = SessionEngine(p, speedSrc, hrSrc, paceSrc, sink, log = debugLog)
         engine = e
         // The old merge (if any) was cancelled with engineJob; start the new one
         // with the fresh engine's scope.
@@ -371,6 +499,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether to backfill HR from Health Connect after workouts without the watch. */
     fun setHcBackfillHr(on: Boolean) {
         viewModelScope.launch { container.configStore.setHcBackfillHr(on) }
+    }
+
+    /** Toggle the debug tracing feature set (on-screen pace trace + log export). */
+    fun setDebugLog(on: Boolean) {
+        viewModelScope.launch { container.configStore.setDebugLog(on) }
+    }
+
+    /** Toggle the on-screen debug log display on the workout screen. */
+    fun setShowDebugLog(on: Boolean) {
+        viewModelScope.launch { container.configStore.setShowDebugLog(on) }
+    }
+
+    /** Debug: force the phone pedometer to drive pace; the watch relay is ignored. */
+    fun setForcePhonePace(on: Boolean) {
+        viewModelScope.launch { container.configStore.setForcePhonePace(on) }
+    }
+
+    /** Export the captured debug log to the SAF document at [uri]; result shows in a snackbar. */
+    fun exportDebugLog(uri: Uri) {
+        val ls = engine?.snapshot
+        val body = buildString {
+            appendLine("morkStep debug log — " +
+                java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()))
+            appendLine(_sensorNote.value)
+            appendLine(
+                "workout: ${if (ls == null) "no engine" else if (ls.running) "running sec=${ls.totalSeconds}" else "not running"}" +
+                    " · pace=${ls?.pace?.toString() ?: "null"}"
+            )
+            appendLine(
+                debugLog.text.value
+                    .ifEmpty { lastWorkoutLogDump.ifEmpty { "(no trace captured — enable debug tracing in Settings)" } }
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(body.toByteArray(Charsets.UTF_8))
+                } ?: error("Could not open export file")
+            }
+                .onSuccess { _transferMessage.value = "Debug log exported" }
+                .onFailure { _transferMessage.value = it.message ?: "Export failed" }
+        }
     }
 
     /** Re-check Health Connect availability and read permission (call after the permission screen). */
@@ -518,6 +688,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startWorkout() {
         val p = _activeProfile.value ?: return
         if (p.pushSec <= 0 || p.slowSec <= 0) return
+        // Snapshot the trace at the moment the workout starts, so an export
+        // after the workout shows exactly what happened during it (the trace
+        // would otherwise be rolled over by post-workout engine rebuilds).
+        debugLog.log("[sys] == workout start ==")
+        lastWorkoutLogDump = debugLog.text.value
         // A discarded engine is gone and a finished engine refuses to re-run;
         // every workout must start from a fresh one.
         if (engine == null || engine?.snapshot?.finished == true) setupEngine()

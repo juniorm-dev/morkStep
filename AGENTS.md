@@ -9,10 +9,15 @@ history log.
 Built with Kotlin coroutines (`kotlinx.coroutines`) + `androidx.compose` (Material 3). No
 XML views, no Frontend. Two independent Gradle Android application modules.
 
-> **LSP editing gate**: Kotlin editing in this repo is gated on the JetBrains language
-> server. See `.omp/AGENTS.md` — it contains the MANDATORY pre-edit workflow
-> (`lsp status` → `lsp references` → `lsp rename`/`code_actions` → `lsp diagnostics` →
-> `gradlew`), the JDK registry requirement, and the versioned-APK caveat.
+> **LSP-first development (committed policy)**: Kotlin work in this repo is done through the
+> JetBrains language server first — renames, refactors, imports and diagnostics ride the
+> ladder of `lsp status` → `lsp references`/`definition` → `lsp rename`/`code_actions`, and
+> work is *structured* so the server can perform the edits (rename/refactor before
+> additive changes; text edits only for what LSP cannot express, followed by an immediate
+> `lsp diagnostics` + "Organize Imports" pass). See `.omp/AGENTS.md` — it contains the full
+> MANDATORY pre-edit workflow (`lsp status` → `lsp references` → `lsp rename`/`code_actions`
+> → `lsp diagnostics` → `gradlew`), the JDK registry requirement, and the versioned-APK
+> caveat.
 
 ---
 
