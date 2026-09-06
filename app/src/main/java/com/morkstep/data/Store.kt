@@ -27,6 +27,9 @@ class ConfigStore(private val context: Context) {
         private val WEAR_VIBRATE = booleanPreferencesKey("wearVibrate")
         private val HC_BACKFILL_HR = booleanPreferencesKey("healthConnectBackfillHr")
         private val DARK_MODE = stringPreferencesKey("darkMode")
+        private val DEBUG_LOG = booleanPreferencesKey("debugLog")
+        private val SHOW_DEBUG_LOG = booleanPreferencesKey("showDebugLog")
+        private val FORCE_PHONE_PACE = booleanPreferencesKey("forcePhonePace")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -64,6 +67,27 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setDarkMode(mode: DarkMode) = context.dataStore.edit { p ->
         p[DARK_MODE] = mode.name
+    }
+
+    /** Whether pace-pipeline tracing, the on-screen debug text and log export are enabled. Default OFF. */
+    val debugLog: Flow<Boolean> = context.dataStore.data.map { it[DEBUG_LOG] ?: false }
+
+    suspend fun setDebugLog(value: Boolean) = context.dataStore.edit { p ->
+        p[DEBUG_LOG] = value
+    }
+
+    /** Whether the captured debug log is displayed on the workout screen. Default OFF. */
+    val showDebugLog: Flow<Boolean> = context.dataStore.data.map { it[SHOW_DEBUG_LOG] ?: false }
+
+    suspend fun setShowDebugLog(value: Boolean) = context.dataStore.edit { p ->
+        p[SHOW_DEBUG_LOG] = value
+    }
+
+    /** Debug: force the phone pedometer to drive pace (watch pace ignored). Default OFF. */
+    val forcePhonePace: Flow<Boolean> = context.dataStore.data.map { it[FORCE_PHONE_PACE] ?: false }
+
+    suspend fun setForcePhonePace(value: Boolean) = context.dataStore.edit { p ->
+        p[FORCE_PHONE_PACE] = value
     }
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]

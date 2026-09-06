@@ -19,6 +19,9 @@ class FallbackPaceSourceTest {
     private fun merge(wear: PaceSource, phone: PaceSource, now: FakeNow, scope: CoroutineScope) =
         FallbackPaceSource(wear, phone, staleAfterMs = 15_000L, nowMs = { now.value })
 
+    private fun forced(wear: PaceSource, phone: PaceSource, now: FakeNow, scope: CoroutineScope) =
+        FallbackPaceSource(wear, phone, staleAfterMs = 0L, nowMs = { now.value })
+
     private class FakeNow {
         var value = 0L
     }
@@ -87,5 +90,33 @@ class FallbackPaceSourceTest {
         // overwrite the phone-driven value.
         wear.pace.value = null
         assertEquals(100, m.pace.value)
+    }
+
+    @Test
+    fun zeroStalenessForcesPhonePaceAndIgnoresWatch() {
+        val scope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
+        val wear = FakePace()
+        val phone = FakePace()
+        val now = FakeNow()
+        val m = forced(wear, phone, now, scope)
+        m.start(scope)
+
+        // Phone drives immediately.
+        phone.pace.value = 100
+        assertEquals(100, m.pace.value)
+
+        // Watch samples are ignored entirely even while fresh.
+        now.value = 1_000L
+        wear.pace.value = 120
+        assertEquals(100, m.pace.value)
+
+        // A newer phone value still wins.
+        phone.pace.value = 108
+        assertEquals(108, m.pace.value)
+
+        // Watch resumes: still ignored.
+        now.value = 2_000L
+        wear.pace.value = 118
+        assertEquals(108, m.pace.value)
     }
 }

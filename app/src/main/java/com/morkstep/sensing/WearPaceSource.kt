@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
+import com.morkstep.DebugLog
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * If no Wear companion is connected, [pace] stays `null` — there is no
  * simulated fallback.
  */
-class WearPaceSource(context: Context) : PaceSource {
+class WearPaceSource(
+    context: Context,
+    /** App-wide debug log; null disables logging. */
+    private val log: DebugLog? = null,
+) : PaceSource {
     private val _pace = MutableStateFlow<Int?>(null)
     override val pace: StateFlow<Int?> = _pace.asStateFlow()
 
@@ -33,9 +38,18 @@ class WearPaceSource(context: Context) : PaceSource {
 
     private val messageListener = MessageClient.OnMessageReceivedListener { event: MessageEvent ->
         // The relayed payload is a 4-byte big-endian steps-per-minute sample.
-        if (event.path == PACE_PATH && event.data.size >= java.lang.Integer.BYTES) {
-            val spm = ByteBuffer.wrap(event.data).order(ByteOrder.BIG_ENDIAN).int
-            if (spm > 0) _pace.value = spm
+        if (event.path == PACE_PATH) {
+            if (event.data.size >= java.lang.Integer.BYTES) {
+                val spm = ByteBuffer.wrap(event.data).order(ByteOrder.BIG_ENDIAN).int
+                if (spm > 0) {
+                    _pace.value = spm
+                    log?.log("[pace-wear] step msg ${event.data.size}B -> $spm spm")
+                } else {
+                    log?.log("[pace-wear] step msg ignored: $spm spm")
+                }
+            } else {
+                log?.log("[pace-wear] step msg too short (${event.data.size}B)")
+            }
         }
     }
 
@@ -44,7 +58,9 @@ class WearPaceSource(context: Context) : PaceSource {
         registered = true
         try {
             messageClient.addListener(messageListener)
+            log?.log("[pace-wear] listening for step msg on ${PACE_PATH}")
         } catch (_: Exception) {
+            log?.log("[pace-wear] wear message addListener failed")
         }
     }
 
@@ -55,6 +71,7 @@ class WearPaceSource(context: Context) : PaceSource {
             messageClient.removeListener(messageListener)
         } catch (_: Exception) {
         }
+        log?.log("[pace-wear] wear step relay stopped")
     }
 
     companion object {

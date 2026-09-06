@@ -22,6 +22,7 @@ import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.morkstep.DebugLog
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +40,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * no strap in range) [hr] simply stays `null` — there is NO simulated
  * fallback; callers must treat `null` as "unknown".
  */
-class BleHeartRateSource(context: Context) : HeartRateSource {
+class BleHeartRateSource(
+    context: Context,
+    /** App-wide debug log; null disables logging. */
+    private val log: DebugLog? = null,
+) : HeartRateSource {
     private val appContext = context.applicationContext
     private val _hr = MutableStateFlow<Int?>(null)
     override val hr: StateFlow<Int?> = _hr.asStateFlow()
@@ -51,6 +56,8 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
     private var gatt: BluetoothGatt? = null
     private var scanning = false
     private var started = false
+    /** Last HR logged to the trace, so unchanged samples don't spam the screen. */
+    private var lastLogHr = -1
 
     init {
         start()
@@ -62,9 +69,18 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         started = true
         // isEnabled() is BLUETOOTH_CONNECT-gated on API 31+, so require both
         // grants before touching the adapter (a scan-only grant would throw).
-        if (!canScan() || !canConnect()) return
-        val adapter = adapter ?: return
-        if (!adapter.isEnabled) return
+        if (!canScan() || !canConnect()) {
+            log?.log("[hr-ble] start skipped: scan=${canScan()} connect=${canConnect()}")
+            return
+        }
+        val adapter = adapter ?: run {
+            log?.log("[hr-ble] no bluetooth adapter")
+            return
+        }
+        if (!adapter.isEnabled) {
+            log?.log("[hr-ble] bluetooth disabled")
+            return
+        }
         scanForStrap()
     }
 
@@ -75,6 +91,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         gatt?.disconnect()
         gatt?.close()
         gatt = null
+        log?.log("[hr-ble] stopped")
     }
 
     // ---- scanning ----
@@ -90,6 +107,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
         scanning = true
+        log?.log("[hr-ble] scanning for HR service (60s)")
         try {
             scanner.startScan(listOf(filter), settings, scanCallback)
         } catch (e: RuntimeException) {
@@ -99,6 +117,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
             // best-effort: degrade to an unknown HR, never crash.
             scanning = false
             Log.w(TAG, "BLE scan start failed; heart rate unavailable", e)
+            log?.log("[hr-ble] scan start failed: ${e::class.simpleName}")
             return
         }
         // Give up after 60s rather than drain battery forever.
@@ -114,6 +133,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         } catch (e: RuntimeException) {
             Log.w(TAG, "BLE scan stop failed", e)
         }
+        log?.log("[hr-ble] scan stopped")
     }
 
     private val scanCallback = object : ScanCallback() {
@@ -121,6 +141,7 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (gatt != null) return // already connected
             stopScan()
+            log?.log("[hr-ble] found ${result.device.name ?: result.device.address}")
             connect(result.device)
         }
     }
@@ -137,9 +158,13 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> g.discoverServices()
+                BluetoothProfile.STATE_CONNECTED -> {
+                    log?.log("[hr-ble] connected (status=$status)")
+                    g.discoverServices()
+                }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     _hr.value = null
+                    log?.log("[hr-ble] disconnected (status=$status)")
                     g.close()
                     gatt = null
                     // Re-scan so a reconnect can happen automatically.
@@ -150,10 +175,17 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
 
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            if (status != BluetoothGatt.GATT_SUCCESS) return
-            val service = g.getService(HR_SERVICE) ?: return
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                log?.log("[hr-ble] services discovery failed ($status)")
+                return
+            }
+            val service = g.getService(HR_SERVICE) ?: run {
+                log?.log("[hr-ble] HR service not found")
+                return
+            }
             val characteristic = service.getCharacteristic(HR_MEASUREMENT) ?: return
             g.setCharacteristicNotification(characteristic, true)
+            log?.log("[hr-ble] notifications enabled")
             val cccd = characteristic.getDescriptor(CCCD)
                 ?: return
             val enableValue = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
@@ -175,7 +207,16 @@ class BleHeartRateSource(context: Context) : HeartRateSource {
             value: ByteArray,
         ) {
             if (characteristic.uuid != HR_MEASUREMENT) return
-            parseHeartRate(value)?.let { _hr.value = it }
+            val bpm = parseHeartRate(value)
+            if (bpm != null) {
+                _hr.value = bpm
+                if (bpm != lastLogHr) {
+                    lastLogHr = bpm
+                    log?.log("[hr-ble] $bpm bpm")
+                }
+            } else {
+                log?.log("[hr-ble] unparseable payload ${value.size}B")
+            }
         }
     }
 

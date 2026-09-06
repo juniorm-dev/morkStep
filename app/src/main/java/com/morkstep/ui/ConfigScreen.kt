@@ -117,6 +117,17 @@ fun ConfigScreen(
     onWearVibrateChange: (Boolean) -> Unit,
     hcBackfillHr: Boolean,
     onHcBackfillChange: (Boolean) -> Unit,
+    debugLog: Boolean,
+    onDebugLogChange: (Boolean) -> Unit,
+    showDebugLog: Boolean,
+    onShowDebugLogChange: (Boolean) -> Unit,
+    forcePhonePace: Boolean,
+    onForcePhonePaceChange: (Boolean) -> Unit,
+    batteryUnrestricted: Boolean,
+    onRequestBatteryUnrestricted: () -> Unit,
+    activityRecognitionGranted: Boolean,
+    onRequestActivityRecognition: () -> Unit,
+    onMaybeRequestActivityRecognition: () -> Unit,
     hcGranted: Boolean,
     onHealthConnectPermission: () -> Unit,
     onDelete: (Long) -> Unit,
@@ -504,6 +515,92 @@ fun ConfigScreen(
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Debug", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Debug tracing", style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = debugLog, onCheckedChange = onDebugLogChange)
+                }
+                Text(
+                    "When on, pace connection/step events are traced live on the workout screen and can be exported " +
+                        "from there with the Export log button. Off by default; no trace data is collected while off.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                // Display the captured log on the workout screen (own toggle;
+                // capture/export are controlled by "Debug tracing" above).
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Show debug log on workout screen", style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = showDebugLog, onCheckedChange = onShowDebugLogChange)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Force phone pedometer", style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = forcePhonePace, onCheckedChange = onForcePhonePaceChange)
+                }
+                Text(
+                    "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
+                        "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Unrestricted battery", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (batteryUnrestricted) "Allowed — sensors stay live" else "Optimized — sensors may be gated",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    OutlinedButton(onClick = onRequestBatteryUnrestricted) {
+                        Text(if (batteryUnrestricted) "Granted" else "Allow")
+                    }
+                }
+                Text(
+                    "Battery optimization can suspend sensor delivery when the screen is off. Allowing unrestricted " +
+                        "battery keeps the step sensors live during workouts.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Step sensor access", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (activityRecognitionGranted) "Granted — pace sensors work"
+                            else "Not granted — step sensors blocked",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    OutlinedButton(onClick = onRequestActivityRecognition) {
+                        Text(if (activityRecognitionGranted) "Granted" else "Allow")
+                    }
+                }
+                Text(
+                    "Android 10+ requires the activity-recognition permission for step sensors; without it, step " +
+                        "pace stays empty no matter what.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
 

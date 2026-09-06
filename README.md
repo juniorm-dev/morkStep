@@ -15,7 +15,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 - **Configurable intervals** — warm-up length, push interval, recovery interval, cool-down length (per profile), adjustable in **15-second** steps (e.g. 30 s is selectable).
 - **Pause / resume** — freeze a workout mid-session (elapsed time, distance and audio cues stop) and continue where you left off; paused wall-clock time is excluded from the recorded duration. Discard and Finish still work while paused, and pausing never alters the length plan.
 - **Speed limits (mph)** — a per-profile *Push Min* floor and *Recovery Max* ceiling (miles per hour). Push keeps speed above the Push Min; recovery keeps speed below the Recovery Max.
-- **Pace limits (steps/min)** — a pedometer metric. With a paired **Wear** companion the watch reads its step cadence (`STEPS_PER_MINUTE` via Wear Health Services) and streams it to the phone; without a watch, the **phone's own step sensor** measures cadence directly (no permission needed), falling back automatically after 15 s of watch silence. A per-profile *Push Min* floor and *Recovery Max* ceiling (spm) guide cadence the same way speed does. Pace shares one cue with speed and heart rate, so any single unmet target raises it. **Watch vs phone cadence:** the watch stream delivers an *instant* value as fast as Wear Health Services emits it (typically ~1 s, already smoothed by the watch firmware) — there is no rolling window and nothing to tune on that path. The phone fallback derives cadence itself over a rolling `Constants.PACE_WINDOW_MS` window (default 5 s — see its doc for the responsiveness-vs-stability options). Both paths feed the same per-phase averages and cue thresholds.
+- **Pace limits (steps/min)** — a pedometer metric. With a paired **Wear** companion the watch reads its step cadence (`STEPS_PER_MINUTE` via Wear Health Services) and streams it to the phone; without a watch, the **phone's own step sensor** measures cadence directly (this requires the **activity-recognition** runtime permission on Android 10+ — granted from Settings → Debug → Step sensor access; the app registers both the step detector and the step counter so a silent detector can't starve pace), falling back automatically after 15 s of watch silence. A per-profile *Push Min* floor and *Recovery Max* ceiling (spm) guide cadence the same way speed does. Pace shares one cue with speed and heart rate, so any single unmet target raises it. **Watch vs phone cadence:** the watch stream delivers an *instant* value as fast as Wear Health Services emits it (typically ~1 s, already smoothed by the watch firmware) — there is no rolling window and nothing to tune on that path. The phone fallback derives cadence itself over a rolling `Constants.PACE_WINDOW_MS` window (default 5 s — see its doc for the responsiveness-vs-stability options). Both paths feed the same per-phase averages and cue thresholds.
 - **Heart rate** — a *Push Min* and *Recovery Max* (bpm). During push, HR should stay at or above the Push Min; during recovery, HR should stay at or below the Recovery Max (the Recovery Max is lower than the Push Min, since recovery targets a lower effort than push). Push cues "Speed up" while HR is below the Push Min; recovery cues "Slow down" while HR is above the Recovery Max.
 - **Baseline profile** — **Create baseline** in Settings installs a short calibration workout (3 rounds: 45 s push / 45 s recovery, 20 s warm-up). The Baseline profile is hidden from the home profile list while it is active, so the home button reads **Start baseline**. When the workout ends (naturally or via **Finish early**) it is re-derived into a calibrated 30-minute baseline — 120 s push / 120 s recovery, warm-up 30 s, cool-down 30 s, with the speed, pace and heart-rate bands taken from the session's actual push/recovery averages (clamped to the slider ranges). The app then jumps to **Settings**, shows a **"Baseline created"** snackbar, and you can **Clone** it into your own profile (the current haptics settings are carried into the baseline).
 - **Audio cues** —
@@ -27,6 +27,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 - **Runs with the screen locked** — a running session starts a foreground service (`WorkoutService`) that holds a partial wake lock so the 1 Hz ticker keeps firing on schedule (audio cues stay on time) and posts an ongoing notification, so the session survives backgrounding and process pressure. The service stops on finish, discard, or profile change tear-down. Saving a profile in Settings confirms with a "Profile saved" snackbar and returns to Home.
 - **Workout plan at a glance** — the home screen shows the active profile's push/recovery and warm-up/cool-down durations as `m:ss` (plain seconds under a minute) instead of rounded minutes, plus the configured vibration mode.
 - **Vibration** — per-profile haptics chosen in Settings: **Off**, **On phase change** (warm-up, push, recovery, cool-down, finish), or **All cues** (also quarter, push-round, and warning cues, mirroring audio). The watch can mirror them too: turn on **Vibrate watch** and the paired Wear companion buzzes alongside the phone.
+- **Debug logging & sensor tracing** — an app-wide diagnostic log (`DebugLog`) traces sensor and wearable activity: GPS fixes (`[gps]`), BLE strap lifecycle + HR (`[hr-ble]`), watch HR relay (`[hr-wear]`), watch/phone pace (`[pace-wear]` / `[pace-phone]` / `[pace-merge]`), and system/connection state (`[sys]` / `[wear]`). Each line is `HH:mm:ss [subsystem] message`, so filtering an exported file per sensor is a single grep. Enable the **Debug tracing** toggle in Settings to capture; the workout screen then offers **Export log** (saves a text file via the system file picker) and, with the separate **Show debug log on workout screen** toggle, renders the live log during a session. The same Debug section has **Force phone pedometer** (0s watch fallback — phone drives pace unconditionally), **Unrestricted battery** (exempts the app from battery optimization so sensors aren't gated), and **Step sensor access** (grants `ACTIVITY_RECOGNITION` for step sensors on Android 10+).
 
 ## Requirements
 
@@ -53,7 +54,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-debug-0.12.4.apk # versioned APK name
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.12.5.apk # versioned APK name
 ```
 
 ### Emulator (instrumented) tests — NOT run by default
@@ -76,7 +77,7 @@ form factor (its nav taps assume a phone-sized display).
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release-0.12.4.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.12.5.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -140,7 +141,7 @@ All code lives under `app/src/main/java/com/morkstep/`, organised by responsibil
 | Package | Responsibility |
 | ------- | -------------- |
 | `engine/` | Pure interval session state machine and cue logic (no Android deps except a clock) |
-| `sensing/` | Speed, pace & heart-rate source abstractions + a simulated implementation |
+| `sensing/` | Speed, pace & heart-rate source abstractions + a simulated implementation; `DebugLog` (app-wide gated diagnostic log) |
 | `audio/` | TTS + tone cues |
 | `data/` | Domain models, profiles + config persistence (DataStore), workout history (Room) |
 | `ui/` | Jetpack Compose screens + ViewModel wiring |
@@ -183,13 +184,15 @@ Speed, pace and HR are narrow interfaces (`SpeedSource`, `PaceSource`, `HeartRat
 - **`BleHeartRateSource`** — real HR via a **Bluetooth LE heart-rate strap** (Heart Rate Service `0x180D` / measurement `0x2A37`): scans for the service, connects, subscribes to notifications, parses 8/16-bit HR payloads. Disconnects re-scan automatically; gives up after 60 s.
 - **`SimulatedSensors`** — developer-only. Random-walks toward phase targets so cue/history paths can be exercised **when explicitly toggled on** in Settings. It is **never an automatic fallback**: when off, a missing signal simply reads blank (`–`), so real workouts can never be silently polluted by fake readings.
 - **`WearHeartRateSource`** — heart rate relayed from the paired **morkStep Wear** companion over the Wearable message layer (path `/morkstep/hr`); the watch reads HR via Wear Health Services and streams each beat-per-minute value on demand. Selected in Settings with the "Heart rate from Wear companion" switch (used instead of BLE when on).
-- **`WearPaceSource`** — pedometer cadence relayed from the paired **morkStep Wear** companion (path `/morkstep/pace`); the watch reads `STEPS_PER_MINUTE` via Wear Health Services and streams each steps-per-minute value. Each relayed sample is the *latest value as emitted by Health Services* (typically ~1 s cadence, smoothed by the watch firmware) — an instant value, not a windowed estimate, so no latency dial applies on this path. A **`PhonePaceSource`** falls back to the phone's own step sensor (`TYPE_STEP_DETECTOR`, else `TYPE_STEP_COUNTER`) when the watch is absent or silent for 15 s (`FallbackPaceSource`); the watch wins again instantly when it resumes. Phone cadence is instead derived over a rolling `Constants.PACE_WINDOW_MS` window (default 5 s).
+- **`WearPaceSource`** — pedometer cadence relayed from the paired **morkStep Wear** companion (path `/morkstep/pace`); the watch reads `STEPS_PER_MINUTE` via Wear Health Services and streams each steps-per-minute value. Each relayed sample is the *latest value as emitted by Health Services* (typically ~1 s cadence, smoothed by the watch firmware) — an instant value, not a windowed estimate, so no latency dial applies on this path. A **`PhonePaceSource`** falls back to the phone's own step sensors — it registers **both** `TYPE_STEP_DETECTOR` and `TYPE_STEP_COUNTER` when present (a silent detector can't starve pace), gated by the **ACTIVITY_RECOGNITION** permission since Android 10 (granted from Settings → Debug → Step sensor access). It kicks in when the watch is absent or silent for 15 s (`FallbackPaceSource`); the watch wins again instantly when it resumes. Phone cadence is derived over a rolling `Constants.PACE_WINDOW_MS` window (default 5 s).
 
-The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions (fine location, BLE scan/connect) are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
+The simulated toggle lives in Settings ("Simulated sensors (debug)", default **off**) and is persisted in DataStore; the Workout screen shows a "no live hardware readings" banner while it is on. Runtime sensor permissions — fine location, BLE scan/connect, and activity recognition (step sensors, Android 10+) — are requested from Settings; on Android 16 the app targets `compileSdk`/`targetSdk 36`.
 
 **Workout graphics.** While a session runs, the Workout screen offers a phase-tracker with four views (chip-selected, session-persistent): **Off** hides it, **Bars** shows push/recovery segment progress, **Band** draws the Push Min–Recovery Max speed band with a live needle, and **Gauge** is a circular arc of segment progress with speed in the center. All three report how the live readings compare to the phase targets (Push Min floor during push, Recovery Max ceiling during recovery — for both speed and pace) with a green "On target" / red "Speed up / Slow down" caption.
 
 **Dark mode.** Profile settings has a **Dark mode** switch: on forces the dark theme, off follows the system setting. Applied on Save.
+
+**Debug logging.** An app-wide `DebugLog` (gated by the **Debug tracing** setting, bounded 12 lines, local-time stamps) traces every sensor and wearable event. `MainViewModel` owns the single instance and hands it to each source — `GpsSpeedSource` (`[gps]`), `BleHeartRateSource` (`[hr-ble]`), `WearHeartRateSource` (`[hr-wear]`), `WearPaceSource` (`[pace-wear]`), `PhonePaceSource` (`[pace-phone]`), `FallbackPaceSource` (`[pace-merge]`) — plus system and connection state (`[sys]` / `[wear]`). The engine mirrors it into `LiveState.debugText`; the workout screen renders it only while the separate **Show debug log on workout screen** toggle is on. Export writes the captured lines to a SAF text file; every line is `HH:mm:ss [subsystem] message`, so per-sensor filtering is a single grep.
 
 **Backup.** Profile settings and the History screen offer Export/Import of profiles or workout history as versioned JSON files via the system file picker (SAF). Importing profiles restores the list; importing history merges rows. Both reassign any colliding id to a fresh one, so importing a backup over a partially-same device never replaces the existing active row or local workout.
 
@@ -229,7 +232,7 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 **Language servers (LSP)**
 | Server | Version | Notes |
 | ------ | ------- | ----- |
-| `kotlin-lsp` (JetBrains `intellij-server`) | 2026.2 EAP | Official Kotlin LSP, IntelliJ-based; resolves Gradle/AGP projects itself. Launched from `$PATH`; configured once globally in `~/.omp/agent/lsp.json`. See note below. |
+| `kotlin-lsp` (JetBrains `intellij-server`) | 2026.3 EAP (ILS-263.4421.0) | Official Kotlin LSP, IntelliJ-based; resolves Gradle/AGP projects itself. Launched from `$PATH`; configured once globally in `~/.omp/agent/lsp.json`. See note below. |
 
 > **LSP setup (committed, machine-independent).** The JetBrains Kotlin Language Server
 > (`intellij-server`, on `$PATH`) does its own Gradle/AGP project resolution — no exported
@@ -262,6 +265,14 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
   the versioned copy if it ever goes missing — every build ends with both files present.
   Bump `versionCode`/`versionName` together in the module's `build.gradle.kts` — and keep
   the `adb install` paths in this README's Build & run section in sync.
+- **intellij-server EAP builds expire.** The EAP language server exits within ~6 weeks
+  of its release date: after expiry every spawn exits immediately with *"This build of
+  intellij-server has expired"* and `lsp` reports "server exited unexpectedly (code 0)" —
+  the binary seems fine (`--version` works), but no LSP request ever succeeds. Refresh by
+  reading the current bundle URL from the VS Code extension's `extension/server-bundle.json`
+  (JetBrains.kotlin-server), downloading from the JetBrains CDN, extracting over
+  `C:\Tools\kotlin-lsp`, and restoring the omp `--stdio` wrapper at `bin\kotlin-lsp.cmd`
+  (that `bin` dir is what's on `$PATH`).
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 

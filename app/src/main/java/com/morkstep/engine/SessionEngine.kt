@@ -1,5 +1,6 @@
 package com.morkstep.engine
 
+import com.morkstep.DebugLog
 import com.morkstep.Constants
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
@@ -41,6 +42,8 @@ data class LiveState(
     val hr: Int? = null,
     /** Pedometer cadence (steps per minute). Null when unknown. */
     val pace: Int? = null,
+    /** Latest app debug log block for on-screen display ("" when debug is off). */
+    val debugText: String = "",
     val overPushMinSec: Int = 0,
     /** Completed fast (push) segments. */
     val pushSegmentsDone: Int = 0,
@@ -157,6 +160,8 @@ class SessionEngine(
     private val paceSource: PaceSource,
     private val cue: CueSink,
     private val clock: SessionClock = SystemClock,
+    /** App debug log; when set, its text is mirrored into [LiveState.debugText]. */
+    private val log: DebugLog? = null,
 ) {
     private val _state = MutableStateFlow(LiveState(lengthLabel = profile.lengthLabel()))
     val state: StateFlow<LiveState> = _state.asStateFlow()
@@ -211,6 +216,13 @@ class SessionEngine(
                 if (snapshot.running && !snapshot.finished) {
                     _state.value = snapshot.copy(speed = p, hr = h, pace = c)
                 }
+            }
+        }
+        // Surface the app debug log on screen regardless of run state, so
+        // connection/relay issues are visible before and during a workout.
+        scope.launch {
+            log?.text?.collect { t ->
+                if (t != snapshot.debugText) _state.value = snapshot.copy(debugText = t)
             }
         }
     }

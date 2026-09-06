@@ -1,8 +1,8 @@
 {
   "servers": {
     "kotlin-lsp": {
-      "command": "kotlin-lsp.cmd",
-      "args": [],
+      "command": "cmd",
+      "args": ["/c", "kotlin-lsp.cmd", "--stdio"],
       "fileTypes": [".kt", ".kts"],
       "languageId": "kotlin",
       "rootMarkers": ["settings.gradle.kts", "build.gradle.kts", "build.gradle", ".git"],
