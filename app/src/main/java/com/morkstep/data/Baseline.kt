@@ -32,27 +32,21 @@ fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
 
 /**
  * Re-derive [baseline] after a workout: fixed 30-minute time length, 120 s /
- * 120 s / 30 s / 30 s intervals, recovery-speed ceiling and push-speed floor
- * taken from the session's speed averages, the recovery-pace ceiling and
- * push-pace floor taken from the session's pace (steps/min) averages, and the
- * recovery-HR cap and push-HR floor taken from the session's bpm averages.
- * Targets only update when the relevant averages were recorded; otherwise the
- * previous targets are kept. Results are clamped to the Config slider ranges so
- * they can never be edited away.
+ * 120 s / 30 s / 30 s intervals, the recovery-pace ceiling and push-pace
+ * floor from the session's pace (steps/min) averages, and the recovery-HR cap
+ * and push-HR floor from the session's bpm averages. Targets only update when
+ * the relevant averages were recorded; otherwise the previous targets are
+ * kept. Speed targets are left untouched: the disabled 30 mph recovery cap /
+ * 0 mph push floor (or any user-set values) survive recalibration. Results
+ * are clamped to the Config slider ranges so they can never be edited away.
  */
 fun updatedBaselineProfile(
     baseline: WorkoutProfile,
-    pushSpeedMph: Double?,
-    recoverySpeedMph: Double?,
     pushPaceSpm: Int? = null,
     recoveryPaceSpm: Int? = null,
     pushHrBpm: Int? = null,
     recoveryHrBpm: Int? = null,
 ): WorkoutProfile {
-    val recoverySpeedCap = (recoverySpeedMph ?: baseline.recoverySpeedCapMph)
-        .coerceIn(Constants.BASELINE_MIN_RECOVERY_SPEED_CAP_MPH, Constants.BASELINE_MAX_RECOVERY_SPEED_CAP_MPH)
-    val pushSpeedFloor = (pushSpeedMph ?: baseline.pushSpeedFloorMph)
-        .coerceIn(Constants.BASELINE_MIN_PUSH_SPEED_FLOOR_MPH, Constants.BASELINE_MAX_PUSH_SPEED_FLOOR_MPH)
     val recoveryPaceCap = (recoveryPaceSpm ?: baseline.recoveryPaceCapSpm)
         .coerceIn(Constants.BASELINE_MIN_RECOVERY_PACE_CAP_SPM, Constants.BASELINE_MAX_RECOVERY_PACE_CAP_SPM)
     val pushPaceFloor = (pushPaceSpm ?: baseline.pushPaceFloorSpm)
@@ -68,8 +62,8 @@ fun updatedBaselineProfile(
         slowSec = Constants.BASELINE_UPDATED_RECOVERY_SEC,
         warmupSec = Constants.BASELINE_UPDATED_WARMUP_SEC,
         cooldownSec = Constants.BASELINE_UPDATED_COOLDOWN_SEC,
-        recoverySpeedCapMph = recoverySpeedCap,
-        pushSpeedFloorMph = pushSpeedFloor,
+        // recoverySpeedCapMph / pushSpeedFloorMph deliberately NOT in the copy:
+        // baseline recalibration must never reset the speed values.
         recoveryPaceCapSpm = recoveryPaceCap,
         pushPaceFloorSpm = pushPaceFloor,
         hrRecoveryMax = recoveryHrCap,

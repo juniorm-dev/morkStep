@@ -42,7 +42,6 @@ import com.morkstep.data.DarkMode
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
-import kotlin.math.roundToInt
 
 private val LENGTH_MODES = listOf(
     WorkoutLength.ROUNDS to "Rounds",
@@ -211,8 +210,6 @@ fun ConfigScreen(
         var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
         var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
         var cooldownSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.cooldownSec) }
-        var speedCeil by rememberSaveable(profile.id) { mutableFloatStateOf(profile.recoverySpeedCapMph.toFloat()) }
-        var speedFloor by rememberSaveable(profile.id) { mutableFloatStateOf(profile.pushSpeedFloorMph.toFloat()) }
         var paceCeil by rememberSaveable(profile.id) { mutableIntStateOf(profile.recoveryPaceCapSpm) }
         var paceFloor by rememberSaveable(profile.id) { mutableIntStateOf(profile.pushPaceFloorSpm) }
         var hrRecoveryMax by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrRecoveryMax) }
@@ -345,26 +342,13 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Speed (mph)", style = MaterialTheme.typography.titleMedium)
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SliderRow("Recovery Max mph", "%.1f".format(speedCeil), speedCeil, 2f..8f, 24) { speedCeil = it }
-                SliderRow("Push Min mph", "%.1f".format(speedFloor), speedFloor, 1.5f..7f, 24) { speedFloor = it }
-                Text(
-                    "Push cues \"Speed up\" while speed stays below Push Min; recovery cues \"Slow down\" while speed stays above Recovery Max.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
         Text("Pace (steps/min)", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Recovery Max spm", "$paceCeil", paceCeil.toFloat(), 90f..140f, 10) { paceCeil = it.toInt() }
                 SliderRow("Push Min spm", "$paceFloor", paceFloor.toFloat(), 80f..130f, 10) { paceFloor = it.toInt() }
                 Text(
-                    "Pedometer cadence from the paired Wear watch. Push cues \"Speed up\" while pace stays below Push Min; recovery cues \"Slow down\" while pace stays above Recovery Max. Pace shares one cue with speed and heart rate.",
+                    "Pedometer cadence from the paired Wear watch. Push cues \"Speed up\" while pace stays below Push Min; recovery cues \"Slow down\" while pace stays above Recovery Max.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -385,8 +369,8 @@ fun ConfigScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SliderRow("Repeat warning every", "${warnSec}s", warnSec.toFloat(), 1f..60f, 59) { warnSec = it.toInt() }
                 Text(
-                    "Push cues \"Speed up\" while speed is below Push Min mph, pace below Push Min spm, or heart rate below Push Min bpm; recovery cues " +
-                        "\"Slow down\" while speed is above Recovery Max mph, pace above Recovery Max spm, or heart rate above Recovery Max bpm. A cue repeats at most once " +
+                    "Push cues \"Speed up\" while pace is below Push Min spm or heart rate below Push Min bpm; recovery cues " +
+                        "\"Slow down\" while pace is above Recovery Max spm or heart rate above Recovery Max bpm. A cue repeats at most once " +
                         "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue; phase-change cues take precedence over all other cues — warnings and workout-length cues wait until the following tick.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -639,8 +623,6 @@ fun ConfigScreen(
                         slowSec = slowSec,
                         warmupSec = warmupSec,
                         cooldownSec = cooldownSec,
-                        recoverySpeedCapMph = (speedCeil * 10).roundToInt() / 10.0,
-                        pushSpeedFloorMph = (speedFloor * 10).roundToInt() / 10.0,
                         recoveryPaceCapSpm = paceCeil,
                         pushPaceFloorSpm = paceFloor,
                         hrPushMin = hrPushMin,

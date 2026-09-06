@@ -54,7 +54,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-debug-0.12.5.apk # versioned APK name
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.12.6.apk # versioned APK name
 ```
 
 ### Emulator (instrumented) tests — NOT run by default
@@ -77,7 +77,7 @@ form factor (its nav taps assume a phone-sized display).
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release-0.12.5.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.12.6.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
