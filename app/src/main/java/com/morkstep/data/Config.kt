@@ -41,14 +41,20 @@ data class WorkoutProfile(
     val cooldownSec: Int = 120,
     /**
      * Recovery-phase speed cap (mph): recovery cues "Slow down" while speed is
-     * above this cap, while [pushSpeedFloorMph] floors push.
+     * above this cap, while [pushSpeedFloorMph] floors push. Disabled at 30
+     * mph — a walking recovery pace never exceeds it — so no recovery speed
+     * warning can fire. Hidden from the Settings sliders; restore a real bound
+     * here (and in the Baseline clamps) to re-enable the cues.
      */
-    val recoverySpeedCapMph: Double = 3.2,
+    val recoverySpeedCapMph: Double = 30.0,
     /**
      * Push-phase speed floor (mph): push cues "Speed up" while speed is below
-     * this; see [recoverySpeedCapMph].
+     * this; see [recoverySpeedCapMph]. Disabled at 0 mph — speed is never
+     * negative — so no push speed warning can fire. Hidden from the Settings
+     * sliders; restore a real bound here (and in the Baseline clamps) to
+     * re-enable the cues.
      */
-    val pushSpeedFloorMph: Double = 4.5,
+    val pushSpeedFloorMph: Double = 0.0,
     /**
      * Recovery-phase pace cap (steps per minute): recovery cues "Slow down"
      * while pace stays above this. Pedometer cadence, mirroring [recoverySpeedCapMph].

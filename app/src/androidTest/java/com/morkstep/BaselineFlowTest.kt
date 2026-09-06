@@ -145,14 +145,15 @@ class BaselineFlowTest {
             rule.onAllNodesWithText("Baseline created").fetchSemanticsNodes().isNotEmpty()
         }
 
-        // The calibrated profile is persisted: 30 min, 120/120/30/30 s, and the
-        // speed/pace/HR bands derived from the simulated phase averages. With
-        // the shortened intervals (15 push ticks toward 4.0 mph / 118 spm /
-        // 138 bpm, ~22 recovery ticks toward 2.2 mph / 92 spm / 112 bpm), the
-        // session means sit at ~ (3.3 mph / ~112 spm / ~127 bpm) for push and
-        // ~ (2.5 mph / ~95 spm / ~117 bpm) for recovery — each inside its band
-        // and each moved from the calibration defaults (4.5/3.2 mph, 110/100
-        // spm, 150/120 bpm).
+        // The calibrated profile is persisted: 30 min, 120/120/30/30 s, the
+        // speed band preserved untouched from its disabled defaults (30 mph
+        // recovery cap / 0 mph push floor) and the pace/HR bands derived from
+        // the simulated phase averages. With the shortened intervals (15 push
+        // ticks toward 4.0 mph / 118 spm / 138 bpm, ~22 recovery ticks toward
+        // 2.2 mph / 92 spm / 112 bpm), the session means sit at ~ (3.3 mph /
+        // ~112 spm / ~127 bpm) for push and ~ (2.5 mph / ~95 spm / ~117 bpm) for
+        // recovery — each inside its band and each moved from the calibration
+        // defaults (110/100 spm, 150/120 bpm).
         val app = rule.activity.application as MorkApplication
         val deadline = System.currentTimeMillis() + 15_000
         var baseline: WorkoutProfile? = null
@@ -169,9 +170,11 @@ class BaselineFlowTest {
         assertEquals(120, bp.slowSec)
         assertEquals(30, bp.warmupSec)
         assertEquals(30, bp.cooldownSec)
-        // Speed band follows the averages (calibration defaults: 4.5 floor / 3.2 cap).
-        assertTrue("push floor from push avg (~3.3) is below default 4.5", bp.pushSpeedFloorMph < 4.5)
-        assertTrue("recovery cap from recovery avg (~2.5) is below default 3.2", bp.recoverySpeedCapMph < 3.2)
+        // Speed band is preserved untouched from the disabled defaults (30 mph cap /
+        // 0 mph floor) — recalibration never resets the speed values, so a
+        // completed baseline can never re-arm a fireable speed warning.
+        assertEquals(30.0, bp.recoverySpeedCapMph, 1e-9)
+        assertEquals(0.0, bp.pushSpeedFloorMph, 1e-9)
         // Pace band follows the averages (calibration defaults: 110 floor / 100 cap).
         // The push mean approaches 118 from ~97 and saturates mid-phase, so it
         // lands inside a bounded window and differs from the default floor.
