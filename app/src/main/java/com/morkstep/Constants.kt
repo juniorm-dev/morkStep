@@ -43,9 +43,39 @@ object Constants {
      * - 3_000 (3 s): quick-reacting; starts to flicker on irregular steps.
      * - 1_000-2_000 (1-2 s): noisier; cue flicker possible — not recommended
      *   for the pace floor/ceiling cues.
-     * The estimator cannot emit below ~2 steps / ~1 s of span (hard floor).
+     * The estimator cannot emit below ~2 steps / ~1.5 s of span (hard floor);
+     * shorter double-step gaps are held, not counted as a sprint.
      */
     const val PACE_WINDOW_MS = 5_000L
+
+    /**
+     * Minimum span (ms) between the oldest and newest step in the window
+     * before the cadence estimator emits a value. Together with the two-step
+     * minimum this is the estimator's hard floor: a short double-step gap
+     * (weight shift, shuffle, pause-resume — common at slow pace) must never
+     * read as a sprint cadence, so it is held instead of emitted.
+     */
+    const val PACE_ESTIMATOR_MIN_SPAN_MS = 1_500L
+
+    /**
+     * How long (ms) the pedometer step counter must stay silent before the
+     * step detector is allowed to drive pace. While the counter is producing
+     * samples its interval-based smoothed cadence is authoritative — the
+     * detector's windowed estimate lags a full window behind rate changes.
+     * The detector takes over after this silence so the fallback still works
+     * on devices whose counter stops emitting (e.g. quiescent while the
+     * screen is off).
+     */
+    const val PACE_COUNTER_PREFERRED_MS = 5_000L
+
+    /**
+     * Minimum pause (ms) between liveness lines in the debug log when the
+     * step counter keeps publishing the same cadence. Without this a steady
+     * pace is indistinguishable from a frozen sensor: the value unchanged
+     * triggers neither the change-log nor a StateFlow emission, so a healthy
+     * run looks dead. The heartbeat carries the live cumulative step count.
+     */
+    const val PACE_STEADY_LOG_MS = 10_000L
 
     /** Fused-location update cadence (ms) for the GPS speed source. */
     const val GPS_UPDATE_INTERVAL_MS = 1_000L
