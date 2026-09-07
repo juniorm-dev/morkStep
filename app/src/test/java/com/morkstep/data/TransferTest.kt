@@ -1,5 +1,6 @@
 package com.morkstep.data
 
+import com.morkstep.data.AudioMode
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -104,15 +105,18 @@ class TransferTest {
         val p = WorkoutProfile(
             id = 7, name = "Hill", rounds = 4,
             vibrationMode = VibrationMode.ALL, vibrationIntensity = 0.8f,
+            audioMode = AudioMode.PHASE_CHANGE,
         )
         val text = json.encodeToString(ProfileExport(profiles = listOf(p)))
         assertTrue(text.contains("\"vibrationIntensity\""))
+        assertTrue(text.contains("\"audioMode\""))
         val back = json.decodeFromString<ProfileExport>(text)
         assertEquals(1, back.version)
         assertEquals(1, back.profiles.size)
         assertEquals("Hill", back.profiles[0].name)
         assertEquals(VibrationMode.ALL, back.profiles[0].vibrationMode)
         assertEquals(0.8f, back.profiles[0].vibrationIntensity, 0.001f)
+        assertEquals(AudioMode.PHASE_CHANGE, back.profiles[0].audioMode)
     }
 
     @Test
@@ -137,6 +141,17 @@ class TransferTest {
         val back = json.decodeFromString<ProfileExport>(legacy)
         assertEquals(VibrationMode.PHASE_CHANGE, back.profiles[0].vibrationMode)
         assertEquals(0.5f, back.profiles[0].vibrationIntensity, 0.001f)
+    }
+
+    @Test
+    fun profileExport_ignoresLegacyAudioCuesBooleanKey() {
+        // Pre-audioMode exports (before v0.13) carried a boolean "audioCues"
+        // key; the unknown key is dropped and the enum field takes its default.
+        val legacy = """
+            {"version":1,"profiles":[{"id":1,"name":"Legacy","audioCues":false}]}
+        """.trimIndent()
+        val back = json.decodeFromString<ProfileExport>(legacy)
+        assertEquals(AudioMode.ALL, back.profiles[0].audioMode)
     }
 
     @Test

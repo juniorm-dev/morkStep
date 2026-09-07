@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.morkstep.data.AudioMode
 import com.morkstep.data.DarkMode
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutLength
@@ -55,6 +56,13 @@ private val VIBRATION_MODES = listOf(
     VibrationMode.OFF to "Off",
     VibrationMode.PHASE_CHANGE to "On phase change",
     VibrationMode.ALL to "All cues",
+)
+
+/** Audio-mode menu options (labels mirror the user-facing setting names). */
+private val AUDIO_MODES = listOf(
+    AudioMode.OFF to "Off",
+    AudioMode.PHASE_CHANGE to "On phase change",
+    AudioMode.ALL to "All cues",
 )
 
 /** Global dark-mode options (labels mirror the user-facing setting names). */
@@ -215,7 +223,7 @@ fun ConfigScreen(
         var hrRecoveryMax by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrRecoveryMax) }
         var hrPushMin by rememberSaveable(profile.id) { mutableIntStateOf(profile.hrPushMin) }
         var warnSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warningThresholdSec) }
-        var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioCues) }
+        var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioMode) }
         var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
         var vibrationIntensity by rememberSaveable(profile.id) { mutableFloatStateOf(profile.vibrationIntensity) }
         Spacer(Modifier.height(16.dp))
@@ -372,6 +380,50 @@ fun ConfigScreen(
                     "Push cues \"Speed up\" while pace is below Push Min spm or heart rate below Push Min bpm; recovery cues " +
                         "\"Slow down\" while pace is above Recovery Max spm or heart rate above Recovery Max bpm. A cue repeats at most once " +
                         "per this interval while the condition holds. A sensor reading 0 (no signal) never triggers a cue; phase-change cues take precedence over all other cues — warnings and workout-length cues wait until the following tick.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Audio cues", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                var audioExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = audioExpanded,
+                    onExpandedChange = { audioExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = AUDIO_MODES.first { it.first == audio }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Audio mode") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = audioExpanded)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = audioExpanded,
+                        onDismissRequest = { audioExpanded = false },
+                    ) {
+                        AUDIO_MODES.forEach { (mode, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    audio = mode
+                                    audioExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+                Text(
+                    "Off: no spoken cues or transition beeps. On phase change: announce warm-up, push, recovery, cooldown and finish. " +
+                        "All cues: also announce quarter, push-round and warning cues.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -628,7 +680,7 @@ fun ConfigScreen(
                         hrPushMin = hrPushMin,
                         hrRecoveryMax = hrRecoveryMax,
                         warningThresholdSec = warnSec,
-                        audioCues = audio,
+                        audioMode = audio,
                         vibrationMode = vibration,
                         vibrationIntensity = vibrationIntensity,
                     )

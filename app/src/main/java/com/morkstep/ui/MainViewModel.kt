@@ -560,11 +560,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Select which profile is shown on the home screen and used for the next workout. */
     fun selectProfile(id: Long) {
         if (id == _activeId.value) return
+        val name = _profiles.value.firstOrNull { it.id == id }?.name
+        if (name != null) debugLog.log("[profile] selected: $name")
         viewModelScope.launch { container.configStore.setActive(id) }
     }
 
     /** Save edits to any existing profile (by id). */
     fun updateProfile(updated: WorkoutProfile) {
+        debugLog.log("[profile] updated: ${updated.name}")
         viewModelScope.launch {
             val list = _profiles.value.map { if (it.id == updated.id) updated else it }
             container.configStore.saveProfiles(list)
@@ -596,6 +599,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             id = System.currentTimeMillis(),
             name = nextFreeProfileName(),
         )
+        debugLog.log("[profile] created: ${fresh.name}")
         viewModelScope.launch {
             val list = _profiles.value + fresh
             container.configStore.saveProfiles(list)
@@ -614,6 +618,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     vibrationMode = _activeProfile.value?.vibrationMode ?: VibrationMode.OFF,
                     vibrationIntensity = _activeProfile.value?.vibrationIntensity ?: 0.5f,
                 )
+            debugLog.log("[profile] baseline created: ${fresh.name}")
             val list = if (existing != null) {
                 _profiles.value.map { if (it.id == existing.id) fresh else it }
             } else {
@@ -627,6 +632,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Delete a profile; if it was active, activate another (or the default). */
     fun deleteProfile(id: Long) {
+        val name = _profiles.value.firstOrNull { it.id == id }?.name
+        if (name != null) debugLog.log("[profile] deleted: $name")
         val remaining = _profiles.value.filterNot { it.id == id }
         if (remaining.isEmpty()) {
             viewModelScope.launch {
@@ -835,6 +842,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun discardWorkout() {
+        debugLog.log("[workout] discard")
         tickerJob?.cancel()
         WorkoutService.stop(getApplication())
         lastWatchState = byteArrayOf()

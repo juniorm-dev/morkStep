@@ -11,6 +11,9 @@ enum class WorkoutLength { ROUNDS, DISTANCE, TIME, ADHOC }
 /** Device haptics for workout cues: none, phase transitions only, or every cue. */
 enum class VibrationMode { OFF, PHASE_CHANGE, ALL }
 
+/** Audio cues for workout cues: none, phase transitions only, or every cue. */
+enum class AudioMode { OFF, PHASE_CHANGE, ALL }
+
 /** Global app theme preference; SYSTEM follows the device setting. */
 enum class DarkMode { SYSTEM, DARK, LIGHT }
 
@@ -84,8 +87,12 @@ data class WorkoutProfile(
      * condition holds.
      */
     val warningThresholdSec: Int = 8,
-    /** Audio cues enabled on/off. */
-    val audioCues: Boolean = true,
+    /**
+     * Audio cue class: phase-change announcements only, or every cue (phase
+     * intros, quarters, push rounds, warnings). OFF silences all audio; the
+     * finish announcement counts as a phase change.
+     */
+    val audioMode: AudioMode = AudioMode.ALL,
     /** When to vibrate the phone (and the paired watch, if enabled): phase changes only, or all cues. */
     val vibrationMode: VibrationMode = VibrationMode.OFF,
     /** Cue vibration strength 0..1 (scales the amplitude of phone/watch haptics). */

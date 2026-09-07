@@ -1,5 +1,6 @@
 package com.morkstep.engine
 
+import com.morkstep.data.AudioMode
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
@@ -652,10 +653,10 @@ class SessionEngineTest {
     }
 
     @Test
-    fun warningVibrates_EvenWhenAudioCuesOff() {
-        // Haptics are independent of the audio toggle: a rate warning must
-        // still vibrate when audio cues are disabled.
-        val p = roundsProfile.copy(audioCues = false)
+    fun warningVibrates_EvenWhenAudioOff() {
+        // Haptics are independent of the audio mode: a rate warning must
+        // still vibrate when audio is off.
+        val p = roundsProfile.copy(audioMode = AudioMode.OFF)
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(p, clock, cue, speed = 4.0f, hr = 100) // < hrPushMin 150
@@ -668,6 +669,67 @@ class SessionEngineTest {
         eng.tick()
         assertFalse(cue.spoken.any { it.contains("Speed up") })
         assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
+    }
+
+    @Test
+    fun phaseChangeOnly_silencesGuidanceButKeepsTransitions() {
+        // AudioMode.PHASE_CHANGE: quarter/warning cues stay silent, but phase
+        // intros (and the finish) still announce and beep.
+        val p = roundsProfile.copy(audioMode = AudioMode.PHASE_CHANGE)
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue, speed = 4.0f, hr = 100) // < hrPushMin 150
+        eng.run()
+        clock.advance(61_000) // t=61 → FAST entry
+        eng.tick()
+        clock.advance(1_000) // t=62: first warning tick (suppressed)
+        eng.tick()
+        clock.advance(1_000) // t=63: warning would fire
+        eng.tick()
+        clock.advance(297_000) // t=360 → finish
+        eng.tick()
+        assertTrue(eng.snapshot.finished)
+        assertTrue(cue.spoken.any { it.contains("Push phase 1") })
+        assertTrue(cue.spoken.any { it.contains("Workout complete") })
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        assertTrue(cue.beeps > 0)
+        // Haptics still mirror every cue class.
+        assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
+    }
+
+    @Test
+    fun audioOff_silencesTransitionBeepsAndIntros() {
+        // AudioMode.OFF: no speech at all and no transition beep; haptics are
+        // the only remaining cue channel.
+        val p = roundsProfile.copy(audioMode = AudioMode.OFF)
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue)
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        assertTrue(cue.spoken.isEmpty())
+        assertEquals(0, cue.beeps)
+        assertTrue(cue.vibrations.contains(CueVibration.TRANSITION))
+    }
+
+    @Test
+    fun audioModeAll_playsAllCues() {
+        // AudioMode.ALL (the default) announces transitions, quarters and
+        // warnings; beeps fire on transitions.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, speed = 4.0f, hr = 100) // < hrPushMin 150
+        eng.run()
+        clock.advance(61_000)
+        eng.tick()
+        clock.advance(1_000) // first warning tick (suppressed)
+        eng.tick()
+        clock.advance(1_000) // warning fires
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Push phase 1") })
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
+        assertTrue(cue.beeps > 0)
     }
 
     @Test

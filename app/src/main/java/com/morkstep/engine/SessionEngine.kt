@@ -2,6 +2,7 @@ package com.morkstep.engine
 
 import com.morkstep.DebugLog
 import com.morkstep.Constants
+import com.morkstep.data.AudioMode
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
@@ -257,6 +258,7 @@ class SessionEngine(
             pace = paceSource.pace.value,
             lengthLabel = profile.lengthLabel(),
         )
+        log?.log("[workout] started: ${profile.name}")
         tick()
     }
 
@@ -282,9 +284,15 @@ class SessionEngine(
         val pa = phaseAt(t, profile, coreEndSec, finishSec)
         val entered = pa.phase != lastPhase
         if (entered) {
-            cue.beep()
+            // The beep is phase-change audio: silent only when audio is off.
+            if (profile.audioMode != AudioMode.OFF) cue.beep()
             cue.vibrate(CueVibration.TRANSITION)
             announce(pa.phase, pa.pushDone + 1)
+            val from = lastPhase
+            log?.log(
+                if (from == null) "[phase] ${pa.phase.name} (start)"
+                else "[phase] ${from.name} → ${pa.phase.name}"
+            )
             lastPhase = pa.phase
             lastCueAt.clear()
             firstWarningCuePending = true
@@ -396,9 +404,12 @@ class SessionEngine(
         )
 
         if (finished) {
-            cue.beep()
+            // The finish repeats the phase-change treatment: beep + announcement
+            // unless audio is off entirely.
+            if (profile.audioMode != AudioMode.OFF) cue.beep()
             cue.vibrate(CueVibration.TRANSITION)
-            speak("Workout complete")
+            if (profile.audioMode != AudioMode.OFF) cue.speak("Workout complete")
+            log?.log("[workout] finished: ${profile.name}")
             return
         }
 
@@ -408,6 +419,7 @@ class SessionEngine(
     /** Manually end an ADHOC workout (or stop any workout early). */
     fun endNow() {
         if (!snapshot.running || snapshot.finished) return
+        log?.log("[workout] finished: ${profile.name}")
         _state.value = snapshot.copy(running = false, finished = true, paused = false)
     }
 
@@ -416,6 +428,7 @@ class SessionEngine(
         val s = snapshot
         if (!s.running || s.finished || s.paused) return
         pausedAtMs = clock.nowMillis()
+        log?.log("[workout] paused")
         _state.value = s.copy(paused = true)
     }
 
@@ -424,11 +437,13 @@ class SessionEngine(
         val s = snapshot
         if (!s.running || s.finished || !s.paused) return
         launchedAtMs += clock.nowMillis() - pausedAtMs
+        log?.log("[workout] resumed")
         _state.value = s.copy(paused = false)
     }
 
     private fun announce(phase: PhaseType, pushNumber: Int = 0) {
-        if (!profile.audioCues) return
+        // Phase announcements are phase-change audio (they fire on transitions).
+        if (profile.audioMode == AudioMode.OFF) return
         when (phase) {
             PhaseType.WARMUP -> cue.speak("Begin with an easy warm-up walk")
             PhaseType.FAST -> cue.speak("Push phase $pushNumber. Maintain a brisk speed")
@@ -444,7 +459,8 @@ class SessionEngine(
     }
 
     private fun speak(text: String) {
-        if (!profile.audioCues || text.isBlank()) return
+        // Guidance cues (quarters, push rounds) are only "all cues" audio.
+        if (profile.audioMode != AudioMode.ALL || text.isBlank()) return
         cue.speak(text)
     }
 
@@ -469,7 +485,16 @@ class SessionEngine(
                     val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrPushMin
                     val speedBelow = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed < profile.pushSpeedFloorMph.toFloat()
                     val paceBelow = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace < profile.pushPaceFloorSpm
-                    if (hrBelow || speedBelow || paceBelow) cueIf("speedUp", "Speed up")
+                    if (hrBelow || speedBelow || paceBelow) {
+                        cueIf(
+                            "speedUp", "Speed up",
+                            warningReasons(
+                                if (hrBelow) "hr ${s.hr} < ${profile.hrPushMin}" else null,
+                                if (speedBelow) "speed ${"%.1f".format(s.speed!!)} < ${profile.pushSpeedFloorMph}" else null,
+                                if (paceBelow) "pace ${s.pace} < ${profile.pushPaceFloorSpm}" else null,
+                            )
+                        )
+                    }
                 }
             }
             PhaseType.SLOW -> {
@@ -478,21 +503,36 @@ class SessionEngine(
                     val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrRecoveryMax
                     val speedAbove = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed > profile.recoverySpeedCapMph.toFloat()
                     val paceAbove = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace > profile.recoveryPaceCapSpm
-                    if (hrAbove || speedAbove || paceAbove) cueIf("slowDown", "Slow down")
+                    if (hrAbove || speedAbove || paceAbove) {
+                        cueIf(
+                            "slowDown", "Slow down",
+                            warningReasons(
+                                if (hrAbove) "hr ${s.hr} > ${profile.hrRecoveryMax}" else null,
+                                if (speedAbove) "speed ${"%.1f".format(s.speed!!)} > ${profile.recoverySpeedCapMph}" else null,
+                                if (paceAbove) "pace ${s.pace} > ${profile.recoveryPaceCapSpm}" else null,
+                            )
+                        )
+                    }
                 }
             }
             else -> Unit
         }
     }
 
-    private fun cueIf(key: String, text: String) {
+    private fun cueIf(key: String, text: String, reason: String = "") {
         val now = clock.nowMillis()
         if (now - (lastCueAt[key] ?: 0L) < cueCooldownMs) return
         lastCueAt[key] = now
         // Audio and haptics are independent: speech is gated by the audio
-        // toggle, but the vibration follows the profile's vibration mode
+        // mode, but the vibration follows the profile's vibration mode
         // (enforced in the sink), so cue haptics still work with audio off.
-        if (profile.audioCues) cue.speak(text)
+        if (profile.audioMode == AudioMode.ALL) cue.speak(text)
         cue.vibrate(CueVibration.GUIDANCE)
+        // Warning cues use their own tag so a future debug-level message
+        // ("[warn] ...") can never be confused with an actual cue.
+        log?.log(if (reason.isNotEmpty()) "[warncue] $text: $reason" else "[warncue] $text")
     }
+
+    /** Join the non-null warning triggers ("hr 128 < 150, pace 92 < 110") for the [warncue] trace line. */
+    private fun warningReasons(vararg reasons: String?): String = reasons.filterNotNull().joinToString(", ")
 }

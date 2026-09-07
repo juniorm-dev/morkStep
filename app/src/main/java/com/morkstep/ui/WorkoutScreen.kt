@@ -107,13 +107,15 @@ fun WorkoutScreen(
                 color = Color(0xFF888888),
                 modifier = Modifier.padding(vertical = 4.dp)
             )
-            if (debugLog) {
-                OutlinedButton(
-                    onClick = onExportLog,
-                    modifier = Modifier.padding(vertical = 2.dp),
-                ) {
-                    Text("Export log")
-                }
+        }
+        // Export is available whenever debug tracing is on, with or without the
+        // captured log shown on screen (the most recent trace is always kept).
+        if (debugLog) {
+            OutlinedButton(
+                onClick = onExportLog,
+                modifier = Modifier.padding(vertical = 2.dp),
+            ) {
+                Text("Export log")
             }
         }
 
