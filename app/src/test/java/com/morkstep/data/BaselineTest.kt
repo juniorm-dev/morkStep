@@ -19,6 +19,9 @@ class BaselineTest {
         assertEquals(45, p.slowSec) // recovery
         assertEquals(20, p.warmupSec)
         assertEquals(0, p.cooldownSec)
+        // Calibration workouts are phase-change audio only; the calibrated
+        // profile that follows re-enables all cues.
+        assertEquals(AudioMode.PHASE_CHANGE, p.audioMode)
         // Total = 20 + 3*(45+45) + 0 = 290 s.
         assertEquals(290L, p.totalSeconds)
         assertEquals("3 rounds", p.lengthLabel())
@@ -44,6 +47,8 @@ class BaselineTest {
         assertEquals(120, updated.slowSec)
         assertEquals(30, updated.warmupSec)
         assertEquals(30, updated.cooldownSec)
+        // The calibrated baseline is the day-to-day profile: all audio cues on.
+        assertEquals(AudioMode.ALL, updated.audioMode)
         // Speed targets are preserved untouched by calibration: the recovery cap
         // stays at its disabled 30 mph default and the push floor at its
         // disabled 0 mph default, so a completed baseline never re-arms a

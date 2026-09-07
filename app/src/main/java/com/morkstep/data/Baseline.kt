@@ -18,7 +18,11 @@ import com.morkstep.Constants
 /** True for the Baseline profile by name (identity used by the home label and post-workout update). */
 fun isBaselineProfile(p: WorkoutProfile): Boolean = p.name == Constants.BASELINE_PROFILE_NAME
 
-/** The calibration profile for a fresh baseline, preserving [id] when re-creating. */
+/** The calibration profile for a fresh baseline, preserving [id] when re-creating.
+ *  Audio is phase-change only: the short calibration workout announces
+ *  transitions (so the user knows what is happening) without the chatter of
+ *  quarters/warnings; the calibrated profile that follows it re-enables all
+ *  cues. */
 fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
     id = id,
     name = Constants.BASELINE_PROFILE_NAME,
@@ -28,6 +32,7 @@ fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
     pushSec = Constants.BASELINE_PUSH_SEC,
     slowSec = Constants.BASELINE_RECOVERY_SEC,
     cooldownSec = Constants.BASELINE_COOLDOWN_SEC,
+    audioMode = AudioMode.PHASE_CHANGE,
 )
 
 /**
@@ -62,6 +67,9 @@ fun updatedBaselineProfile(
         slowSec = Constants.BASELINE_UPDATED_RECOVERY_SEC,
         warmupSec = Constants.BASELINE_UPDATED_WARMUP_SEC,
         cooldownSec = Constants.BASELINE_UPDATED_COOLDOWN_SEC,
+        // The calibrated baseline is the "real" profile the user works out
+        // with, so all audio cues come back on once calibration finishes.
+        audioMode = AudioMode.ALL,
         // recoverySpeedCapMph / pushSpeedFloorMph deliberately NOT in the copy:
         // baseline recalibration must never reset the speed values.
         recoveryPaceCapSpm = recoveryPaceCap,

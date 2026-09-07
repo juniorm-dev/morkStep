@@ -22,12 +22,13 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
     - per-phase spoken announcements plus beeps on transitions,
     - spoken warning cues — during **push**, "Speed up" when pace is below the *Push Min* spm or HR is below the *Push Min* bpm; during **recovery**, "Slow down" when pace is above the *Recovery Max* spm or HR is above the *Recovery Max* bpm (speed targets are disabled, so speed never cues). Pace and HR share one cue per phase so they never double-fire, and a reading without a meaningful signal never triggers a cue — 0 BPM, speed at/below 1.5 mph (GPS noise when standing still), or pace at/below 10 spm (walking that slowly is deliberate — a rest break, not a missed target — so warnings would be noise). Phase-change cues take precedence over every other cue — a transition announcement is never clobbered by a warning or a workout-length cue (quarter / ADHOC every-Nth-push), which wait until the following tick. A cue repeats at most once per a configurable threshold in seconds, shared by push and recovery; the **first** warning after each phase transition is suppressed so a stale sensor reading from the previous phase does not trigger a spurious cue,
     - a cue on **each quarter**, measured on the chosen length dimension — round count for **Rounds**, miles for **Distance**, minutes for **Time** ("One quarter done", "Halfway there", "Three quarters done"),
-  - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off).
+  - for **Adhoc** workouts, a cue every N completed push rounds (configurable, N=0 off),
+  - audio is per-profile in Settings: **Off** (silent — no speech, no transition beeps), **On phase change** (transition announcements + the finish, still including beeps), or **All cues** (everything above, the default). Baseline calibration workouts are created with **On phase change** and re-enabled to **All cues** once the calibrated baseline is derived.
 - **Workout history** — every completed session is auto-saved (date, duration, push count, distance *mi*, seconds above the push-min HR) plus **per-phase averages** — average speed, pace and HR for **push**, **recovery**, and **overall** — listed in a History screen. Averages are 1 Hz samples accumulated by the engine and bucketed by phase.
 - **Runs with the screen locked** — a running session starts a foreground service (`WorkoutService`) that holds a partial wake lock so the 1 Hz ticker keeps firing on schedule (audio cues stay on time) and posts an ongoing notification, so the session survives backgrounding and process pressure. The service stops on finish, discard, or profile change tear-down. Saving a profile in Settings confirms with a "Profile saved" snackbar and returns to Home.
 - **Workout plan at a glance** — the home screen shows the active profile's push/recovery and warm-up/cool-down durations as `m:ss` (plain seconds under a minute) instead of rounded minutes, plus the configured vibration mode.
 - **Vibration** — per-profile haptics chosen in Settings: **Off**, **On phase change** (warm-up, push, recovery, cool-down, finish), or **All cues** (also quarter, push-round, and warning cues, mirroring audio). The watch can mirror them too: turn on **Vibrate watch** and the paired Wear companion buzzes alongside the phone.
-- **Debug logging & sensor tracing** — an app-wide diagnostic log (`DebugLog`) traces sensor and wearable activity: GPS fixes (`[gps]`), BLE strap lifecycle + HR (`[hr-ble]`), watch HR relay (`[hr-wear]`), watch/phone pace (`[pace-wear]` / `[pace-phone]` / `[pace-merge]`), and system/connection state (`[sys]` / `[wear]`). Each line is `HH:mm:ss [subsystem] message`, so filtering an exported file per sensor is a single grep. Enable the **Debug tracing** toggle in Settings to capture; the workout screen then offers **Export log** (saves a text file via the system file picker) and, with the separate **Show debug log on workout screen** toggle, renders the live log during a session. The same Debug section has **Force phone pedometer** (0s watch fallback — phone drives pace unconditionally), **Unrestricted battery** (exempts the app from battery optimization so sensors aren't gated), and **Step sensor access** (grants `ACTIVITY_RECOGNITION` for step sensors on Android 10+).
+- **Debug logging & sensor tracing** — an app-wide diagnostic log (`DebugLog`) traces sensor and wearable activity: GPS fixes (`[gps]`), BLE strap lifecycle + HR (`[hr-ble]`), watch HR relay (`[hr-wear]`), watch/phone pace (`[pace-wear]` / `[pace-phone]` / `[pace-merge]`), system/connection state (`[sys]` / `[wear]`), and session events — profiles (`[profile]`), workout actions (`[workout]`), phase transitions (`[phase]`), warning cues (`[warncue]`). Each line is `HH:mm:ss [tag] message`, so filtering an exported file per subsystem is a single grep (full tag list under **Log tags** in Architecture). Enable the **Debug tracing** toggle in Settings to capture; the workout screen then offers **Export log** (saves a text file via the system file picker) and, with the separate **Show debug log on workout screen** toggle, renders the live log during a session. The same Debug section has **Force phone pedometer** (0s watch fallback — phone drives pace unconditionally), **Unrestricted battery** (exempts the app from battery optimization so sensors aren't gated), and **Step sensor access** (grants `ACTIVITY_RECOGNITION` for step sensors on Android 10+).
 
 ## Requirements
 
@@ -54,7 +55,7 @@ IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep
 ```bash
 ./gradlew assembleDebug          # build debug APK
 ./gradlew testDebugUnitTest      # run unit tests
-adb install -r app/build/outputs/apk/debug/morkStep-debug-0.12.6.apk # versioned APK name
+adb install -r app/build/outputs/apk/debug/morkStep-debug-0.12.8.apk # versioned APK name
 ```
 
 ### Emulator (instrumented) tests — NOT run by default
@@ -77,7 +78,7 @@ form factor (its nav taps assume a phone-sized display).
 
 ```bash
 ./gradlew assembleRelease        # build a signed release APK
-adb install -r app/build/outputs/apk/release/morkStep-release-0.12.6.apk # versioned artifact
+adb install -r app/build/outputs/apk/release/morkStep-release-0.12.8.apk # versioned artifact
 ```
 
 Release signing reads a **gitignored** `keystore.properties` at the repo root:
@@ -194,7 +195,39 @@ The simulated toggle lives in Settings ("Simulated sensors (debug)", default **o
 
 **Dark mode.** Profile settings has a **Dark mode** switch: on forces the dark theme, off follows the system setting. Applied on Save.
 
-**Debug logging.** An app-wide `DebugLog` (gated by the **Debug tracing** setting, bounded 12 lines, local-time stamps) traces every sensor and wearable event. `MainViewModel` owns the single instance and hands it to each source — `GpsSpeedSource` (`[gps]`), `BleHeartRateSource` (`[hr-ble]`), `WearHeartRateSource` (`[hr-wear]`), `WearPaceSource` (`[pace-wear]`), `PhonePaceSource` (`[pace-phone]`), `FallbackPaceSource` (`[pace-merge]`) — plus system and connection state (`[sys]` / `[wear]`). The engine mirrors it into `LiveState.debugText`; the workout screen renders it only while the separate **Show debug log on workout screen** toggle is on. Export writes the captured lines to a SAF text file; every line is `HH:mm:ss [subsystem] message`, so per-sensor filtering is a single grep.
+**Debug logging.** An app-wide `DebugLog` (gated by the **Debug tracing** setting, bounded 12 lines, local-time stamps) traces every sensor and wearable event. `MainViewModel` owns the single instance and hands it to each source — `GpsSpeedSource` (`[gps]`), `BleHeartRateSource` (`[hr-ble]`), `WearHeartRateSource` (`[hr-wear]`), `WearPaceSource` (`[pace-wear]`), `PhonePaceSource` (`[pace-phone]`), `FallbackPaceSource` (`[pace-merge]`) — plus system/connection state (`[sys]` / `[wear]`), profile operations and workout actions from `MainViewModel`, and engine session events (`[workout]` / `[phase]` / `[warncue]`). The engine mirrors it into `LiveState.debugText`; the workout screen renders it only while the separate **Show debug log on workout screen** toggle is on (the **Export log** button is available whenever **Debug tracing** is on, with or without the on-screen display). Export writes the captured lines to a SAF text file; every line is `HH:mm:ss [tag] message`, so filtering an exported file by subsystem is a single grep.
+
+**Log tags.**
+
+| Tag | Meaning |
+| --- | ------- |
+| `[sys]` | system/sensor-mode events and the `== workout start ==` marker |
+| `[wear]` | wearable connection/ack trace (wearables connected, watch acks) |
+| `[hr-ble]` | BLE strap lifecycle + HR readings |
+| `[hr-wear]` | watch HR relay |
+| `[gps]` | GPS speed fixes |
+| `[pace-wear]` | watch pace relay |
+| `[pace-phone]` | phone pedometer cadence (step detector/counter) |
+| `[pace-merge]` | watch/phone pace fallback decisions |
+| `[profile]` | profile selected / created / updated / deleted / baseline created |
+| `[workout]` | workout started / paused / resumed / finished / discard |
+| `[phase]` | phase transitions, e.g. `WARMUP → FAST` |
+| `[warncue]` | warning cues, e.g. `Speed up: hr 128 < 150` |
+| `[warn]` | reserved — not emitted; kept free for a future warn-level line |
+
+The `[phase]` lines mark every phase entry — the exact transitions possible between the four `PhaseType`s (warm-up → push → recovery repeats → cool-down):
+
+| `[phase]` line | When it fires |
+| --- | --- |
+| `[phase] WARMUP (start)` | very first tick of a workout (no previous phase yet — no arrow) |
+| `[phase] WARMUP → FAST` | warm-up ends, first push interval |
+| `[phase] FAST → SLOW` | push → recovery, every round |
+| `[phase] SLOW → FAST` | recovery → next push round |
+| `[phase] SLOW → COOLDOWN` | ROUNDS after the last recovery; TIME/DISTANCE when the core ends mid-recovery |
+| `[phase] FAST → COOLDOWN` | TIME/DISTANCE when the core ends mid-push (cooldown follows immediately) |
+| `[phase] WARMUP → COOLDOWN` | degenerate TIME config whose cool-down ≥ total target (core ends before the first push) |
+
+The workout finish is a `[workout] finished: <name>` action line, not a `[phase]` entry.
 
 **Backup.** Profile settings and the History screen offer Export/Import of profiles or workout history as versioned JSON files via the system file picker (SAF). Importing profiles restores the list; importing history merges rows. Both reassign any colliding id to a fresh one, so importing a backup over a partially-same device never replaces the existing active row or local workout.
 
