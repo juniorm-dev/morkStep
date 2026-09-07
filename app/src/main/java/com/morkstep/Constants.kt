@@ -105,6 +105,16 @@ object Constants {
     const val MILLIS_PER_SECOND = 1_000L
     /** Seconds in one hour, for integrating mph into miles. */
     const val SECONDS_PER_HOUR = 3600.0
+    /**
+     * Phase-average seed offset ("Level out phase transitions" per-profile
+     * toggle, [com.morkstep.data.WorkoutProfile.resetPhaseAverages]): when a
+     * phase starts, its average accumulators are seeded to just inside the
+     * target band — push min + this offset on entering push, recovery max -
+     * this offset on entering recovery — so the new phase's average opens near
+     * its target instead of carrying the previous phase's levels into it. The
+     * overall average is never seeded.
+     */
+    const val PHASE_AVG_SEED_OFFSET = 1
 
     // ---- baseline profile ----
     /** Name of the Baseline profile; identity used by the home label and post-workout update. */

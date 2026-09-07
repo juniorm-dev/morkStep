@@ -46,6 +46,7 @@ Treat LSP as a hard gate on editing — the same way the build is a hard gate on
 - Use the `lsp` tool for diagnostics / definition / type-definition / implementation /
   references / rename / symbols / hover / code actions; completion via `lsp request`
   (`textDocument/completion`).
+
 - The server imports the Gradle 9.4 / AGP 9.0.1 workspace itself. For that import it needs
   a JDK ≤ Gradle's ceiling registered in IntelliJ's JDK registry (`~/.jdks/jbr-21` —
   `JAVA_HOME` is NOT consulted). Cross-file features (references, implementation) only work
@@ -56,3 +57,19 @@ Treat LSP as a hard gate on editing — the same way the build is a hard gate on
 - APK outputs are versioned by post-packaging rename tasks: app →
   `morkStep-<versionName>-<buildType>.apk`, wear → `morkStep-wear-<versionName>-<buildType>.apk`
   (see README "Upgrade caveats").
+
+## Code conventions
+
+- **Tuning values live in `app/src/main/java/com/morkstep/Constants.kt`, not inline.**
+  Any behavior-adjustable number — thresholds, offsets, windows, intervals, seed
+  deltas — goes in `Constants` under the matching `// ---- section ----` region with a
+  doc comment naming the behavior it tunes, and the calling code references the
+  constant by name. Never hardcode such a value as a bare literal in engine/UI/sensor
+  logic. (Example: the phase-average seed offset `PHASE_AVG_SEED_OFFSET`, the
+  `MIN_VALID_*` signal floors, `PACE_WINDOW_MS`.)
+- **Per-profile, user-facing toggles belong on `WorkoutProfile`** (`data/Config.kt`) with
+  a doc comment quoting the Settings label, wired through the Settings screen's
+  per-profile `rememberSaveable` state + `Save profile` copy. This is the established
+  pattern (`audioMode`, `vibrationMode`, `resetPhaseAverages`).
+- When introducing a new behavior knob, check `Constants.kt` / `WorkoutProfile` first
+  for an existing parameter that should cover it before adding a new one.

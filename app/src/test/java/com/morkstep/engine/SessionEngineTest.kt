@@ -385,15 +385,40 @@ class SessionEngineTest {
         sensors.setSpeed(2.0f); sensors.setHr(110); sensors.setPace(90)
         clock.advance(60_000); eng.tick() // t=130 → SLOW, sample 2.0 / 110 / 90
 
-        assertEquals(4.0f, eng.snapshot.avgPushSpeedMph!!, 0.01f)
-        assertEquals(2.0f, eng.snapshot.avgRecoverySpeedMph!!, 0.01f)
+        // Each phase entry resets its bucket to just inside the target band
+        // (push min + 1 / recovery max - 1), then the entry sample blends in.
+        // push: seed 4.2 + sample 4.0 = 8.2 / 2; speed floor 3.2.
+        assertEquals(4.1f, eng.snapshot.avgPushSpeedMph!!, 0.01f)
+        // recovery: seed 3.5 + sample 2.0 = 5.5 / 2; speed cap 4.5.
+        assertEquals(2.75f, eng.snapshot.avgRecoverySpeedMph!!, 0.01f)
         assertEquals(3.0f, eng.snapshot.avgOverallSpeedMph!!, 0.01f) // (3+3+4+2)/4
-        assertEquals(140, eng.snapshot.avgPushHr!!)
-        assertEquals(110, eng.snapshot.avgRecoveryHr!!)
+        // push HR: seed 151 + 140 = 291 / 2 → 145; recovery: 119 + 110 = 229 / 2 → 114.
+        assertEquals(145, eng.snapshot.avgPushHr!!)
+        assertEquals(114, eng.snapshot.avgRecoveryHr!!)
         assertEquals(112, eng.snapshot.avgOverallHr!!) // (100+100+140+110)/4 = 112.5 → 112
-        assertEquals(120, eng.snapshot.avgPushPace!!)
-        assertEquals(90, eng.snapshot.avgRecoveryPace!!)
+        // push pace: seed 101 + 120 = 221 / 2 → 110; recovery: 109 + 90 = 199 / 2 → 99.
+        assertEquals(110, eng.snapshot.avgPushPace!!)
+        assertEquals(99, eng.snapshot.avgRecoveryPace!!)
         assertEquals(100, eng.snapshot.avgOverallPace!!) // (95+95+120+90)/4 = 100
+    }
+
+    @Test
+    fun phaseAverages_notSeededWhenToggleOff() {
+        // resetPhaseAverages = false keeps the pure sample average: no seed is
+        // injected on phase entry, so a single-push-sample phase reports exactly
+        // that sample rather than blending in the push-min/+1 seed.
+        val p = roundsProfile.copy(resetPhaseAverages = false) // warmup 60, fast 60
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val sensors = FakeSensors(3.0f, 100, 95)
+        val eng = SessionEngine(p, sensors, sensors, sensors, cue, clock)
+        eng.run() // t=0 warmup sample
+        sensors.setSpeed(4.0f); sensors.setHr(140); sensors.setPace(120)
+        clock.advance(70_000); eng.tick() // t=70 → FAST, sample 4.0 / 140 / 120
+
+        assertEquals(4.0f, eng.snapshot.avgPushSpeedMph!!, 0.01f)
+        assertEquals(140, eng.snapshot.avgPushHr!!)
+        assertEquals(120, eng.snapshot.avgPushPace!!)
     }
 
     // ---- pause / resume ----

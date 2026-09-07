@@ -97,6 +97,15 @@ data class WorkoutProfile(
     val vibrationMode: VibrationMode = VibrationMode.OFF,
     /** Cue vibration strength 0..1 (scales the amplitude of phone/watch haptics). */
     val vibrationIntensity: Float = 0.5f,
+    /**
+     * Experimental: when a phase starts, seed that phase's average accumulators
+     * to just inside its target band (push min + 1 on push, recovery max - 1 on
+     * recovery) instead of carrying the previous phase's levels into the new
+     * phase's average. Levels out the push/recovery transition without the new
+     * phase being polluted by the previous one. ON by default; on-off per
+     * profile; the overall average is never seeded.
+     */
+    val resetPhaseAverages: Boolean = true,
     ) {
     val totalSeconds: Long
         get() = when (lengthMode) {

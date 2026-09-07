@@ -226,6 +226,7 @@ fun ConfigScreen(
         var audio by rememberSaveable(profile.id) { mutableStateOf(profile.audioMode) }
         var vibration by rememberSaveable(profile.id) { mutableStateOf(profile.vibrationMode) }
         var vibrationIntensity by rememberSaveable(profile.id) { mutableFloatStateOf(profile.vibrationIntensity) }
+        var resetAverages by rememberSaveable(profile.id) { mutableStateOf(profile.resetPhaseAverages) }
         Spacer(Modifier.height(16.dp))
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -327,7 +328,7 @@ fun ConfigScreen(
                         distanceMiles, 0.5f..20f, 78,
                     ) { distanceMiles = it }
                     WorkoutLength.TIME -> SliderRow(
-                        "Duration (min)", "$timeMinutes min",
+                        "Duration", "$timeMinutes min",
                         timeMinutes.toFloat(), 5f..120f, 46,
                     ) { timeMinutes = it.toInt() }
                     WorkoutLength.ADHOC -> SliderRow(
@@ -474,6 +475,28 @@ fun ConfigScreen(
                     "Intensity", "%.0f%%".format(vibrationIntensity * 100),
                     vibrationIntensity, 0f..1f, 9,
                 ) { vibrationIntensity = it }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Phase averages", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Level out phase transitions", style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = resetAverages, onCheckedChange = { resetAverages = it })
+                }
+                Text(
+                    "Experimental: each phase's average starts just inside its target band (push min + 1 on push, " +
+                        "recovery max - 1 on recovery) instead of carrying the previous phase's levels into the new " +
+                        "phase's average, so the push/recovery transition is less polluted by the phase before it. " +
+                        "The overall average is unaffected.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
 
@@ -683,6 +706,7 @@ fun ConfigScreen(
                         audioMode = audio,
                         vibrationMode = vibration,
                         vibrationIntensity = vibrationIntensity,
+                        resetPhaseAverages = resetAverages,
                     )
                 )
             },

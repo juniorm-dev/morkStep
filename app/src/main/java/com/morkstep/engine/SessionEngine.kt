@@ -296,6 +296,25 @@ class SessionEngine(
             lastPhase = pa.phase
             lastCueAt.clear()
             firstWarningCuePending = true
+            // Experimental (per-profile toggle): seed the newly-entered phase's
+            // average accumulators to just inside its target band — push min + 1
+            // on entering push, recovery max - 1 on entering recovery — so the
+            // phase's average starts near its target instead of carrying the
+            // previous phase's (or earlier rounds') levels into the transition.
+            // Overall averages are untouched.
+            if (profile.resetPhaseAverages) when (pa.phase) {
+                PhaseType.FAST -> {
+                    pushSpeedSum = (profile.pushSpeedFloorMph + Constants.PHASE_AVG_SEED_OFFSET).toDouble(); pushSpeedCnt = 1
+                    pushHrSum = (profile.hrPushMin + Constants.PHASE_AVG_SEED_OFFSET).toLong(); pushHrCnt = 1
+                    pushPaceSum = (profile.pushPaceFloorSpm + Constants.PHASE_AVG_SEED_OFFSET).toLong(); pushPaceCnt = 1
+                }
+                PhaseType.SLOW -> {
+                    slowSpeedSum = (profile.recoverySpeedCapMph - Constants.PHASE_AVG_SEED_OFFSET).toDouble(); slowSpeedCnt = 1
+                    slowHrSum = (profile.hrRecoveryMax - Constants.PHASE_AVG_SEED_OFFSET).toLong(); slowHrCnt = 1
+                    slowPaceSum = (profile.recoveryPaceCapSpm - Constants.PHASE_AVG_SEED_OFFSET).toLong(); slowPaceCnt = 1
+                }
+                else -> Unit
+            }
         }
 
         // Sample speed/HR once per tick into phase buckets (1 Hz averages).

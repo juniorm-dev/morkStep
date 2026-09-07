@@ -35,6 +35,14 @@ set APP_HOME=%DIRNAME%
 @rem Resolve any "." and ".." in APP_HOME to make it shorter.
 for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 
+@rem Default to the Android Studio JBR (JDK 21) when JAVA_HOME is unset: Kotlin/KSP
+@rem 2.2.10 cannot read JDK 26 class files (unexpected jvm signature V), so builds
+@rem must run on the JBR even when a newer JDK is first on PATH. An explicitly set
+@rem JAVA_HOME still wins — this only supplies a working default.
+if not defined JAVA_HOME (
+    if exist "C:\Program Files\Android\Android Studio\jbr\bin\java.exe" set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+)
+
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
