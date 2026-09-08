@@ -1,5 +1,12 @@
 # morkStep — Kotlin LSP usage
 
+## Git workflow
+
+- **Never commit directly to `main`.** Any auto-commit goes on a feature branch
+  (e.g. `fix/<short-description>`), pushed to origin, then merged into `main` (or handed
+  off for review first). Exception: the user explicitly asks to commit/tag on `main`
+  (e.g. running `release.bat`, which tags and pushes `main` itself).
+
 This repo uses a **Kotlin-LSP-first development approach**. Kotlin code intelligence runs on
 `kotlin-lsp` = JetBrains `intellij-server` (2026.3 EAP, ILS-263.4421.0), launched via the
 `kotlin-lsp.cmd` wrapper on PATH. Configured in `~/.omp/agent/lsp.json` (global) and
