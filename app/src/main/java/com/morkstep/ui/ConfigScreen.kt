@@ -487,7 +487,11 @@ fun ConfigScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Level out phase transitions", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Level out phase transitions",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(checked = resetAverages, onCheckedChange = { resetAverages = it })
                 }
                 Text(
@@ -509,7 +513,11 @@ fun ConfigScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Simulated sensors (debug)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Simulated sensors (debug)",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(checked = simulated, onCheckedChange = onSimulatedChange)
                 }
                 Text(
@@ -523,7 +531,11 @@ fun ConfigScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Heart rate from Wear companion", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Heart rate from Wear companion",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
                         Switch(checked = wearHr, onCheckedChange = onWearHrChange)
                     }
                     Row(
@@ -531,7 +543,11 @@ fun ConfigScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Vibrate watch", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Vibrate watch",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
                         Switch(checked = wearVibrate, onCheckedChange = onWearVibrateChange)
                     }
                     Row(
@@ -539,7 +555,11 @@ fun ConfigScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Health Connect HR (after workout)", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Health Connect HR (after workout)",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
                         Switch(checked = hcBackfillHr, onCheckedChange = onHcBackfillChange)
                     }
                     Text(
@@ -547,16 +567,16 @@ fun ConfigScreen(
                             "workout is backfilled from Health Connect (no live readings).",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = onRequestPermissions,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Grant sensor permissions")
                         }
                         OutlinedButton(
                             onClick = onHealthConnectPermission,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Grant Health Connect access")
                         }
@@ -586,7 +606,11 @@ fun ConfigScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Debug tracing", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Debug tracing",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(checked = debugLog, onCheckedChange = onDebugLogChange)
                 }
                 Text(
@@ -601,7 +625,11 @@ fun ConfigScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Show debug log on workout screen", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Show debug log on workout screen",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(checked = showDebugLog, onCheckedChange = onShowDebugLogChange)
                 }
                 Row(
@@ -609,7 +637,11 @@ fun ConfigScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Force phone pedometer", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Force phone pedometer",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(checked = forcePhonePace, onCheckedChange = onForcePhonePaceChange)
                 }
                 Text(
@@ -619,10 +651,9 @@ fun ConfigScreen(
                 )
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text("Unrestricted battery", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (batteryUnrestricted) "Allowed — sensors stay live" else "Optimized — sensors may be gated",
@@ -640,10 +671,9 @@ fun ConfigScreen(
                 )
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text("Step sensor access", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (activityRecognitionGranted) "Granted — pace sensors work"
@@ -671,11 +701,11 @@ fun ConfigScreen(
                     "Export saves the current profiles or workout history to a file you pick; import restores it.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = onExportProfiles, modifier = Modifier.weight(1f)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onExportProfiles, modifier = Modifier.fillMaxWidth()) {
                         Text("Export profiles")
                     }
-                    OutlinedButton(onClick = onImportProfiles, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onImportProfiles, modifier = Modifier.fillMaxWidth()) {
                         Text("Import profiles")
                     }
                 }
