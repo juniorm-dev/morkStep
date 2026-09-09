@@ -92,7 +92,10 @@ class ConfigStore(private val context: Context) {
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]
         if (raw.isNullOrBlank()) listOf(defaultProfile()) else runCatching {
-            json.decodeFromString<List<WorkoutProfile>>(raw)
+            // Every loaded profile is re-pinned to the disabled speed band:
+            // legacy or imported profiles saved with real speed targets must
+            // never re-arm the engine's speed warning cues.
+            json.decodeFromString<List<WorkoutProfile>>(raw).map { it.withSpeedCuesDisabled() }
         }.getOrDefault(listOf(defaultProfile()))
     }
 

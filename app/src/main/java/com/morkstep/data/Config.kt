@@ -1,5 +1,6 @@
 package com.morkstep.data
 
+import com.morkstep.Constants
 import kotlinx.serialization.Serializable
 
 /** Phase of a workout interval. */
@@ -44,20 +45,22 @@ data class WorkoutProfile(
     val cooldownSec: Int = 120,
     /**
      * Recovery-phase speed cap (mph): recovery cues "Slow down" while speed is
-     * above this cap, while [pushSpeedFloorMph] floors push. Disabled at 30
-     * mph — a walking recovery pace never exceeds it — so no recovery speed
-     * warning can fire. Hidden from the Settings sliders; restore a real bound
-     * here (and in the Baseline clamps) to re-enable the cues.
+     * above this cap, while [pushSpeedFloorMph] floors push. Pinned to the
+     * disabled band — a walking recovery pace never exceeds 30 mph — so no
+     * recovery speed warning can fire. Hidden from the Settings sliders and
+     * re-pinned on every profile load ([withSpeedCuesDisabled]); restore a
+     * real bound here and remove the load-time normalization to re-enable.
      */
-    val recoverySpeedCapMph: Double = 30.0,
+    val recoverySpeedCapMph: Double = Constants.DISABLED_RECOVERY_SPEED_CAP_MPH,
     /**
      * Push-phase speed floor (mph): push cues "Speed up" while speed is below
-     * this; see [recoverySpeedCapMph]. Disabled at 0 mph — speed is never
-     * negative — so no push speed warning can fire. Hidden from the Settings
-     * sliders; restore a real bound here (and in the Baseline clamps) to
-     * re-enable the cues.
+     * this; see [recoverySpeedCapMph]. Pinned to the disabled band — speed is
+     * never negative — so no push speed warning can fire. Hidden from the
+     * Settings sliders and re-pinned on every profile load
+     * ([withSpeedCuesDisabled]); restore a real bound here and remove the
+     * load-time normalization to re-enable.
      */
-    val pushSpeedFloorMph: Double = 0.0,
+    val pushSpeedFloorMph: Double = Constants.DISABLED_PUSH_SPEED_FLOOR_MPH,
     /**
      * Recovery-phase pace cap (steps per minute): recovery cues "Slow down"
      * while pace stays above this. Pedometer cadence, mirroring [recoverySpeedCapMph].
@@ -125,3 +128,17 @@ data class WorkoutProfile(
 
 /** The default profile: adhoc length (no preset end). */
 fun defaultProfile(): WorkoutProfile = WorkoutProfile()
+
+/**
+ * Pins the speed targets to the disabled band so no speed warning cue can ever
+ * fire, regardless of stored or imported profile values. Applied on every
+ * profile load ([com.morkstep.data.ConfigStore]) — legacy profiles saved
+ * before the speed sliders were hidden carry real speed values that would
+ * otherwise re-arm the engine's speed-cue checks. Restore real bounds in the
+ * [WorkoutProfile] defaults and remove the load-time normalization to
+ * re-enable speed cues.
+ */
+fun WorkoutProfile.withSpeedCuesDisabled(): WorkoutProfile = copy(
+    recoverySpeedCapMph = Constants.DISABLED_RECOVERY_SPEED_CAP_MPH,
+    pushSpeedFloorMph = Constants.DISABLED_PUSH_SPEED_FLOOR_MPH,
+)

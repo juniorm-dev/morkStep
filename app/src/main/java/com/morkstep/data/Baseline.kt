@@ -10,9 +10,10 @@ import com.morkstep.Constants
  * the active Baseline profile is re-derived into the calibrated 30-minute
  * baseline, pacing it off the phase averages actually recorded.
  *
- * Speed-band semantics (see the engine): the recovery-speed cap cues "Slow
- * down" while recovery speed stays above it; the push-speed floor cues "Speed
- * up" while push speed stays below it.
+ * Speed cues are permanently disabled: the recovery-speed cap and push-speed
+ * floor are pinned to the disabled band (30 mph / 0 mph) on every profile load
+ * ([WorkoutProfile.withSpeedCuesDisabled]), so speed never cues "Slow down" or
+ * "Speed up" regardless of stored or imported values.
  */
 
 /** True for the Baseline profile by name (identity used by the home label and post-workout update). */
@@ -42,8 +43,10 @@ fun baselineCalibrationProfile(id: Long): WorkoutProfile = WorkoutProfile(
  * and push-HR floor from the session's bpm averages. Targets only update when
  * the relevant averages were recorded; otherwise the previous targets are
  * kept. Speed targets are left untouched: the disabled 30 mph recovery cap /
- * 0 mph push floor (or any user-set values) survive recalibration. Results
- * are clamped to the Config slider ranges so they can never be edited away.
+ * 0 mph push floor survive recalibration (and are re-pinned on every load
+ * anyway), so completing a baseline can never re-arm a fireable speed target.
+ * Results are clamped to the Config slider ranges so they can never be edited
+ * away.
  */
 fun updatedBaselineProfile(
     baseline: WorkoutProfile,
