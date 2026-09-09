@@ -973,6 +973,24 @@ class SessionEngineTest {
     }
 
     @Test
+    fun recoveryPaceBelowCeiling_doesNotCue() {
+        // Recovery: pace is a valid signal (90 ≥ 10) but below the recovery max
+        // (90 < 110), and speed/HR are inside the recovery band — the target is
+        // met, so no "Slow down" cue may fire.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue, speed = 2.0f, hr = 115, pace = 90)
+        eng.run()
+        clock.advance(121_000) // t=121 → SLOW
+        eng.tick()
+        clock.advance(1_000) // first warning cue after entry suppressed
+        eng.tick()
+        clock.advance(1_000)
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Slow down") })
+    }
+
+    @Test
     fun slowPaceOff_cuesExactlyOnce() {
         // Recovery: only pace is off (above ceiling); exactly one shared cue + vibration.
         val clock = FakeClock(1_000)
