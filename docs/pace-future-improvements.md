@@ -2,16 +2,17 @@
 
 Do NOT implement without explicit approval. These are design changes, not bug fixes.
 
-**Scope — phone pedometer only.** Every item below is a `PhonePaceSource` artifact. While a
-paired Wear companion is streaming `STEPS_PER_MINUTE`, that watch value is what the engine
-sees — `FallbackPaceSource` passes a phone sample through only after 15 s of watch silence —
-so the phone estimators are bypassed entirely and none of this applies. The phone path (and
-these limitations with it) returns if the watch stream stalls.
+**Scope.** §1–§3 are `PhonePaceSource` artifacts. While a paired Wear companion is streaming
+`STEPS_PER_MINUTE`, that watch value is what the engine sees — `FallbackPaceSource` passes a
+phone sample through only after 15 s of watch silence — so the phone estimators are bypassed
+entirely and §1–§3 do not apply; they return with the phone path if the watch stream stalls.
+§4 is about the merged stream itself and applies on both paths (and specifically to a stalled
+watch).
 
 **Status (0.13.3):** §1 open · §2 open · §3 open for mid-phase samples; its
 transition-adjacent case is mitigated engine-side by the
 `Constants.PHASE_TRANSITION_SETTLE_MS` warning mute (README → "Level out phase
-transitions"). No other item implemented.
+transitions") · §4 open. No other item implemented.
 
 ## 1. Stop floor for displayed pace (raw-rate deadband)
 
@@ -89,3 +90,27 @@ must keep this display deadband in mind (a stop floor is a *display* contract;
 **Not changed yet** — recorded only. The recommendation above stands as the implementation
 proposal (time-weighting and/or a longer minimum interval) if phone-only workouts should
 stop crossing a ceiling for a single mid-phase sample.
+
+## 4. No staleness expiry on the merged pace (recorded 2026-09-10)
+
+**Finding (code, both paths).** `FallbackPaceSource` only ever writes a non-null phone or
+watch sample into its `StateFlow` — nothing clears the value on silence, and neither source
+emits `null` when its own stream stops (`PhonePaceSource` nulls only in `stop()`;
+`WearPaceSource` logs and ignores a `0`/absent sample without emitting). `StateFlow` also
+does not re-emit an unchanged value, so the engine keeps reading the same number.
+
+**Consequence.** A stalled watch relay (watch dozing or off-wrist, message-layer hiccup,
+watch app killed) leaves its last `STEPS_PER_MINUTE` driving `LiveState.pace`, the phase
+averages, and the warning verdict until the phone fallback takes over 15 s later — and the
+phone path has the same property while no steps arrive (a real standstill emits no counter
+samples). A value frozen above the recovery ceiling therefore repeats "Slow down" every
+`warningThresholdSec` instead of reading blank, and the on-screen log will show no fresh
+`[pace-wear]` / `[pace-phone]` line to explain it.
+
+**Proposed (not implemented).** Give the merge a freshness deadline: stamp each accepted
+sample and publish `null` once the newest accepted sample is older than a threshold (e.g.
+`PACE_COUNTER_PREFERRED_MS` for the phone path, and a watch-specific bound), so the engine
+sees "no pace signal" rather than a stale one. Needs care not to blank the display during
+slow walking, where the counter legitimately delivers few samples.
+
+**Not changed yet** — recorded only.
