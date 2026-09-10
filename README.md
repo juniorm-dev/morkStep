@@ -270,7 +270,7 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 **Language servers (LSP)**
 | Server | Version | Notes |
 | ------ | ------- | ----- |
-| `kotlin-lsp` (JetBrains `intellij-server`) | 2026.3 EAP (ILS-263.4421.0) | Official Kotlin LSP, IntelliJ-based; resolves Gradle/AGP projects itself. Launched from `$PATH`; configured once globally in `~/.omp/agent/lsp.json`. See note below. |
+| `kotlin-lsp` (JetBrains `intellij-server`) | 2026.3 EAP (ILS-263.4702.0) | Official Kotlin LSP, IntelliJ-based; resolves Gradle/AGP projects itself. Launched from `$PATH`; configured once globally in `~/.omp/agent/lsp.json`. See note below. |
 
 > **LSP setup (committed, machine-independent).** The JetBrains Kotlin Language Server
 > (`intellij-server`, on `$PATH`) does its own Gradle/AGP project resolution — no exported
@@ -283,7 +283,11 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 > finds JDKs (`~/.jdks/` on Windows — `JAVA_HOME` is *not* consulted); keep that copy in sync
 > with the build JDK. Known quirk: the **first** diagnostics request after a reload can report
 > cascading `Unresolved reference` false positives while the index warms — simply re-request;
-> subsequent checks are clean.
+> subsequent checks are clean. Second quirk: `textDocument/documentSymbol` (`lsp symbols`)
+> returns line numbers measured on a comment-collapsed view of the file, so they drift on
+> KDoc-heavy sources — `Constants.PACE_WINDOW_MS` (disk line 72) is reported at 58,
+> `WorkoutProfile.recoverySpeedCapMph` (disk 54) at 46. Trust its symbol *names*; take
+> positions from `hover` / `definition` / `references`, which match disk exactly.
 > The Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type
 > errors.
 
@@ -307,11 +311,21 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 - **intellij-server EAP builds expire.** The EAP language server exits within ~6 weeks
   of its release date: after expiry every spawn exits immediately with *"This build of
   intellij-server has expired"* and `lsp` reports "server exited unexpectedly (code 0)" —
-  the binary seems fine (`--version` works), but no LSP request ever succeeds. Refresh by
-  reading the current bundle URL from the VS Code extension's `extension/server-bundle.json`
-  (JetBrains.kotlin-server), downloading from the JetBrains CDN, extracting over
-  `C:\Tools\kotlin-lsp`, and restoring the omp `--stdio` wrapper at `bin\kotlin-lsp.cmd`
-  (that `bin` dir is what's on `$PATH`).
+  the binary seems fine (`--version` works), but no LSP request ever succeeds. Refresh from
+  the VS Code extension `JetBrains.kotlin-server`, which now *vendors the whole server per
+  platform* (0.0.12: no `server-bundle.json`, no CDN download): fetch the platform VSIX from
+  the gallery API's `Microsoft.VisualStudio.Services.VSIXPackage` entry for
+  `targetPlatform=win32-x64` (the extension's default download URL serves **linux-x64** — the
+  `win32` package is a separate version record), take `extension/server/` from it as
+  `C:\Tools\kotlin-lsp`, and keep the omp `--stdio` wrapper at `bin\kotlin-lsp.cmd` (that
+  `bin` dir is what's on `$PATH`); the bundle's own root `kotlin-lsp.cmd` is deprecated and
+  redirects to `bin\intellij-server.exe` without `--stdio`. Verify with `build.txt` (e.g.
+  `ILS-263.4702.0`).
+  Builds before `ILS-263.4702.0` cannot import this workspace: their Gradle importer died
+  with `ClassCastException … IdeaKotlinResolvedBinaryDependency cannot be cast to …
+  IdeaKotlinDependency` in `SourceSetDependencyResolver.populateDependenciesForAndroidModule`,
+  leaving 0 libraries in the workspace model — no classpath, no cross-file definition or
+  references. `ILS-263.4702.0` imports it (108 libraries; the `onVariants` warning is benign).
 
 The harness also auto-loads built-in `pylsp` for Python regardless.
 

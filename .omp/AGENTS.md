@@ -8,7 +8,7 @@
   (e.g. running `release.bat`, which tags and pushes `main` itself).
 
 This repo uses a **Kotlin-LSP-first development approach**. Kotlin code intelligence runs on
-`kotlin-lsp` = JetBrains `intellij-server` (2026.3 EAP, ILS-263.4421.0), launched via the
+`kotlin-lsp` = JetBrains `intellij-server` (2026.3 EAP, ILS-263.4702.0), launched via the
 `kotlin-lsp.cmd` wrapper on PATH. Configured in `~/.omp/agent/lsp.json` (global) and
 `.omp/lsp.json` (project).
 
