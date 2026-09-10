@@ -84,7 +84,7 @@ suspend fun healthConnectHrForWorkout(
         )
     }.getOrDefault(emptyList())
     val phaseBuckets = buckets.mapNotNull { b ->
-        val bucketStart = b.startTime ?: return@mapNotNull null
+        val bucketStart = b.startTime
         val offsetSec = Duration.between(start, bucketStart).seconds
         val avg = b.result[HeartRateRecord.BPM_AVG]?.toInt() ?: return@mapNotNull null
         offsetSec to avg

@@ -68,14 +68,16 @@ default `assemble`/`test` lifecycle. Run them explicitly against a booted
 emulator when needed:
 
 ```bash
-./gradlew :app:connectedDebugAndroidTest   # phone app UI smoke tests (15)
-./gradlew :wear:connectedDebugAndroidTest  # Wear companion UI smoke tests (2)
+./gradlew :app:connectedDebugAndroidTest   # phone app UI tests (15: smoke 7, baseline flow 3, history / phase-averages toggle / sensor readings / sensor-permission launch / pace readings 1 each)
+./gradlew :wear:connectedDebugAndroidTest  # Wear companion UI tests (7: graphics panel 4, smoke 3)
 ```
 
 Each suite installs the app, starts from a clean state (`clearPackageData`),
-and asserts the home screen, navigation, and version footer. With multiple
-devices attached, Gradle runs the suite on each: the app suite targets a phone
-form factor (its nav taps assume a phone-sized display).
+and asserts the home screen, navigation and version footer plus the flows its
+classes name (baseline creation, workout history, the phase-averages toggle,
+sensor/permission-driven readings on the phone; HR/pace rendering and the graphics
+panel on the watch). With multiple devices attached, Gradle runs the suite on each:
+the app suite targets a phone form factor (its nav taps assume a phone-sized display).
 
 ### Release (signed) build
 
@@ -288,6 +290,10 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 > KDoc-heavy sources — `Constants.PACE_WINDOW_MS` (disk line 72) is reported at 58,
 > `WorkoutProfile.recoverySpeedCapMph` (disk 54) at 46. Trust its symbol *names*; take
 > positions from `hover` / `definition` / `references`, which match disk exactly.
+> Third quirk: a diagnostics request issued immediately after an external file edit can
+> return the **pre-edit** result — a warning was reported at a line whose object literal had
+> already been rewritten into a lambda, and the very next identical request returned `OK`.
+> Re-request before judging anything.
 > The Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type
 > errors.
 
