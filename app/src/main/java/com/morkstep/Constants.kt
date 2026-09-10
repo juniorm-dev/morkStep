@@ -32,6 +32,29 @@ object Constants {
      */
     const val MIN_VALID_PACE_SPM = 10
 
+    // ---- speed warning cues (permanently disabled) ----
+    /**
+     * Recovery-phase speed cap (mph) pinned to the disabled band: recovery
+     * cues "Slow down" only while speed is above this cap, and a walking
+     * recovery pace never exceeds 30 mph — so no recovery speed warning can
+     * ever fire. Enforced on every profile load (see
+     * [com.morkstep.data.WorkoutProfile.withSpeedCuesDisabled]) so stored or
+     * imported profiles cannot re-arm a fireable speed target. Restore a real
+     * bound here, in the [com.morkstep.data.WorkoutProfile] defaults, and
+     * remove the load-time normalization to re-enable speed cues.
+     */
+    const val DISABLED_RECOVERY_SPEED_CAP_MPH = 30.0
+    /**
+     * Push-phase speed floor (mph) pinned to the disabled band: push cues
+     * "Speed up" only while speed is below this floor, and speed is never
+     * negative — so no push speed warning can ever fire. Enforced on every
+     * profile load (see [com.morkstep.data.WorkoutProfile.withSpeedCuesDisabled])
+     * so stored or imported profiles cannot re-arm a fireable speed target.
+     * Restore a real bound here, in the [com.morkstep.data.WorkoutProfile]
+     * defaults, and remove the load-time normalization to re-enable speed cues.
+     */
+    const val DISABLED_PUSH_SPEED_FLOOR_MPH = 0.0
+
     /**
      * Rolling window (ms) for the phone pedometer's cadence estimate
      * ([com.morkstep.sensing.PaceWindowCalculator]).
