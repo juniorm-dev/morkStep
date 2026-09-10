@@ -431,6 +431,85 @@ class SessionEngineTest {
         assertEquals(120, eng.snapshot.avgPushPace!!)
     }
 
+    @Test
+    fun phaseOccurrences_recordTheirOwnAverages() {
+        // Every phase occurrence — warm-up, both pushes, both recoveries,
+        // cool-down — is recorded in workout order with its own averaged samples.
+        // A tick on a phase boundary counts for the phase being entered, exactly
+        // as the engine buckets its pooled averages.
+        val clock = FakeClock(1_000)
+        val sensors = FakeSensors(3.0f, 120, 95)
+        val eng = SessionEngine(roundsProfile, sensors, sensors, sensors, RecordingCue(), clock)
+        eng.run() // t=0 → warm-up sample 3.0 / 120 / 95
+        clock.advance(60_000)
+        sensors.setSpeed(4.0f); sensors.setHr(150); sensors.setPace(110)
+        eng.tick() // t=60 → FAST; warm-up closes on its single sample
+        clock.advance(30_000)
+        sensors.setSpeed(4.2f); sensors.setHr(152)
+        eng.tick() // t=90 → second push sample
+        clock.advance(30_000)
+        sensors.setSpeed(2.0f); sensors.setHr(110); sensors.setPace(90)
+        eng.tick() // t=120 → SLOW; push closes: 4.1 / 151 / 110
+        clock.advance(60_000)
+        sensors.setSpeed(4.5f); sensors.setHr(160); sensors.setPace(115)
+        eng.tick() // t=180 → FAST; recovery closes: 2.0 / 110 / 90
+        clock.advance(60_000)
+        sensors.setSpeed(2.5f); sensors.setHr(115); sensors.setPace(92)
+        eng.tick() // t=240 → SLOW; push closes: 4.5 / 160 / 115
+        clock.advance(60_000)
+        sensors.setSpeed(2.0f); sensors.setHr(105); sensors.setPace(88)
+        eng.tick() // t=300 → COOLDOWN; recovery closes: 2.5 / 115 / 92
+        clock.advance(60_000)
+        eng.tick() // t=360 → finished; cooldown closes: 2.0 / 105 / 88
+
+        assertTrue(eng.snapshot.finished)
+        val phases = eng.snapshot.phaseAverages
+        assertEquals(
+            listOf(
+                PhaseType.WARMUP, PhaseType.FAST, PhaseType.SLOW,
+                PhaseType.FAST, PhaseType.SLOW, PhaseType.COOLDOWN,
+            ),
+            phases.map { it.phase },
+        )
+        assertEquals(3.0f, phases[0].avgSpeedMph!!, 0.01f)
+        assertEquals(120, phases[0].avgHrBpm!!)
+        assertEquals(95, phases[0].avgPaceSpm!!)
+        assertEquals(4.1f, phases[1].avgSpeedMph!!, 0.01f)
+        assertEquals(151, phases[1].avgHrBpm!!)
+        assertEquals(110, phases[1].avgPaceSpm!!)
+        assertEquals(2.0f, phases[2].avgSpeedMph!!, 0.01f)
+        assertEquals(110, phases[2].avgHrBpm!!)
+        assertEquals(90, phases[2].avgPaceSpm!!)
+        assertEquals(4.5f, phases[3].avgSpeedMph!!, 0.01f)
+        assertEquals(160, phases[3].avgHrBpm!!)
+        assertEquals(2.5f, phases[4].avgSpeedMph!!, 0.01f)
+        assertEquals(115, phases[4].avgHrBpm!!)
+        assertEquals(2.0f, phases[5].avgSpeedMph!!, 0.01f)
+        assertEquals(105, phases[5].avgHrBpm!!)
+        assertEquals(88, phases[5].avgPaceSpm!!)
+    }
+
+    @Test
+    fun phaseOccurrences_dropMissingMetricsAndFlushOnEarlyEnd() {
+        // With no HR and no pace signal at all, a phase records those metrics as
+        // null rather than as zeros, and stopping early still closes the phase
+        // that was in progress.
+        val clock = FakeClock(1_000)
+        val sensors = FakeSensors(3.5f, null, null)
+        val eng = SessionEngine(roundsProfile, sensors, sensors, sensors, RecordingCue(), clock)
+        eng.run() // t=0 → warm-up sample 3.5 / – / –
+        clock.advance(20_000)
+        eng.tick()
+        eng.endNow()
+
+        val phases = eng.snapshot.phaseAverages
+        assertEquals(1, phases.size)
+        assertEquals(PhaseType.WARMUP, phases[0].phase)
+        assertEquals(3.5f, phases[0].avgSpeedMph!!, 0.01f)
+        assertNull(phases[0].avgHrBpm)
+        assertNull(phases[0].avgPaceSpm)
+    }
+
     // ---- pause / resume ----
 
     @Test

@@ -153,7 +153,7 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
 | `app/src/main/java/com/morkstep/ui/MorkApp.kt` | Root composable; nav routes + permission/document launchers |
 | `app/src/main/java/com/morkstep/engine/SessionEngine.kt` | IWT state machine; `CueSink`/`CueVibration`/`SessionClock` |
 | `app/src/main/java/com/morkstep/data/Config.kt` | Domain models + enums (`WorkoutProfile`, `PhaseType`, `WorkoutLength`, `VibrationMode`, `DarkMode`) |
-| `app/src/main/java/com/morkstep/data/WorkoutHistory.kt` | Room DB (v4) + `WorkoutDao` |
+| `app/src/main/java/com/morkstep/data/WorkoutHistory.kt` | Room DB (v2 — profile name + per-phase averages) + `WorkoutDao` |
 | `wear/src/main/java/com/morkstep/wear/Constants.kt` | Cross-device protocol constants — MUST stay in sync with phone |
 | `wear/src/main/java/com/morkstep/wear/WearWorkoutGraphics.kt` | `decodeWearSessionState`, graphics panel |
 | `app/src/main/AndroidManifest.xml` / `wear/…` | Permissions + activity/service wiring |

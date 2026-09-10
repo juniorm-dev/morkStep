@@ -3,6 +3,7 @@ package com.morkstep.engine
 import com.morkstep.DebugLog
 import com.morkstep.Constants
 import com.morkstep.data.AudioMode
+import com.morkstep.data.PhaseAverages
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
@@ -68,6 +69,12 @@ data class LiveState(
     val avgPushPace: Int? = null,
     val avgRecoveryPace: Int? = null,
     val avgOverallPace: Int? = null,
+    /**
+     * Averages for each phase occurrence completed so far, in workout order
+     * (cool-down included once the session finishes). Persisted into the history
+     * entry on finish.
+     */
+    val phaseAverages: List<PhaseAverages> = emptyList(),
 )
 
 /** Wall-clock abstraction so the ticker is unit-testable. */
@@ -216,6 +223,17 @@ class SessionEngine(
     private var allPaceSum = 0L
     private var allPaceCnt = 0
 
+    // Current phase's own accumulators (real samples only, never seeded) and the
+    // completed phases before it — the per-occurrence averages the history
+    // entry stores and the history chart plots.
+    private var curSpeedSum = 0.0
+    private var curSpeedCnt = 0
+    private var curHrSum = 0L
+    private var curHrCnt = 0
+    private var curPaceSum = 0L
+    private var curPaceCnt = 0
+    private var completedPhases: List<PhaseAverages> = emptyList()
+
     val snapshot: LiveState get() = _state.value
 
     /** Start observing sensor values. Call once when the engine is owned. */
@@ -258,6 +276,10 @@ class SessionEngine(
         pushPaceSum = 0L; pushPaceCnt = 0
         slowPaceSum = 0L; slowPaceCnt = 0
         allPaceSum = 0L; allPaceCnt = 0
+        curSpeedSum = 0.0; curSpeedCnt = 0
+        curHrSum = 0L; curHrCnt = 0
+        curPaceSum = 0L; curPaceCnt = 0
+        completedPhases = emptyList()
         _state.value = snapshot.copy(
             running = true, finished = false, paused = false, totalSeconds = 0, secondsInPhase = 0,
             phase = PhaseType.WARMUP,
@@ -265,6 +287,7 @@ class SessionEngine(
             progress = null, speed = speedSource.speed.value, hr = hrSource.hr.value,
             pace = paceSource.pace.value,
             lengthLabel = profile.lengthLabel(),
+            phaseAverages = completedPhases,
         )
         log?.log("[workout] started: ${profile.name}")
         tick()
@@ -292,6 +315,10 @@ class SessionEngine(
         val pa = phaseAt(t, profile, coreEndSec, finishSec)
         val entered = pa.phase != lastPhase
         if (entered) {
+            // Close out the phase that just ended before the state moves on: its
+            // samples are complete and the tick's sample below already belongs to
+            // the new phase.
+            flushPhase()
             // The beep is phase-change audio: silent only when audio is off.
             if (profile.audioMode != AudioMode.OFF) cue.beep()
             cue.vibrate(CueVibration.TRANSITION)
@@ -334,9 +361,11 @@ class SessionEngine(
             }
         }
 
-        // Sample speed/HR once per tick into phase buckets (1 Hz averages).
+        // Sample speed/HR once per tick into phase buckets (1 Hz averages), plus
+        // the current phase's own accumulator for the per-phase history list.
         speedSource.speed.value?.let { p ->
             allSpeedSum += p; allSpeedCnt++
+            curSpeedSum += p; curSpeedCnt++
             when (pa.phase) {
                 PhaseType.FAST -> { pushSpeedSum += p; pushSpeedCnt++ }
                 PhaseType.SLOW -> { slowSpeedSum += p; slowSpeedCnt++ }
@@ -345,6 +374,7 @@ class SessionEngine(
         }
         hrSource.hr.value?.let { h ->
             allHrSum += h; allHrCnt++
+            curHrSum += h; curHrCnt++
             when (pa.phase) {
                 PhaseType.FAST -> { pushHrSum += h; pushHrCnt++ }
                 PhaseType.SLOW -> { slowHrSum += h; slowHrCnt++ }
@@ -353,6 +383,7 @@ class SessionEngine(
         }
         paceSource.pace.value?.let { c ->
             allPaceSum += c; allPaceCnt++
+            curPaceSum += c; curPaceCnt++
             when (pa.phase) {
                 PhaseType.FAST -> { pushPaceSum += c; pushPaceCnt++ }
                 PhaseType.SLOW -> { slowPaceSum += c; slowPaceCnt++ }
@@ -418,6 +449,9 @@ class SessionEngine(
         }
 
         val finished = t >= finishSec
+        // The finish line ends the last phase; close it out so the cool-down (or
+        // the phase the session stopped in) is part of the recorded entry.
+        if (finished) flushPhase()
 
         _state.value = snapshot.copy(
             totalSeconds = t,
@@ -437,6 +471,7 @@ class SessionEngine(
             avgPushPace = avgPushPace,
             avgRecoveryPace = avgRecoveryPace,
             avgOverallPace = avgOverallPace,
+            phaseAverages = completedPhases,
         )
 
         if (finished) {
@@ -452,11 +487,35 @@ class SessionEngine(
         if (!entered) ratePhase()
     }
 
+    /**
+     * Close the phase recorded in [lastPhase]: append its own averages to
+     * [completedPhases] and reset the current-phase accumulators. A no-op when
+     * the phase had no real sample (a sensor-less phase is left out of the
+     * history entry rather than recorded as zeros) or when no phase has run yet.
+     */
+    private fun flushPhase() {
+        val phase = lastPhase ?: return
+        if (curSpeedCnt == 0 && curHrCnt == 0 && curPaceCnt == 0) return
+        completedPhases = completedPhases + PhaseAverages(
+            phase = phase,
+            avgSpeedMph = if (curSpeedCnt > 0) (curSpeedSum / curSpeedCnt).toFloat() else null,
+            avgPaceSpm = if (curPaceCnt > 0) (curPaceSum / curPaceCnt).toInt() else null,
+            avgHrBpm = if (curHrCnt > 0) (curHrSum / curHrCnt).toInt() else null,
+        )
+        curSpeedSum = 0.0; curSpeedCnt = 0
+        curHrSum = 0L; curHrCnt = 0
+        curPaceSum = 0L; curPaceCnt = 0
+    }
+
     /** Manually end an ADHOC workout (or stop any workout early). */
     fun endNow() {
         if (!snapshot.running || snapshot.finished) return
+        flushPhase()
         log?.log("[workout] finished: ${profile.name}")
-        _state.value = snapshot.copy(running = false, finished = true, paused = false)
+        _state.value = snapshot.copy(
+            running = false, finished = true, paused = false,
+            phaseAverages = completedPhases,
+        )
     }
 
     /** Freeze the session at the current instant: elapsed time, distance and cues stop until [resume]. */

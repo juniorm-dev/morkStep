@@ -3,6 +3,7 @@ package com.morkstep.data
 import com.morkstep.data.AudioMode
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -161,6 +162,11 @@ class TransferTest {
             overPushMinSec = 0, distanceMiles = 0.2f, avgPushSpeed = 4.5f,
             avgPushHr = 132, avgRecoveryHr = 120,
             avgPushPace = 122, avgRecoveryPace = 98,
+            profileName = "Rounds",
+            phases = listOf(
+                PhaseAverages(PhaseType.WARMUP, avgSpeedMph = 3.0f, avgPaceSpm = 95, avgHrBpm = 120),
+                PhaseAverages(PhaseType.FAST, avgSpeedMph = 4.5f, avgPaceSpm = 122, avgHrBpm = 132),
+            ),
         )
         val text = json.encodeToString(WorkoutExport(workouts = listOf(w)))
         val back = json.decodeFromString<WorkoutExport>(text)
@@ -171,6 +177,31 @@ class TransferTest {
         assertEquals(120, row.avgRecoveryHr!!)
         assertEquals(122, row.avgPushPace!!)
         assertEquals(98, row.avgRecoveryPace!!)
+        assertEquals("Rounds", row.profileName)
+        assertEquals(2, row.phaseAverages.size)
+        assertEquals(PhaseType.WARMUP, row.phaseAverages[0].phase)
+        assertEquals(3.0f, row.phaseAverages[0].avgSpeedMph!!, 0.001f)
+        assertEquals(95, row.phaseAverages[0].avgPaceSpm!!)
+        assertEquals(120, row.phaseAverages[0].avgHrBpm!!)
+        assertEquals(PhaseType.FAST, row.phaseAverages[1].phase)
+        assertEquals(4.5f, row.phaseAverages[1].avgSpeedMph!!, 0.001f)
+        assertEquals(132, row.phaseAverages[1].avgHrBpm!!)
+    }
+
+    @Test
+    fun workoutExport_prePhaseBackupDefaultsNewFields() {
+        // A backup written before 0.14 carries neither the profile name nor the
+        // per-phase list; both must default rather than fail the import.
+        val legacy = """
+            {"version":1,"workouts":[{"id":1,"startTime":1,"endTime":2,"durationSec":60,
+            "pushSegments":1,"overPushMinSec":0,"distanceMiles":0.2,"avgPushSpeed":4.5,
+            "avgRecoverySpeed":null,"avgOverallSpeed":null,"avgPushHr":132,"avgRecoveryHr":null,
+            "avgOverallHr":null}]}
+        """.trimIndent()
+        val back = json.decodeFromString<WorkoutExport>(legacy)
+        assertEquals(1, back.workouts.size)
+        assertNull(back.workouts[0].profileName)
+        assertTrue(back.workouts[0].phaseAverages.isEmpty())
     }
 
     private fun workout(
@@ -190,6 +221,8 @@ class TransferTest {
         avgPushPace: Int? = null,
         avgRecoveryPace: Int? = null,
         avgOverallPace: Int? = null,
+        profileName: String? = null,
+        phases: List<PhaseAverages> = emptyList(),
     ) = WorkoutEntity(
         id = id, startTime = startTime, endTime = endTime, durationSec = durationSec,
         pushSegments = pushSegments, overPushMinSec = overPushMinSec,
@@ -197,5 +230,6 @@ class TransferTest {
         avgRecoverySpeed = avgRecoverySpeed, avgOverallSpeed = avgOverallSpeed,
         avgPushHr = avgPushHr, avgRecoveryHr = avgRecoveryHr, avgOverallHr = avgOverallHr,
         avgPushPace = avgPushPace, avgRecoveryPace = avgRecoveryPace, avgOverallPace = avgOverallPace,
+        profileName = profileName, phaseAverages = phases,
     )
 }

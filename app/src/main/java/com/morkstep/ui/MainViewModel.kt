@@ -781,6 +781,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 avgPushPace = ls.avgPushPace,
                 avgRecoveryPace = ls.avgRecoveryPace,
                 avgOverallPace = ls.avgOverallPace,
+                profileName = activeProfileAtFinish?.name,
+                phaseAverages = ls.phaseAverages,
             )
             val id = container.workoutDao.insert(entity)
             // Health Connect backfill: only when the Wear relay is off; real-time
