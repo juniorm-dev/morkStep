@@ -321,12 +321,12 @@ class SessionEngine(
             // Overall averages are untouched.
             if (profile.resetPhaseAverages) when (pa.phase) {
                 PhaseType.FAST -> {
-                    pushSpeedSum = (profile.pushSpeedFloorMph + Constants.PHASE_AVG_SEED_OFFSET).toDouble(); pushSpeedCnt = 1
+                    pushSpeedSum = profile.pushSpeedFloorMph + Constants.PHASE_AVG_SEED_OFFSET; pushSpeedCnt = 1
                     pushHrSum = (profile.hrPushMin + Constants.PHASE_AVG_SEED_OFFSET).toLong(); pushHrCnt = 1
                     pushPaceSum = (profile.pushPaceFloorSpm + Constants.PHASE_AVG_SEED_OFFSET).toLong(); pushPaceCnt = 1
                 }
                 PhaseType.SLOW -> {
-                    slowSpeedSum = (profile.recoverySpeedCapMph - Constants.PHASE_AVG_SEED_OFFSET).toDouble(); slowSpeedCnt = 1
+                    slowSpeedSum = profile.recoverySpeedCapMph - Constants.PHASE_AVG_SEED_OFFSET; slowSpeedCnt = 1
                     slowHrSum = (profile.hrRecoveryMax - Constants.PHASE_AVG_SEED_OFFSET).toLong(); slowHrCnt = 1
                     slowPaceSum = (profile.recoveryPaceCapSpm - Constants.PHASE_AVG_SEED_OFFSET).toLong(); slowPaceCnt = 1
                 }
@@ -527,7 +527,7 @@ class SessionEngine(
                         "speedUp", "Speed up",
                         warningReasons(
                             if (hrBelow) "hr ${s.hr} < ${profile.hrPushMin}" else null,
-                            if (speedBelow) "speed ${"%.1f".format(s.speed!!)} < ${profile.pushSpeedFloorMph}" else null,
+                            if (speedBelow) "speed ${"%.1f".format(s.speed)} < ${profile.pushSpeedFloorMph}" else null,
                             if (paceBelow) "pace ${s.pace} < ${profile.pushPaceFloorSpm}" else null,
                         )
                     )
@@ -544,7 +544,7 @@ class SessionEngine(
                         "slowDown", "Slow down",
                         warningReasons(
                             if (hrAbove) "hr ${s.hr} > ${profile.hrRecoveryMax}" else null,
-                            if (speedAbove) "speed ${"%.1f".format(s.speed!!)} > ${profile.recoverySpeedCapMph}" else null,
+                            if (speedAbove) "speed ${"%.1f".format(s.speed)} > ${profile.recoverySpeedCapMph}" else null,
                             if (paceAbove) "pace ${s.pace} > ${profile.recoveryPaceCapSpm}" else null,
                         )
                     )
