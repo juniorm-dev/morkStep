@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import com.morkstep.data.PhaseAverages
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutEntity
 import com.morkstep.data.WorkoutProfile
@@ -25,8 +26,10 @@ import java.time.Instant
  * Health Connect for whatever HR records it holds over the exact workout
  * window:
  *  - statistical aggregate: overall average, min, max (`HeartRateRecord`),
- *  - per-minute buckets mapped back onto the profile's phase plan, for the
- *    push/recovery averages just like the real-time engine would have recorded.
+ *  - per-minute buckets mapped back onto the profile's phase plan, giving an HR
+ *    average for every phase occurrence (warm-up, each push, each recovery,
+ *    cool-down) plus the pooled push/recovery averages — the same fields a
+ *    real-time session would have recorded.
  *
  * "Not perfect" by design: Health Connect only has data if some device or app
  * (a watch, a strap app, etc.) wrote it, samples can be sparse, and the read
@@ -39,6 +42,8 @@ data class HealthConnectHr(
     val avgRecovery: Int?,
     val minHr: Int?,
     val maxHr: Int?,
+    /** HR average per phase occurrence, in workout order; empty when no bucket landed in a phase. */
+    val phaseAverages: List<PhaseAverages>,
 )
 
 /**
@@ -90,11 +95,97 @@ suspend fun healthConnectHrForWorkout(
         offsetSec to avg
     }
     val (avgPush, avgRecovery) = phaseAveragesFromBuckets(phaseBuckets, profile, entity.durationSec)
+    val phaseAverages = phaseAveragesPerOccurrence(phaseBuckets, profile, entity.durationSec)
 
-    if (avgOverall == null && minHr == null && maxHr == null && avgPush == null && avgRecovery == null) {
+    if (avgOverall == null && minHr == null && maxHr == null && avgPush == null && avgRecovery == null &&
+        phaseAverages.isEmpty()
+    ) {
         return null
     }
-    return HealthConnectHr(avgOverall, avgPush, avgRecovery, minHr, maxHr)
+    return HealthConnectHr(avgOverall, avgPush, avgRecovery, minHr, maxHr, phaseAverages)
+}
+
+/**
+ * Map per-minute HR buckets (offset seconds since workout start → avg bpm) onto
+ * the profile's phase plan, one entry per phase occurrence that a bucket landed
+ * in — warm-up, each push round, each recovery round, cool-down — in workout
+ * order. Pure, and built on the same `phaseAt` plan math the engine uses, so a
+ * bucket is attributed to exactly the phase (and round) a live session would
+ * have attributed it to.
+ */
+internal fun phaseAveragesPerOccurrence(
+    buckets: List<Pair<Long, Int>>,
+    profile: WorkoutProfile,
+    totalSeconds: Int,
+): List<PhaseAverages> {
+    val plan = planFor(profile)
+    val sums = LinkedHashMap<Pair<PhaseType, Int>, Long>()
+    val counts = mutableMapOf<Pair<PhaseType, Int>, Int>()
+    buckets.forEach { (offsetSec, bpm) ->
+        if (offsetSec >= totalSeconds) return@forEach
+        val at = phaseAt(offsetSec.toInt(), profile, plan.coreEndSec, plan.finishSec)
+        // Occurrence within the phase type: the round the bucket fell in
+        // (`phaseAt` counts completed pushes, so a FAST phase is one ahead).
+        val key = at.phase to when (at.phase) {
+            PhaseType.FAST -> at.pushDone + 1
+            PhaseType.SLOW -> at.pushDone
+            PhaseType.WARMUP, PhaseType.COOLDOWN -> 1
+        }
+        sums[key] = (sums[key] ?: 0L) + bpm
+        counts[key] = (counts[key] ?: 0) + 1
+    }
+    return sums.map { (key, sum) -> PhaseAverages(key.first, avgHrBpm = (sum / counts.getValue(key)).toInt()) }
+}
+
+/**
+ * Fold backfilled per-phase HR into the phases the session itself recorded:
+ * every recorded phase keeps its live speed/pace and takes the backfill's HR
+ * only where it has none (a real-time HR reading is never overwritten). The
+ * two lists are matched by phase type plus occurrence, not by position, so a
+ * phase either source missed still lands in workout order — a phase the
+ * session recorded no signal for at all is added from the backfill rather than
+ * dropped, and a backfill with no bucket for a phase leaves that phase's
+ * recorded averages untouched.
+ */
+internal fun mergeBackfilledPhaseAverages(
+    recorded: List<PhaseAverages>,
+    backfilled: List<PhaseAverages>,
+): List<PhaseAverages> {
+    if (backfilled.isEmpty()) return recorded
+    if (recorded.isEmpty()) return backfilled
+    val merged = LinkedHashMap<Pair<PhaseType, Int>, PhaseAverages>()
+    phaseOccurrences(recorded).forEachIndexed { i, key -> merged[key] = recorded[i] }
+    phaseOccurrences(backfilled).forEachIndexed { i, key ->
+        val existing = merged[key]
+        val backfilledHr = backfilled[i].avgHrBpm
+        when {
+            existing == null -> merged[key] = backfilled[i]
+            existing.avgHrBpm == null && backfilledHr != null -> merged[key] = existing.copy(avgHrBpm = backfilledHr)
+        }
+    }
+    return merged.entries.sortedBy { phaseOrder(it.key) }.map { it.value }
+}
+
+/** Workout-order key of each phase occurrence: which occurrence of its type this phase is. */
+private fun phaseOccurrences(phases: List<PhaseAverages>): List<Pair<PhaseType, Int>> {
+    val seen = mutableMapOf<PhaseType, Int>()
+    return phases.map { p ->
+        val n = (seen[p.phase] ?: 0) + 1
+        seen[p.phase] = n
+        p.phase to n
+    }
+}
+
+/**
+ * Sort rank of a phase occurrence in workout order: warm-up, then round by
+ * round (push before recovery), then cool-down — the order the phases ran in,
+ * independent of a phase having been missed by either source.
+ */
+private fun phaseOrder(key: Pair<PhaseType, Int>): Int = when (key.first) {
+    PhaseType.WARMUP -> 0
+    PhaseType.FAST -> 2 * key.second - 1
+    PhaseType.SLOW -> 2 * key.second
+    PhaseType.COOLDOWN -> Int.MAX_VALUE
 }
 
 /**

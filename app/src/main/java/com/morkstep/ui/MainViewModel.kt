@@ -39,6 +39,7 @@ import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.WearPaceSource
 import com.morkstep.sensing.healthConnectHrForWorkout
+import com.morkstep.sensing.mergeBackfilledPhaseAverages
 import com.morkstep.sensing.SpeedSource
 import com.morkstep.sensing.SimulatedSensors
 import com.morkstep.sensing.FallbackPaceSource
@@ -781,6 +782,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 avgPushPace = ls.avgPushPace,
                 avgRecoveryPace = ls.avgRecoveryPace,
                 avgOverallPace = ls.avgOverallPace,
+                profileName = activeProfileAtFinish?.name,
+                phaseAverages = ls.phaseAverages,
             )
             val id = container.workoutDao.insert(entity)
             // Health Connect backfill: only when the Wear relay is off; real-time
@@ -797,6 +800,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     avgRecoveryHr = entity.avgRecoveryHr ?: hc.avgRecovery,
                     minHr = hc.minHr,
                     maxHr = hc.maxHr,
+                    phaseAverages = mergeBackfilledPhaseAverages(entity.phaseAverages, hc.phaseAverages),
                 )
                 if (merged != entity) container.workoutDao.update(merged)
             }

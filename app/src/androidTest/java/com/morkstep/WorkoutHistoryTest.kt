@@ -3,6 +3,7 @@ package com.morkstep
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -110,5 +111,22 @@ class WorkoutHistoryTest {
         assertTrue(rule.onAllNodesWithText("HR bpm", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertFalse("empty-state text must be gone once a workout exists",
             rule.onAllNodesWithText("No workouts yet").fetchSemanticsNodes().isNotEmpty())
+        // The entry names the profile the session ran under.
+        assertTrue(rule.onAllNodesWithText("Default", substring = true).fetchSemanticsNodes().isNotEmpty())
+        // Collapsed, the card gives the overall averages only — no phase rows yet.
+        assertTrue(rule.onAllNodesWithText("Show phase breakdown", substring = true).fetchSemanticsNodes().isNotEmpty())
+        assertFalse("the per-phase breakdown stays hidden until the card is tapped",
+            rule.onAllNodesWithText("Warm-up").fetchSemanticsNodes().isNotEmpty())
+
+        // Tapping the newest card (the top row, this session) opens the per-phase
+        // averages and the line chart. Sibling tests may have left rows of their
+        // own, so the tap targets the first card rather than a single match.
+        rule.onAllNodesWithText("Show phase breakdown").onFirst().performClick()
+        rule.waitUntil(timeoutMillis = 15_000) {
+            rule.onAllNodesWithText("Warm-up").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(rule.onAllNodesWithText("Push 1").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("Recovery 1").fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithContentDescription("Phase chart").assertExists()
     }
 }
