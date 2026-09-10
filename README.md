@@ -72,12 +72,16 @@ emulator when needed:
 ./gradlew :wear:connectedDebugAndroidTest  # Wear companion UI tests (7: graphics panel 4, smoke 3)
 ```
 
-Each suite installs the app, starts from a clean state (`clearPackageData`),
-and asserts the home screen, navigation and version footer plus the flows its
-classes name (baseline creation, workout history, the phase-averages toggle,
+Each suite installs the app and asserts the home screen, navigation and version footer plus the
+flows its classes name (baseline creation, workout history, the phase-averages toggle,
 sensor/permission-driven readings on the phone; HR/pace rendering and the graphics
-panel on the watch). With multiple devices attached, Gradle runs the suite on each:
-the app suite targets a phone form factor (its nav taps assume a phone-sized display).
+panel on the watch). Several of those assertions are empty-state ones (`No workouts yet`,
+`Start workout`), so the run wants a fresh install: the runner's `clearPackageData`
+argument does not clear data an already-installed app carries into the run, and state left
+by a manual session (a history row, the Baseline profile active) fails them — uninstall
+`com.morkstep` first if you have been using the app on that emulator. With multiple
+devices attached, Gradle runs the suite on each: the app suite targets a phone form factor
+(its nav taps assume a phone-sized display).
 
 ### Release (signed) build
 
@@ -234,7 +238,7 @@ The `[phase]` lines mark every phase entry — the exact transitions possible be
 
 The workout finish is a `[workout] finished: <name>` action line, not a `[phase]` entry.
 
-**Backup.** Profile settings and the History screen offer Export/Import of profiles or workout history as versioned JSON files via the system file picker (SAF). Importing profiles restores the list; importing history merges rows. Both reassign any colliding id to a fresh one, so importing a backup over a partially-same device never replaces the existing active row or local workout.
+**Backup.** Profile settings and the History screen offer Export/Import of profiles or workout history as versioned JSON files via the system file picker (SAF). A history export carries the whole entry — profile name, pooled averages and the per-phase list included; a pre-0.14 file without those keys still imports (the missing fields default). Importing profiles restores the list; importing history merges rows. Both reassign any colliding id to a fresh one, so importing a backup over a partially-same device never replaces the existing active row or local workout.
 
 **Baseline profile.** `data/Baseline.kt` owns the lifecycle: `baselineCalibrationProfile()` builds the 3-round calibration workout (preserving the existing baseline's id on re-create and carrying the active profile's vibration mode/intensity), `isBaselineProfile()` identifies it by name, and `updatedBaselineProfile()` re-derives the calibrated 30-minute profile after a workout — the recovery/push pace averages become the pace ceiling/floor and the recovery/push HR averages the HR cap/floor, each clamped to the Config slider bounds (falls back to the previous targets if an average was not recorded); the speed values are deliberately **preserved untouched** across recalibration, so with the disabled 30 mph / 0 mph defaults they stay non-fireable and any user-set values survive the workout. The re-derive runs in `MainViewModel.onFinished()` (a `.copy()` keeps every other setting); the UI then navigates to Settings and raises a one-shot "Baseline created" message.
 
@@ -251,7 +255,7 @@ The workout finish is a `[workout] finished: <name>` action line, not a `[phase]
 
 ### UI — `ui/`
 
-Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, `Settings`) and a separate full-screen `Workout` route. State comes from a single `MainViewModel` exposing `config` and `live` as `StateFlow`, collected with `collectAsStateWithLifecycle` so recomposition tracks the running session. No XML layouts.
+Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, `Settings`) and a separate full-screen `Workout` route. State comes from a single `MainViewModel` exposing `config` and `live` as `StateFlow`, collected with `collectAsStateWithLifecycle` so recomposition tracks the running session. No XML layouts. History cards expand in place (`HistoryScreen`) to the per-phase averages and a Canvas line chart of them (`HistoryPhaseChart`) — one line per metric, each scaled to its own min–max, with a metric a workout never recorded left out entirely.
 
 ## Tools & language servers used
 
