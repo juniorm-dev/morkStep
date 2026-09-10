@@ -498,6 +498,8 @@ fun ConfigScreen(
                     "Experimental: each phase's average starts just inside its target band (push min + 1 on push, " +
                         "recovery max - 1 on recovery) instead of carrying the previous phase's levels into the new " +
                         "phase's average, so the push/recovery transition is less polluted by the phase before it. " +
+                        "It also holds warning cues back for a few seconds after a phase change, so the new phase " +
+                        "does not warn on the previous phase's readings. " +
                         "The overall average is unaffected.",
                     style = MaterialTheme.typography.bodySmall,
                 )
