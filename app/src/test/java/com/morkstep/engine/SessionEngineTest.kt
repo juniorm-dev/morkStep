@@ -1,5 +1,6 @@
 package com.morkstep.engine
 
+import com.morkstep.Constants
 import com.morkstep.data.AudioMode
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutLength
@@ -61,6 +62,19 @@ class SessionEngineTest {
 
     private fun engineWith(profile: WorkoutProfile, clock: FakeClock, cue: RecordingCue, speed: Float? = 4.0f, hr: Int? = 130, pace: Int? = null) =
         SessionEngine(profile, FakeSensors(speed, hr, pace), FakeSensors(speed, hr, pace), FakeSensors(speed, hr, pace), cue, clock)
+
+    /**
+     * Cross a phase transition's warning-settle window and tick once, so the
+     * warning cue under test is no longer muted. The default profile levels out
+     * transitions ([WorkoutProfile.resetPhaseAverages] = true), which holds
+     * warning cues back for [Constants.PHASE_TRANSITION_SETTLE_MS] after the
+     * entry tick — the previous phase's reading (and a first-sample pace spike)
+     * is not a valid basis for a warning about the new phase.
+     */
+    private fun tickPastSettle(eng: SessionEngine, clock: FakeClock) {
+        clock.advance(Constants.PHASE_TRANSITION_SETTLE_MS)
+        eng.tick()
+    }
 
     // ---- pure helpers ----
 
@@ -268,8 +282,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -297,8 +310,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -312,8 +324,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
@@ -327,8 +338,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
@@ -343,13 +353,13 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // t=61: first warning cue → suppressed
         eng.tick()
-        clock.advance(3_000) // t=64: first warning fires
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        tickPastSettle(eng, clock) // first warning cue fires
+        assertEquals(1, cue.spoken.count { it.contains("Speed up") })
+        clock.advance(3_000) // 3 s < 5 s threshold → no repeat
         eng.tick()
         assertEquals(1, cue.spoken.count { it.contains("Speed up") })
-        clock.advance(3_000) // t=67: 3 s < 5 s threshold → no repeat
-        eng.tick()
-        assertEquals(1, cue.spoken.count { it.contains("Speed up") })
-        clock.advance(3_000) // t=70: 6 s ≥ 5 s threshold → repeat
+        clock.advance(3_000) // 6 s ≥ 5 s threshold → repeat
         eng.tick()
         assertEquals(2, cue.spoken.count { it.contains("Speed up") })
     }
@@ -530,11 +540,11 @@ class SessionEngineTest {
         eng.tick()
         assertTrue(cue.spoken.any { it.contains("Push phase 1") })
         assertFalse(cue.spoken.any { it.contains("Speed up") })
-        // Warnings still fire on subsequent ticks.
+        // Warnings still fire on subsequent ticks, once the new phase's
+        // readings have settled.
         clock.advance(1_000) // t=61: first warning cue suppressed
         eng.tick()
-        clock.advance(1_000) // t=62: warning fires
-        eng.tick()
+        tickPastSettle(eng, clock) // warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -582,9 +592,11 @@ class SessionEngineTest {
     }
 
     @Test
-    fun phaseTransition_suppressesFirstWarningCue() {
-        // FAST with HR below the push min (150): neither the entry tick nor the
-        // first warning tick may cue; the warning appears one tick later.
+    fun phaseTransition_mutesWarningsUntilTheNewPhaseReadingsSettle() {
+        // FAST with HR below the push min (150). "Level out phase transitions"
+        // (on by default) holds warnings back past the entry tick: one tick after
+        // the transition the reading is still the previous phase's, so nothing
+        // may cue until the settle window has elapsed.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(roundsProfile, clock, cue, hr = 100)
@@ -592,13 +604,15 @@ class SessionEngineTest {
         clock.advance(60_001) // t=60 → entry into FAST (only the announcement)
         eng.tick()
         assertFalse(cue.spoken.any { it.contains("Speed up") })
-        clock.advance(1_000) // t=61 → first warning tick, suppressed
+        clock.advance(1_000) // t=61 → first tick after entry, muted
         eng.tick()
         assertFalse(cue.spoken.any { it.contains("Speed up") })
-        clock.advance(1_000) // t=62 → warning fires
+        clock.advance(Constants.PHASE_TRANSITION_SETTLE_MS - 2_000) // still inside the window
         eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        tickPastSettle(eng, clock) // settles → the warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
-        // Same for recovery: entering SLOW suppresses the first warning.
+        // Same for recovery: entering SLOW mutes warnings the same way.
         val clock2 = FakeClock(1_000)
         val cue2 = RecordingCue()
         val eng2 = engineWith(roundsProfile, clock2, cue2, speed = 2.0f, hr = 165) // > hrRecoveryMax 120
@@ -606,12 +620,32 @@ class SessionEngineTest {
         clock2.advance(121_000) // t=121 → entry into SLOW
         eng2.tick()
         assertFalse(cue2.spoken.any { it.contains("Slow down") })
-        clock2.advance(1_000) // t=122 → first warning tick, suppressed
+        clock2.advance(1_000) // t=122 → first tick after entry, muted
         eng2.tick()
         assertFalse(cue2.spoken.any { it.contains("Slow down") })
-        clock2.advance(1_000) // t=123 → warning fires
-        eng2.tick()
+        tickPastSettle(eng2, clock2) // settles → the warning fires
         assertTrue(cue2.spoken.any { it.contains("Slow down") })
+    }
+
+    @Test
+    fun phaseTransitionWarnings_toggleOffKeepsOneTickSuppression() {
+        // resetPhaseAverages = false ("Level out phase transitions" off) keeps
+        // the pre-settle contract: only the very first tick after a transition
+        // is skipped, so the warning lands two ticks in.
+        val p = roundsProfile.copy(resetPhaseAverages = false)
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(p, clock, cue, hr = 100) // < hrPushMin 150
+        eng.run()
+        clock.advance(60_001) // t=60 → FAST entry
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        clock.advance(1_000) // t=61 → first tick after entry, suppressed
+        eng.tick()
+        assertFalse(cue.spoken.any { it.contains("Speed up") })
+        clock.advance(1_000) // t=62 → warning fires
+        eng.tick()
+        assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
     // ---- haptic vibration cues ----
 
@@ -671,8 +705,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
         assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
     }
@@ -690,8 +723,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertFalse(cue.spoken.any { it.contains("Speed up") })
         assertTrue(cue.vibrations.contains(CueVibration.GUIDANCE))
     }
@@ -709,8 +741,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // t=62: first warning tick (suppressed)
         eng.tick()
-        clock.advance(1_000) // t=63: warning would fire
-        eng.tick()
+        tickPastSettle(eng, clock) // warning evaluates: silent (audio), but it still vibrates
         clock.advance(297_000) // t=360 → finish
         eng.tick()
         assertTrue(eng.snapshot.finished)
@@ -750,8 +781,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning tick (suppressed)
         eng.tick()
-        clock.advance(1_000) // warning fires
-        eng.tick()
+        tickPastSettle(eng, clock) // warning fires
         assertTrue(cue.spoken.any { it.contains("Push phase 1") })
         assertTrue(cue.spoken.any { it.contains("Speed up") })
         assertTrue(cue.beeps > 0)
@@ -769,8 +799,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -786,8 +815,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
@@ -802,8 +830,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertFalse(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -819,8 +846,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -836,8 +862,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertFalse(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -853,8 +878,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -868,8 +892,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertFalse(cue.spoken.any { it.contains("Slow down") })
     }
 
@@ -884,8 +907,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertEquals(1, cue.spoken.count { it.contains("Speed up") })
         assertEquals(1, cue.vibrations.count { it == CueVibration.GUIDANCE })
     }
@@ -903,8 +925,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -918,12 +939,11 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertTrue(cue.spoken.any { it.contains("Slow down") })
     }
 
-@Test
+    @Test
     fun noSignalPace_suppressesPaceCue() {
         // Pace 0 (no signal) must not cue even though speed/HR are on target
         // and only the pace condition could fire.
@@ -935,8 +955,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertFalse(cue.spoken.any { it.contains("Speed up") })
     }
 
@@ -955,8 +974,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertFalse(cue.spoken.any { it.contains("Speed up") })
         // Recovery side: pace below ceiling, speed/HR inside the recovery band.
         val clock2 = FakeClock(1_000)
@@ -985,8 +1003,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000)
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed
         assertFalse(cue.spoken.any { it.contains("Slow down") })
     }
 
@@ -1001,8 +1018,7 @@ class SessionEngineTest {
         eng.tick()
         clock.advance(1_000) // first warning cue after entry suppressed
         eng.tick()
-        clock.advance(1_000) // then it fires
-        eng.tick()
+        tickPastSettle(eng, clock) // settle window elapsed → the warning fires
         assertEquals(1, cue.spoken.count { it.contains("Slow down") })
         // The 1/2-round quarter cue also vibrates GUIDANCE, so require at least
         // one guidance vibration rather than an exact count.

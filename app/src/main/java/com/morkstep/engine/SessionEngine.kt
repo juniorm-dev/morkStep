@@ -177,6 +177,14 @@ class SessionEngine(
     private var lastPhase: PhaseType? = null
     /** Suppresses the first warning cue in a newly-entered phase (sensor value from the previous phase is stale). */
     private var firstWarningCuePending = false
+    /**
+     * Wall-clock deadline before which warning cues stay muted after a phase
+     * transition. Armed on entry only when the profile levels out transitions
+     * ([com.morkstep.data.WorkoutProfile.resetPhaseAverages]); otherwise it stays
+     * 0 and just [firstWarningCuePending]'s single tick is skipped. See
+     * [Constants.PHASE_TRANSITION_SETTLE_MS].
+     */
+    private var warningSettleUntilMs = 0L
     private var lastQuarter = 0
     private var lastAdhocCueN = 0
     private val lastCueAt = mutableMapOf<String, Long>()
@@ -296,6 +304,15 @@ class SessionEngine(
             lastPhase = pa.phase
             lastCueAt.clear()
             firstWarningCuePending = true
+            // "Level out phase transitions" also holds warning cues back until
+            // the new phase's readings have settled: the average seeding below
+            // only shapes the reported averages, while the cue verdict reads the
+            // live signal, which at this instant is still the phase we just left.
+            warningSettleUntilMs = if (profile.resetPhaseAverages) {
+                clock.nowMillis() + Constants.PHASE_TRANSITION_SETTLE_MS
+            } else {
+                0L
+            }
             // Experimental (per-profile toggle): seed the newly-entered phase's
             // average accumulators to just inside its target band — push min + 1
             // on entering push, recovery max - 1 on entering recovery — so the
@@ -493,49 +510,67 @@ class SessionEngine(
                 if (s.hr != null && s.hr > profile.hrPushMin) {
                     _state.value = s.copy(overPushMinSec = s.overPushMinSec + 1)
                 }
-                // The first warning cue after a phase transition is suppressed:
-                // the sensor value carried over from the previous phase is stale.
-                if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Speed up while the push target (Push Min bpm / Push Min mph / Push Min spm) is unmet.
-                    // HR, speed and pace share one cue so they never double-fire, and a
-                    // reading without a meaningful signal never triggers a cue:
-                    // HR below the min-signal threshold, speed at/below its
-                    // min-signal threshold, or pace at/below its own.
-                    val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrPushMin
-                    val speedBelow = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed < profile.pushSpeedFloorMph.toFloat()
-                    val paceBelow = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace < profile.pushPaceFloorSpm
-                    if (hrBelow || speedBelow || paceBelow) {
-                        cueIf(
-                            "speedUp", "Speed up",
-                            warningReasons(
-                                if (hrBelow) "hr ${s.hr} < ${profile.hrPushMin}" else null,
-                                if (speedBelow) "speed ${"%.1f".format(s.speed!!)} < ${profile.pushSpeedFloorMph}" else null,
-                                if (paceBelow) "pace ${s.pace} < ${profile.pushPaceFloorSpm}" else null,
-                            )
+                // Warning cues are muted while the reading is still the previous
+                // phase's — one tick always, longer when the profile levels out
+                // transitions (see warningAllowed).
+                if (!warningAllowed()) return
+                // Speed up while the push target (Push Min bpm / Push Min mph / Push Min spm) is unmet.
+                // HR, speed and pace share one cue so they never double-fire, and a
+                // reading without a meaningful signal never triggers a cue:
+                // HR below the min-signal threshold, speed at/below its
+                // min-signal threshold, or pace at/below its own.
+                val hrBelow = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr < profile.hrPushMin
+                val speedBelow = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed < profile.pushSpeedFloorMph.toFloat()
+                val paceBelow = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace < profile.pushPaceFloorSpm
+                if (hrBelow || speedBelow || paceBelow) {
+                    cueIf(
+                        "speedUp", "Speed up",
+                        warningReasons(
+                            if (hrBelow) "hr ${s.hr} < ${profile.hrPushMin}" else null,
+                            if (speedBelow) "speed ${"%.1f".format(s.speed!!)} < ${profile.pushSpeedFloorMph}" else null,
+                            if (paceBelow) "pace ${s.pace} < ${profile.pushPaceFloorSpm}" else null,
                         )
-                    }
+                    )
                 }
             }
             PhaseType.SLOW -> {
-                if (firstWarningCuePending) { firstWarningCuePending = false } else {
-                    // Slow down while the recovery target (Recovery Max bpm / Recovery Max mph / Recovery Max spm) is unmet.
-                    val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrRecoveryMax
-                    val speedAbove = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed > profile.recoverySpeedCapMph.toFloat()
-                    val paceAbove = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace > profile.recoveryPaceCapSpm
-                    if (hrAbove || speedAbove || paceAbove) {
-                        cueIf(
-                            "slowDown", "Slow down",
-                            warningReasons(
-                                if (hrAbove) "hr ${s.hr} > ${profile.hrRecoveryMax}" else null,
-                                if (speedAbove) "speed ${"%.1f".format(s.speed!!)} > ${profile.recoverySpeedCapMph}" else null,
-                                if (paceAbove) "pace ${s.pace} > ${profile.recoveryPaceCapSpm}" else null,
-                            )
+                if (!warningAllowed()) return
+                // Slow down while the recovery target (Recovery Max bpm / Recovery Max mph / Recovery Max spm) is unmet.
+                val hrAbove = s.hr != null && s.hr >= Constants.MIN_VALID_HR_BPM && s.hr > profile.hrRecoveryMax
+                val speedAbove = s.speed != null && s.speed > Constants.MIN_VALID_SPEED_MPH && s.speed > profile.recoverySpeedCapMph.toFloat()
+                val paceAbove = s.pace != null && s.pace >= Constants.MIN_VALID_PACE_SPM && s.pace > profile.recoveryPaceCapSpm
+                if (hrAbove || speedAbove || paceAbove) {
+                    cueIf(
+                        "slowDown", "Slow down",
+                        warningReasons(
+                            if (hrAbove) "hr ${s.hr} > ${profile.hrRecoveryMax}" else null,
+                            if (speedAbove) "speed ${"%.1f".format(s.speed!!)} > ${profile.recoverySpeedCapMph}" else null,
+                            if (paceAbove) "pace ${s.pace} > ${profile.recoveryPaceCapSpm}" else null,
                         )
-                    }
+                    )
                 }
             }
             else -> Unit
         }
+    }
+
+    /**
+     * Whether a warning cue may be evaluated on this tick.
+     *
+     * Always false on the first tick after a phase transition (the reading
+     * predates the new phase), and — when the profile levels out transitions
+     * ([com.morkstep.data.WorkoutProfile.resetPhaseAverages]) — until
+     * [Constants.PHASE_TRANSITION_SETTLE_MS] has passed, by which point the
+     * merged speed/HR/pace values can only have been produced by the new phase.
+     * [ratePhase] calls this once per tick, so the single-tick suppression is
+     * consumed exactly once.
+     */
+    private fun warningAllowed(): Boolean {
+        if (firstWarningCuePending) {
+            firstWarningCuePending = false
+            return false
+        }
+        return clock.nowMillis() >= warningSettleUntilMs
     }
 
     private fun cueIf(key: String, text: String, reason: String = "") {

@@ -41,3 +41,32 @@ Do NOT implement without explicit approval. These are design changes, not bug fi
   consider a max single-sample delta or a median filter in `GpsSpeedSource`
   (mirrors `MIN_VALID_SPEED_MPH`'s low-end gate with a high-end clamp).
 - Lower priority; pace is the reported concern.
+
+## 3. Counter rate overshoot on batched step-counter delivery (recorded 2026-09-10)
+
+**Log evidence** (`tmp/morkStep-debug-1789044514060.txt`):
+```
+13:48:25 [pace-phone] step counter -> 78 spm (+1 steps, total 13240)
+13:48:26 [pace-phone] step counter -> 130 spm (+3 steps, total 13243)
+13:48:27 [warncue] Slow down: pace 130 > 110
+13:48:27 [pace-phone] step counter -> 95 spm (+1 steps, total 13244)
+```
+- The 50/50 chain reproduces exactly: `(78 + 3·60_000/1_000) / 2 = 129` → the logged 130.
+- Four steps across those two seconds is ~120 spm on average, so the smoothed value
+  overshot the true cadence by ~10 spm for exactly one tick — enough to cross a 110 spm
+  recovery cap from a walk that never exceeded it. The warning vanished on the next
+  sample (95).
+- Cause: `PaceCounterEstimator` divides the delta by the *delivery interval* and blends
+  each sample 50/50 regardless of `dt`, so a short batched interval (the 500 ms floor up
+  to ~1.5 s) carries the same weight as a 30 s one, while `raw = dCount · 60_000 / dt` is
+  very noisy there — at a true 95 spm, `P(dCount = 3)` in a 1 s interval is ≈ 0.2, i.e.
+  raw 180 on roughly one second in five.
+- Proposed (not implemented): weight each sample by `dt / PACE_WINDOW_MS` instead of a
+  fixed 0.5, and/or raise the minimum accepted interval from 500 ms toward
+  `PACE_ESTIMATOR_MIN_SPAN_MS`. Tradeoff: the counter path's "reacts within one step"
+  responsiveness slides toward the detector's windowed lag, which is the documented
+  reason the counter is authoritative while it is alive.
+- Transition-adjacent instances of this spike are already mitigated engine-side by the
+  warning settle window (`Constants.PHASE_TRANSITION_SETTLE_MS`); mid-phase ones are not.
+
+**Not changed yet** — recorded only.

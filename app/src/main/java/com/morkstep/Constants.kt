@@ -139,6 +139,26 @@ object Constants {
      */
     const val PHASE_AVG_SEED_OFFSET = 1
 
+    /**
+     * How long (ms) warning cues stay muted after entering a new phase when the
+     * profile levels out transitions
+     * ([com.morkstep.data.WorkoutProfile.resetPhaseAverages], on by default).
+     *
+     * The seeded phase averages are display/history state — the cue verdict in
+     * `SessionEngine.ratePhase()` reads the *instantaneous* merged
+     * speed/HR/pace, so a seeded average cannot hold a cue back on its own. The
+     * phase's first readings are still the previous phase's, and for pace a
+     * batch-delivered counter sample ("+3 steps" in a 1 s delivery gap) reads
+     * ~180 spm raw and lands the smoothed estimate above a recovery cap that the
+     * walk never crossed — the "[warncue] Slow down: pace 130 > 110" one tick
+     * after a transition. [PACE_WINDOW_MS] + one tick is the shortest window in
+     * which the phone pedometer's cadence can be rebuilt from steps taken inside
+     * the new phase. This is deliberately far below the shortest interval
+     * ([BASELINE_PUSH_SEC] = 45 s), so a genuinely off-target phase still cues
+     * promptly.
+     */
+    const val PHASE_TRANSITION_SETTLE_MS = 6_000L
+
     // ---- baseline profile ----
     /** Name of the Baseline profile; identity used by the home label and post-workout update. */
     const val BASELINE_PROFILE_NAME = "Baseline"

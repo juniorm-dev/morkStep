@@ -107,6 +107,12 @@ data class WorkoutProfile(
      * phase's average. Levels out the push/recovery transition without the new
      * phase being polluted by the previous one. ON by default; on-off per
      * profile; the overall average is never seeded.
+     *
+     * The toggle also mutes warning cues for
+     * [com.morkstep.Constants.PHASE_TRANSITION_SETTLE_MS] after a phase change:
+     * the seeded averages are reported state, while the cue verdict reads the
+     * live sensor signal, which right after the transition is still the previous
+     * phase's.
      */
     val resetPhaseAverages: Boolean = true,
     ) {
