@@ -68,6 +68,8 @@ data class WorkoutEntity(
      * Per-phase averages in workout order (warm-up → push/recovery pairs →
      * cool-down), driving the expanded history card and its line chart. Empty
      * for rows saved before per-phase recording, or when no sample arrived.
+     * A Health Connect backfill fills in a phase's HR where the session had no
+     * real-time HR rather than replacing the entry.
      */
     val phaseAverages: List<PhaseAverages> = emptyList(),
 )
