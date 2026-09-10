@@ -1,6 +1,17 @@
-# Pace sensor — future improvements (recorded 2026-09-06)
+# Pace sensor — future improvements (recorded 2026-09-06, findings updated 2026-09-10)
 
 Do NOT implement without explicit approval. These are design changes, not bug fixes.
+
+**Scope — phone pedometer only.** Every item below is a `PhonePaceSource` artifact. While a
+paired Wear companion is streaming `STEPS_PER_MINUTE`, that watch value is what the engine
+sees — `FallbackPaceSource` passes a phone sample through only after 15 s of watch silence —
+so the phone estimators are bypassed entirely and none of this applies. The phone path (and
+these limitations with it) returns if the watch stream stalls.
+
+**Status (0.13.3):** §1 open · §2 open · §3 open for mid-phase samples; its
+transition-adjacent case is mitigated engine-side by the
+`Constants.PHASE_TRANSITION_SETTLE_MS` warning mute (README → "Level out phase
+transitions"). No other item implemented.
 
 ## 1. Stop floor for displayed pace (raw-rate deadband)
 
@@ -32,7 +43,9 @@ Do NOT implement without explicit approval. These are design changes, not bug fi
   `lastCount`/`lastCountAt` so a genuine restart is detected on the next valid
   interval (only the *rate* is deadbanded, not the counter position).
 
-**Not changed yet** — recorded only.
+**Not changed yet** — recorded only. Same estimator as §3: a change to its blend weighting
+must keep this display deadband in mind (a stop floor is a *display* contract;
+`MIN_VALID_PACE_SPM = 10` already gates cues).
 
 ## 2. Optional: GPS speed sanity floor (separate from pace)
 
@@ -66,7 +79,13 @@ Do NOT implement without explicit approval. These are design changes, not bug fi
   `PACE_ESTIMATOR_MIN_SPAN_MS`. Tradeoff: the counter path's "reacts within one step"
   responsiveness slides toward the detector's windowed lag, which is the documented
   reason the counter is authoritative while it is alive.
-- Transition-adjacent instances of this spike are already mitigated engine-side by the
-  warning settle window (`Constants.PHASE_TRANSITION_SETTLE_MS`); mid-phase ones are not.
+- Transition-adjacent instances of this spike are already mitigated (0.13.3) engine-side by
+  the warning settle window — `Constants.PHASE_TRANSITION_SETTLE_MS`, armed when the profile
+  levels out transitions; the live `state.pace` display still shows them. Mid-phase
+  instances are not mitigated at all, and neither is the display.
+- With a live Wear pace relay the item disappears: the phone estimator never feeds the merge
+  (see Scope above).
 
-**Not changed yet** — recorded only.
+**Not changed yet** — recorded only. The recommendation above stands as the implementation
+proposal (time-weighting and/or a longer minimum interval) if phone-only workouts should
+stop crossing a ceiling for a single mid-phase sample.
