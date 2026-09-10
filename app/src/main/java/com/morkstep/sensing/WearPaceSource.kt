@@ -58,7 +58,7 @@ class WearPaceSource(
         registered = true
         try {
             messageClient.addListener(messageListener)
-            log?.log("[pace-wear] listening for step msg on ${PACE_PATH}")
+            log?.log("[pace-wear] listening for step msg on $PACE_PATH")
         } catch (_: Exception) {
             log?.log("[pace-wear] wear message addListener failed")
         }

@@ -55,7 +55,7 @@ class WearHeartRateSource(
         registered = true
         try {
             messageClient.addListener(messageListener)
-            log?.log("[hr-wear] listening on ${HR_PATH}")
+            log?.log("[hr-wear] listening on $HR_PATH")
         } catch (_: Exception) {
             log?.log("[hr-wear] addListener failed")
         }

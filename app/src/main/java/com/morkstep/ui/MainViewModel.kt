@@ -201,11 +201,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     /** Traces watch->phone message reception (state relays arrive ~1 Hz during a workout). */
-    private val watchMessageListener = object : com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener {
-        override fun onMessageReceived(event: com.google.android.gms.wearable.MessageEvent) {
-            if (event.path == WEAR_STATE_PATH) {
-                debugLog.log("[wear] watch ack ${event.sourceNodeId.takeLast(6)}")
-            }
+    private val watchMessageListener = MessageClient.OnMessageReceivedListener { event ->
+        if (event.path == WEAR_STATE_PATH) {
+            debugLog.log("[wear] watch ack ${event.sourceNodeId.takeLast(6)}")
         }
     }
     /** Last state payload sent to the watch; identical snapshots are not re-sent. */

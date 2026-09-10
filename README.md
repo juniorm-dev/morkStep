@@ -288,6 +288,10 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
 > KDoc-heavy sources — `Constants.PACE_WINDOW_MS` (disk line 72) is reported at 58,
 > `WorkoutProfile.recoverySpeedCapMph` (disk 54) at 46. Trust its symbol *names*; take
 > positions from `hover` / `definition` / `references`, which match disk exactly.
+> Third quirk: a diagnostics request issued immediately after an external file edit can
+> return the **pre-edit** result — a warning was reported at a line whose object literal had
+> already been rewritten into a lambda, and the very next identical request returned `OK`.
+> Re-request before judging anything.
 > The Gradle build (`assembleDebug`, `testDebugUnitTest`) remains the authority on type
 > errors.
 
