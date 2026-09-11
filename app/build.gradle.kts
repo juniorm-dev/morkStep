@@ -145,8 +145,8 @@ android {
         applicationId = "com.morkstep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "0.14.0"
+        versionCode = 31
+        versionName = "0.14.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Instrumented (emulator) tests start from a clean app state: no leftover
         // profiles or history, so assertions are deterministic. These tests are
