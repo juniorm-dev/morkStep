@@ -107,6 +107,32 @@ object Constants {
     /** Fused-location maximum tolerated update delay before a batch is forced (ms). */
     const val GPS_MAX_UPDATE_DELAY_MS = 2_000L
 
+    // ---- health connect HR backfill ----
+    /**
+     * Delays (ms) between the post-workout Health Connect HR re-reads, measured
+     * from the previous attempt (so the chain spans ~1 minute to an hour after
+     * the finish). Health Connect holds only what another app has already
+     * synced, and a wrist heart-rate source (the watch's Health Services, a
+     * strap app) commonly lands its records minutes after the session ended, so
+     * the read at the finish line is a first attempt rather than the only one.
+     * The chain stops at the first attempt that fills heart rate.
+     */
+    val HC_BACKFILL_RETRY_DELAYS_MS: List<Long> = listOf(60_000L, 5 * 60_000L, 15 * 60_000L, 45 * 60_000L)
+
+    /**
+     * How many of the most recent workouts a History-open sweep re-reads from
+     * Health Connect when they recorded no heart rate at all — the catch-up for
+     * a session whose HR only reached Health Connect after the app was closed,
+     * when the retry chain above had nothing left to run in.
+     */
+    const val HC_BACKFILL_SWEEP_LIMIT = 10
+
+    /** Oldest workout (ms since its end) a History-open sweep still re-reads. */
+    const val HC_BACKFILL_SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000L
+
+    /** Minimum gap (ms) between two sweep passes, so repeatedly opening History does not re-query per tap. */
+    const val HC_BACKFILL_SWEEP_THROTTLE_MS = 15 * 60_000L
+
     // ---- haptics ----
     /** Phone cue haptic length in ms: a clearly tactile buzz for transitions and cues. */
     const val PHONE_VIBRATE_MS = 600L

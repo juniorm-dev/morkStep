@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import com.morkstep.DebugLog
 import com.morkstep.data.PhaseAverages
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutEntity
@@ -50,32 +51,64 @@ data class HealthConnectHr(
  * Read the workout window's HR from Health Connect, or null when Health
  * Connect is unavailable, HR read permission was not granted, or no HR
  * records exist in the window. Never throws: callers treat null as "skip".
+ *
+ * Every outcome is traced to [log] under the `[hc]` tag, so an exported debug
+ * log says *why* a workout came back without HR — unavailable, unpermitted, a
+ * failed query, or a window Health Connect holds no records for (a source that
+ * has not synced yet).
  */
 suspend fun healthConnectHrForWorkout(
     context: Context,
     entity: WorkoutEntity,
     profile: WorkoutProfile,
+    log: DebugLog? = null,
 ): HealthConnectHr? {
-    if (HealthConnectClient.getSdkStatus(context) != HealthConnectClient.SDK_AVAILABLE) return null
+    if (HealthConnectClient.getSdkStatus(context) != HealthConnectClient.SDK_AVAILABLE) {
+        log?.log("[hc] Health Connect unavailable")
+        return null
+    }
     if (ContextCompat.checkSelfPermission(context, "android.permission.health.READ_HEART_RATE") !=
         PackageManager.PERMISSION_GRANTED
     ) {
+        log?.log("[hc] read permission not granted")
         return null
     }
     val start = Instant.ofEpochMilli(entity.startTime)
     val end = Instant.ofEpochMilli(entity.endTime)
-    if (end <= start) return null
+    if (end <= start) {
+        log?.log("[hc] empty window")
+        return null
+    }
 
     val client = HealthConnectClient.getOrCreate(context)
-    val aggregate = client.aggregate(
-        AggregateRequest(
-            metrics = setOf(HeartRateRecord.BPM_AVG, HeartRateRecord.BPM_MAX, HeartRateRecord.BPM_MIN),
-            timeRangeFilter = TimeRangeFilter.between(start, end),
+    // Average/min/max over the window. Min/max are the optional pair — a
+    // provider that predates the statistical metrics rejects that request — so
+    // a failed read is retried for the average alone instead of losing the
+    // whole backfill to one unsupported metric.
+    val aggregate = runCatching {
+        client.aggregate(
+            AggregateRequest(
+                metrics = setOf(HeartRateRecord.BPM_AVG, HeartRateRecord.BPM_MAX, HeartRateRecord.BPM_MIN),
+                timeRangeFilter = TimeRangeFilter.between(start, end),
+            )
         )
-    )
-    val avgOverall = aggregate[HeartRateRecord.BPM_AVG]?.toInt()
-    val minHr = aggregate[HeartRateRecord.BPM_MIN]?.toInt()
-    val maxHr = aggregate[HeartRateRecord.BPM_MAX]?.toInt()
+    }.getOrElse { e ->
+        log?.log("[hc] aggregate failed (${e::class.simpleName}); retrying average only")
+        runCatching {
+            client.aggregate(
+                AggregateRequest(
+                    metrics = setOf(HeartRateRecord.BPM_AVG),
+                    timeRangeFilter = TimeRangeFilter.between(start, end),
+                )
+            )
+        }.getOrElse { retry ->
+            log?.log("[hc] average-only aggregate failed (${retry::class.simpleName})")
+            null
+        }
+    }
+    val avgOverall = aggregate?.get(HeartRateRecord.BPM_AVG)?.toInt()
+    val minHr = aggregate?.get(HeartRateRecord.BPM_MIN)?.toInt()
+    val maxHr = aggregate?.get(HeartRateRecord.BPM_MAX)?.toInt()
 
     // Per-minute buckets → phase averages. Bucketing is best-effort: if the
     // bucket read fails (or a metric is unsupported per bucket) skip phases.
@@ -87,7 +120,10 @@ suspend fun healthConnectHrForWorkout(
                 timeRangeSlicer = Duration.ofMinutes(1),
             )
         )
-    }.getOrDefault(emptyList())
+    }.getOrElse { e ->
+        log?.log("[hc] bucket read failed (${e::class.simpleName})")
+        emptyList()
+    }
     val phaseBuckets = buckets.mapNotNull { b ->
         val bucketStart = b.startTime
         val offsetSec = Duration.between(start, bucketStart).seconds
@@ -100,8 +136,13 @@ suspend fun healthConnectHrForWorkout(
     if (avgOverall == null && minHr == null && maxHr == null && avgPush == null && avgRecovery == null &&
         phaseAverages.isEmpty()
     ) {
+        log?.log("[hc] no HR in ${entity.durationSec}s window (${buckets.size} buckets)")
         return null
     }
+    log?.log(
+        "[hc] HR avg ${avgOverall ?: "–"} min ${minHr ?: "–"} max ${maxHr ?: "–"} · " +
+            "${phaseBuckets.size} buckets · ${phaseAverages.size} phases"
+    )
     return HealthConnectHr(avgOverall, avgPush, avgRecovery, minHr, maxHr, phaseAverages)
 }
 

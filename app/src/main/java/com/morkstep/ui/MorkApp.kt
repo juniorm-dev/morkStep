@@ -295,6 +295,9 @@ WorkoutScreen(
                 )
             }
             composable(Routes.HISTORY) {
+                // Health Connect HR lags the workout, so opening History is where
+                // a late-arriving backfill catches up (throttled in the view model).
+                LaunchedEffect(Unit) { viewModel.sweepHrBackfill() }
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,

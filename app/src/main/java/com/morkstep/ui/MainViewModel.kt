@@ -786,23 +786,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 phaseAverages = ls.phaseAverages,
             )
             val id = container.workoutDao.insert(entity)
+            val stored = entity.copy(id = id)
             // Health Connect backfill: only when the Wear relay is off; real-time
             // values already recorded (BLE strap) are never overwritten — each
             // backfilled field fills only what is still null.
-            if (_hcBackfillHr.value && !_useWearHr.value && activeProfileAtFinish != null) {
-                val hc = runCatching {
-                    healthConnectHrForWorkout(getApplication(), entity.copy(id = id), activeProfileAtFinish)
-                }.getOrNull() ?: return@launch
-                val merged = entity.copy(
-                    id = id,
-                    avgOverallHr = entity.avgOverallHr ?: hc.avgOverall,
-                    avgPushHr = entity.avgPushHr ?: hc.avgPush,
-                    avgRecoveryHr = entity.avgRecoveryHr ?: hc.avgRecovery,
-                    minHr = hc.minHr,
-                    maxHr = hc.maxHr,
-                    phaseAverages = mergeBackfilledPhaseAverages(entity.phaseAverages, hc.phaseAverages),
-                )
-                if (merged != entity) container.workoutDao.update(merged)
+            if (!_hcBackfillHr.value) {
+                debugLog.log("[hc] skipped: disabled in Settings")
+            } else if (_useWearHr.value) {
+                debugLog.log("[hc] skipped: Wear HR relay is on")
+            } else if (activeProfileAtFinish == null) {
+                debugLog.log("[hc] skipped: no active profile")
+            } else if (!backfillHr(stored, activeProfileAtFinish)) {
+                // The source that records this workout's HR may not have reached
+                // Health Connect yet, so the finish-line read is a first attempt.
+                scheduleHrBackfillRetries(stored, activeProfileAtFinish)
             }
         }
         // Baseline: after any baseline workout, re-derive the calibrated profile
@@ -827,6 +824,95 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             // One-shot: the UI opens Settings and confirms the baseline was made.
             _baselineCreatedMessage.value = "Baseline created"
+        }
+    }
+
+    /**
+     * Read a finished workout's window from Health Connect and fill the heart
+     * rate it recorded none of — the overall/push/recovery averages, the
+     * min/max pair, and every phase occurrence (see `HealthConnectHr`).
+     * Idempotent: a metric or phase that already holds a real-time reading is
+     * never overwritten, so every retry path can simply call it again. Returns
+     * true once HR landed, false while Health Connect holds none for the window.
+     */
+    private suspend fun backfillHr(entity: WorkoutEntity, profile: WorkoutProfile): Boolean {
+        val hc = runCatching {
+            healthConnectHrForWorkout(getApplication(), entity, profile, debugLog)
+        }.getOrElse { e ->
+            debugLog.log("[hc] read failed (${e::class.simpleName})")
+            null
+        } ?: return false
+        val merged = entity.copy(
+            avgOverallHr = entity.avgOverallHr ?: hc.avgOverall,
+            avgPushHr = entity.avgPushHr ?: hc.avgPush,
+            avgRecoveryHr = entity.avgRecoveryHr ?: hc.avgRecovery,
+            minHr = hc.minHr,
+            maxHr = hc.maxHr,
+            phaseAverages = mergeBackfilledPhaseAverages(entity.phaseAverages, hc.phaseAverages),
+        )
+        if (merged == entity) {
+            debugLog.log("[hc] #${entity.id} already holds this HR")
+            return true
+        }
+        val rows = container.workoutDao.update(merged)
+        debugLog.log("[hc] filled #${entity.id} (rows=$rows)")
+        return true
+    }
+
+    /**
+     * Keep re-reading Health Connect for a finished workout that has no HR yet.
+     * Whatever records the session's HR (the watch's Health Services, a strap
+     * app) can reach Health Connect minutes after the workout ends, so the read
+     * at the finish line is the first attempt rather than the only one. Stops at
+     * the first attempt that fills HR; a workout still empty when the app closes
+     * is picked up by [sweepHrBackfill] the next time History is opened.
+     */
+    private fun scheduleHrBackfillRetries(entity: WorkoutEntity, profile: WorkoutProfile) {
+        viewModelScope.launch {
+            val delays = Constants.HC_BACKFILL_RETRY_DELAYS_MS
+            delays.forEachIndexed { i, delayMs ->
+                @Suppress("ConvertLongToDuration")
+                delay(delayMs)
+                if (backfillHr(entity, profile)) return@launch
+                debugLog.log("[hc] retry ${i + 1}/$delays.size: still no HR")
+            }
+        }
+    }
+
+    /** Last [sweepHrBackfill] pass, for the throttle. */
+    private var lastHrSweepMs = 0L
+
+    /**
+     * Catch-up backfill, run when History opens: re-read every recent workout
+     * that recorded no HR at all. Health Connect lags the workout — a wrist
+     * source can land the session's HR long after the finish, when the app and
+     * its retries are gone — so the backfill resumes here instead of being a
+     * single shot. Idempotent and throttled: a workout that already holds HR is
+     * not in the query, and a second open inside
+     * [Constants.HC_BACKFILL_SWEEP_THROTTLE_MS] does nothing.
+     */
+    fun sweepHrBackfill() {
+        if (!_hcBackfillHr.value || _useWearHr.value) return
+        val now = System.currentTimeMillis()
+        if (now - lastHrSweepMs < Constants.HC_BACKFILL_SWEEP_THROTTLE_MS) return
+        lastHrSweepMs = now
+        viewModelScope.launch {
+            val recent = runCatching {
+                container.workoutDao.needingHrBackfill(Constants.HC_BACKFILL_SWEEP_LIMIT)
+            }.getOrDefault(emptyList())
+            val pending = recent.filter { now - it.endTime <= Constants.HC_BACKFILL_SWEEP_MAX_AGE_MS }
+            if (pending.isEmpty()) return@launch
+            val profiles = _profiles.value
+            var filled = 0
+            pending.forEach { row ->
+                val profile = profiles.firstOrNull { it.name == row.profileName }
+                if (profile == null) {
+                    debugLog.log("[hc] skip #${row.id}: profile \"${row.profileName}\" is gone")
+                    return@forEach
+                }
+                if (backfillHr(row, profile)) filled++
+            }
+            debugLog.log("[hc] sweep: ${pending.size} without HR · $filled filled")
         }
     }
 

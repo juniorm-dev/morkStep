@@ -44,7 +44,11 @@ MainActivity → MorkApp (Scaffold + bottom nav) → Home/Config/History/Workout
                  • start() combines speed+hr into LiveState StateFlow
                  • MainViewModel.tickerJob: viewModelScope.launch { delay(1000); engine.tick() }
    output:     CueSink → CueSpeaker (TTS + beeps) + phone Vibrator haptics + watch haptics
-   finish:     onFinished() → Room WorkoutEntity row → Health-Connect HR backfill → Baseline re-derive
+   finish:     onFinished() → Room WorkoutEntity row → Health-Connect HR backfill
+                 • first read at the finish line, then timed re-reads, then a
+                   History-open sweep — Health Connect lags the workout, so an
+                   empty first read is normal ("[hc]" trace lines say which case)
+                 • baseline profile: re-derive the calibrated profile from the session
    keepalive:  WorkoutService foreground service (wake lock + notification)
 ```
 Sensors are hardware-callback-driven on the main Looper (BLE `BluetoothGattCallback`, GPS
@@ -156,7 +160,7 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
 | `app/src/main/java/com/morkstep/data/WorkoutHistory.kt` | Room DB (v2 — profile name + per-phase averages) + `WorkoutDao` |
 | `app/src/main/java/com/morkstep/ui/HistoryScreen.kt` | History list; cards expand in place to the per-phase averages |
 | `app/src/main/java/com/morkstep/ui/HistoryPhaseChart.kt` | Canvas line chart of a workout's per-phase speed/pace/HR |
-| `app/src/main/java/com/morkstep/sensing/HealthConnectHr.kt` | Post-workout HR backfill: aggregates + per-phase buckets → entry |
+| `app/src/main/java/com/morkstep/sensing/HealthConnectHr.kt` | Post-workout HR backfill: aggregates + per-phase buckets → entry; `[hc]` trace of every read |
 | `wear/src/main/java/com/morkstep/wear/Constants.kt` | Cross-device protocol constants — MUST stay in sync with phone |
 | `wear/src/main/java/com/morkstep/wear/WearWorkoutGraphics.kt` | `decodeWearSessionState`, graphics panel |
 | `app/src/main/AndroidManifest.xml` / `wear/…` | Permissions + activity/service wiring |
