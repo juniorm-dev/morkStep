@@ -90,15 +90,20 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun observeAll(): Flow<List<WorkoutEntity>>
 
+    /** One row by id, for a fill-only write that must merge into the current state (null when the row is gone). */
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    suspend fun findById(id: Long): WorkoutEntity?
+
     /**
-     * Recent workouts that recorded no heart rate at all — the candidates for a
-     * post-hoc Health Connect read (see `MainViewModel.sweepHrBackfill`), newest
-     * first. A workout with any real-time HR is left alone: the backfill only
-     * ever fills gaps, it never replaces a live reading.
+     * Recent workouts whose overall HR average is still unknown — the candidates
+     * for the post-hoc Health Connect read (see `MainViewModel.sweepHrBackfill`),
+     * newest first. That is a workout which recorded no heart rate at all, or one
+     * where only part of an earlier backfill landed (the overall average is the
+     * value the History card shows). A workout that holds it is left alone: the
+     * backfill only ever fills gaps, it never replaces a live reading.
      */
     @Query(
-        "SELECT * FROM workouts WHERE avgOverallHr IS NULL AND avgPushHr IS NULL " +
-            "AND avgRecoveryHr IS NULL AND minHr IS NULL AND maxHr IS NULL " +
+        "SELECT * FROM workouts WHERE avgOverallHr IS NULL " +
             "ORDER BY startTime DESC LIMIT :limit"
     )
     suspend fun needingHrBackfill(limit: Int): List<WorkoutEntity>

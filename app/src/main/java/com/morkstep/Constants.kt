@@ -133,6 +133,27 @@ object Constants {
     /** Minimum gap (ms) between two sweep passes, so repeatedly opening History does not re-query per tap. */
     const val HC_BACKFILL_SWEEP_THROTTLE_MS = 15 * 60_000L
 
+    /**
+     * Minimum gap (ms) between two on-demand Health Connect reads for the same
+     * workout — the read fired when its History card is opened
+     * ([com.morkstep.ui.MainViewModel.backfillHrForWorkout]). A row whose HR is
+     * still missing is otherwise re-queried on every open, and a second open
+     * inside this window would only repeat the query that just ran.
+     */
+    const val HC_BACKFILL_CARD_THROTTLE_MS = 60_000L
+
+    // ---- debug tracing ----
+    /**
+     * Lines the debug log keeps per session — the exported trace. Sized for a
+     * whole workout plus its post-finish Health Connect backfill lines, which a
+     * few dozen events are not enough for: the backfill verdict has to survive
+     * the sensor chatter that follows the finish.
+     */
+    const val DEBUG_LOG_MAX_LINES = 400
+
+    /** Newest lines of the trace the workout screen mirrors on screen; the export keeps all of them. */
+    const val DEBUG_LOG_DISPLAY_LINES = 12
+
     // ---- haptics ----
     /** Phone cue haptic length in ms: a clearly tactile buzz for transitions and cues. */
     const val PHONE_VIBRATE_MS = 600L

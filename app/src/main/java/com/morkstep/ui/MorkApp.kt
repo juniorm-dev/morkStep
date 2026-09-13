@@ -230,7 +230,11 @@ WorkoutScreen(
                         debugLog = debugEnabled,
                         showDebugLog = showDebugLog,
                         onExportLog = {
-                            createLogDoc.launch("morkStep-debug-${System.currentTimeMillis()}.txt")
+                            // The version in the name lets a capture be matched to
+                            // the build it came from without opening it.
+                            createLogDoc.launch(
+                                "morkStep-debug-${viewModel.appVersionName()}-${System.currentTimeMillis()}.txt"
+                            )
                         },
                                             onEnd = {
                         viewModel.endWorkout()
@@ -301,6 +305,9 @@ WorkoutScreen(
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,
+                    // Opening a card re-reads Health Connect for that row, so a
+                    // workout whose HR landed after the automatic passes fills in.
+                    onWorkoutOpened = viewModel::backfillHrForWorkout,
                 )
             }
         }

@@ -46,8 +46,11 @@ MainActivity → MorkApp (Scaffold + bottom nav) → Home/Config/History/Workout
    output:     CueSink → CueSpeaker (TTS + beeps) + phone Vibrator haptics + watch haptics
    finish:     onFinished() → Room WorkoutEntity row → Health-Connect HR backfill
                  • first read at the finish line, then timed re-reads, then a
-                   History-open sweep — Health Connect lags the workout, so an
-                   empty first read is normal ("[hc]" trace lines say which case)
+                   History-open sweep, then that row's History card being opened
+                   (on-demand re-read) — Health Connect lags the workout, so an
+                   empty first read is normal ("[hc]" trace lines say which case:
+                   SDK status + read permission, the provider probe, and the
+                   outcome of each read/skip)
                  • baseline profile: re-derive the calibrated profile from the session
    keepalive:  WorkoutService foreground service (wake lock + notification)
 ```
@@ -158,9 +161,9 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
 | `app/src/main/java/com/morkstep/engine/SessionEngine.kt` | IWT state machine; `CueSink`/`CueVibration`/`SessionClock` |
 | `app/src/main/java/com/morkstep/data/Config.kt` | Domain models + enums (`WorkoutProfile`, `PhaseType`, `WorkoutLength`, `VibrationMode`, `DarkMode`) |
 | `app/src/main/java/com/morkstep/data/WorkoutHistory.kt` | Room DB (v2 — profile name + per-phase averages) + `WorkoutDao` |
-| `app/src/main/java/com/morkstep/ui/HistoryScreen.kt` | History list; cards expand in place to the per-phase averages |
+| `app/src/main/java/com/morkstep/ui/HistoryScreen.kt` | History list; cards expand in place to the per-phase averages, and opening one re-reads Health Connect for that row (`onWorkoutOpened`) |
 | `app/src/main/java/com/morkstep/ui/HistoryPhaseChart.kt` | Canvas line chart of a workout's per-phase speed/pace/HR |
-| `app/src/main/java/com/morkstep/sensing/HealthConnectHr.kt` | Post-workout HR backfill: aggregates + per-phase buckets → entry; `[hc]` trace of every read |
+| `app/src/main/java/com/morkstep/sensing/HealthConnectHr.kt` | Post-workout HR backfill: aggregates + per-phase buckets → entry; SDK/permission status, provider probe and every read outcome traced under `[hc]` |
 | `wear/src/main/java/com/morkstep/wear/Constants.kt` | Cross-device protocol constants — MUST stay in sync with phone |
 | `wear/src/main/java/com/morkstep/wear/WearWorkoutGraphics.kt` | `decodeWearSessionState`, graphics panel |
 | `app/src/main/AndroidManifest.xml` / `wear/…` | Permissions + activity/service wiring |
@@ -208,7 +211,8 @@ it via `:app/:wear:connectedDebugAndroidTest`.
   the run — the empty-state assertions assume a fresh install, so uninstall first if the
   app has been used on that device).
 - **Coverage today**: `engine/` (SessionEngine) is exhaustively covered; pure parsers
-  (BLE HR, Wear 35-byte decode), the Health Connect bucket/merge helpers, and
+  (BLE HR, Wear 35-byte decode), the Health Connect bucket/merge/gap helpers, `DebugLog`'s
+  export-vs-screen views, the collapsed History card's HR line, and
   `Transfer`/`Baseline` logic are covered; the History card (expand, per-phase rows,
   phase chart) is covered by the instrumented `WorkoutHistoryTest`. **Gaps**:
   `audio/CueSpeaker`, `WorkoutService`, `MainViewModel`, `data/Store` +

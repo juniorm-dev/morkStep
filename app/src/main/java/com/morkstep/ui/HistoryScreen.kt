@@ -51,7 +51,22 @@ private fun summaryLine(w: WorkoutEntity): String {
 private fun overallAverages(w: WorkoutEntity): List<String> = buildList {
     w.avgOverallSpeed?.let { add("speed mph:  overall %.1f".format(it)) }
     w.avgOverallPace?.let { add("pace spm:  overall $it") }
-    w.avgOverallHr?.let { add("HR bpm:  overall $it") }
+    hrLine(w)?.let { add(it) }
+}
+
+/**
+ * The collapsed card's HR line: the whole-session average when Health Connect
+ * has it, else the pooled push/recovery pair, else the min–max pair. A backfilled
+ * row can hold only some of those — the aggregate and the per-minute buckets are
+ * separate reads — and a row that recorded heart rate at all has to say so
+ * without the card being opened.
+ */
+internal fun hrLine(w: WorkoutEntity): String? = when {
+    w.avgOverallHr != null -> "HR bpm:  overall ${w.avgOverallHr}"
+    w.avgPushHr != null || w.avgRecoveryHr != null ->
+        "HR bpm:  push ${w.avgPushHr ?: "–"} · rec ${w.avgRecoveryHr ?: "–"}"
+    w.minHr != null && w.maxHr != null -> "HR bpm:  min–max ${w.minHr}–${w.maxHr}"
+    else -> null
 }
 
 /** Pooled push/recovery averages — every round of a type taken together, the level above the per-phase rows. */
@@ -76,11 +91,19 @@ private fun extraStats(w: WorkoutEntity): String? {
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
+/**
+ * Workout history: every finished session as one card. Opening a card reveals
+ * the pooled and per-phase breakdown — and [onWorkoutOpened] is where
+ * MainViewModel re-reads Health Connect for that row, so a workout whose HR only
+ * reached Health Connect after the automatic passes (finish-line read, retry
+ * chain, History sweep) still fills in on demand.
+ */
 @Suppress("FunctionName")
 @Composable
 fun HistoryScreen(
     onExport: () -> Unit,
     onImport: () -> Unit,
+    onWorkoutOpened: (WorkoutEntity) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as MorkApplication
     val dao = app.container.workoutDao
@@ -135,7 +158,11 @@ fun HistoryScreen(
                     WorkoutRow(
                         w = w,
                         expanded = expandedId == w.id,
-                        onToggle = { expandedId = if (expandedId == w.id) null else w.id },
+                        onToggle = {
+                            val opening = expandedId != w.id
+                            expandedId = if (opening) w.id else null
+                            if (opening) onWorkoutOpened(w)
+                        },
                     )
                 }
             }
