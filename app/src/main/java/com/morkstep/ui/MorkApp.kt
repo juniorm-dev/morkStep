@@ -99,6 +99,10 @@ fun MorkApp(viewModel: MainViewModel) {
     fun launchHistoryImport() {
         openWorkoutDoc.launch(arrayOf("application/json"))
     }
+    /** Export the captured debug trace; the name carries the app version so a capture says which build it came from. */
+    fun launchLogExport() {
+        createLogDoc.launch("morkStep-debug-${viewModel.appVersionName()}-${System.currentTimeMillis()}.txt")
+    }
 
     // After saving a profile: confirm with a snackbar and return to Home.
     LaunchedEffect(savedProfileName) {
@@ -212,6 +216,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     profiles = profiles,
                     activeId = activeId,
                     workoutActive = live.running,
+                    debugLog = debugEnabled,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
@@ -219,6 +224,9 @@ fun MorkApp(viewModel: MainViewModel) {
                     },
                     onConfig = { navController.navigate(Routes.CONFIG) },
                     onHistory = { navController.navigate(Routes.HISTORY) },
+                    // Export at any point — before a workout, or after one to
+                    // capture its trace including the [hc] backfill verdict.
+                    onExportLog = ::launchLogExport,
                 )
             }
             composable(Routes.WORKOUT) {
@@ -229,13 +237,7 @@ WorkoutScreen(
                         simulated = simulated,
                         debugLog = debugEnabled,
                         showDebugLog = showDebugLog,
-                        onExportLog = {
-                            // The version in the name lets a capture be matched to
-                            // the build it came from without opening it.
-                            createLogDoc.launch(
-                                "morkStep-debug-${viewModel.appVersionName()}-${System.currentTimeMillis()}.txt"
-                            )
-                        },
+                        onExportLog = ::launchLogExport,
                                             onEnd = {
                         viewModel.endWorkout()
                         // Baseline: the finish event above returns Home itself.
