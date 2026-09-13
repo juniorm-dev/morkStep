@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Read heart-rate records from Health Connect (post-workout backfill). -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <!-- The backfill's late reads: the finish-line read runs with the workout
+         screen up, but the re-reads that follow (the retry chain at ~1/6/21/66
+         min, a History-open sweep, opening a card) run with the app out of the
+         foreground, where Health Connect serves data only to an app holding this
+         permission. Without the grant those reads come back empty, so heart rate
+         that reaches Health Connect after the workout never enters history. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
     <!-- Bluetooth heart-rate straps -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />

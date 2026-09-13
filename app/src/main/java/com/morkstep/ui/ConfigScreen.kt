@@ -43,6 +43,7 @@ import com.morkstep.data.DarkMode
 import com.morkstep.data.VibrationMode
 import com.morkstep.data.WorkoutLength
 import com.morkstep.data.WorkoutProfile
+import com.morkstep.sensing.BackgroundReadAccess
 
 private val LENGTH_MODES = listOf(
     WorkoutLength.ROUNDS to "Rounds",
@@ -136,6 +137,7 @@ fun ConfigScreen(
     onRequestActivityRecognition: () -> Unit,
     onMaybeRequestActivityRecognition: () -> Unit,
     hcGranted: Boolean,
+    hcBackgroundRead: BackgroundReadAccess,
     onHealthConnectPermission: () -> Unit,
     onDelete: (Long) -> Unit,
     onRequestPermissions: () -> Unit,
@@ -589,6 +591,14 @@ fun ConfigScreen(
                             "Health Connect: ${if (hcGranted) "granted" else "not granted"}",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    if (hcBackgroundRead != BackgroundReadAccess.UNSUPPORTED) {
+                        Text(
+                            "Health Connect background reads: ${hcBackgroundRead.note} — " +
+                                "required for the post-workout rereads (1/6/21/66 min) " +
+                                "and every History re-read.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 } else {
                     Text(
                         sensorNote,

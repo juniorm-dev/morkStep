@@ -246,9 +246,10 @@ class SessionEngine(
             }
         }
         // Surface the app debug log on screen regardless of run state, so
-        // connection/relay issues are visible before and during a workout.
+        // connection/relay issues are visible before and during a workout. The
+        // screen shows only the newest lines; the export keeps the whole trace.
         scope.launch {
-            log?.text?.collect { t ->
+            log?.displayText?.collect { t ->
                 if (t != snapshot.debugText) _state.value = snapshot.copy(debugText = t)
             }
         }

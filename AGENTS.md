@@ -35,28 +35,50 @@ MainActivity → MorkApp (Scaffold + bottom nav) → Home/Config/History/Workout
                                        │ read StateFlows from
                                  MainViewModel  ◀── owns EVERYTHING
    config in:  ConfigStore (DataStore Flows) → rebuildSources()/setupEngine()
-   sensors:    SpeedSource/HeartRateSource StateFlow<Float?/Int?> hot streams
+   sensors:    SpeedSource/PaceSource/HeartRateSource StateFlow<Float?/Int?> hot streams
                  • GpsSpeedSource  (Play Services Fused Location, 1 Hz)
                  • BleHeartRateSource (BLE strap HR service 0x180D/0x2A37)
                  • WearHeartRateSource (HR relayed from paired watch, /morkstep/hr)
+                 • WearPaceSource (watch cadence, /morkstep/pace) merged with
+                   PhonePaceSource (phone step sensors) by FallbackPaceSource
+                   (phone drives after 15 s of watch silence; 0 = forced)
                  • SimulatedSensors (dev toggle, seeded Random(42), phase-driven)
-   engine:     SessionEngine(profile, speedSrc, hrSrc, SpeakerSink)
-                 • start() combines speed+hr into LiveState StateFlow
+   engine:     SessionEngine(profile, speedSrc, hrSrc, paceSrc, SpeakerSink)
+                 • start() combines speed+hr+pace into LiveState StateFlow
                  • MainViewModel.tickerJob: viewModelScope.launch { delay(1000); engine.tick() }
    output:     CueSink → CueSpeaker (TTS + beeps) + phone Vibrator haptics + watch haptics
-   finish:     onFinished() → Room WorkoutEntity row → Health-Connect HR backfill → Baseline re-derive
+   finish:     onFinished() → Room WorkoutEntity row → Health-Connect HR backfill
+                 • first read at the finish line, then timed re-reads, then a
+                   History-open sweep, then that row's History card being opened
+                   (on-demand re-read) — Health Connect lags the workout, so an
+                   empty first read is normal ("[hc]" trace lines say which case:
+                   SDK status + read permission + background-read state, the
+                   provider probe, and the outcome of each read/skip)
+                 • every read after the finish-line one runs out of the
+                   foreground, so Health Connect only serves it data when the app
+                   holds android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND
+                   (granted with the heart-rate read; shown in Settings and in the
+                   export header) — without it the re-reads come back empty and
+                   late HR never reaches history
+                 • the sweep skips rows still inside Constants.HC_BACKFILL_SWEEP_GRACE_MS
+                   of their finish (Health Connect cannot hold their HR yet) and
+                   spends no throttle for such a pass, so opening History right
+                   after a workout cannot block the pass that fills the HR
+                 • baseline profile: re-derive the calibrated profile from the session
    keepalive:  WorkoutService foreground service (wake lock + notification)
 ```
 Sensors are hardware-callback-driven on the main Looper (BLE `BluetoothGattCallback`, GPS
-`LocationCallback`, Health-Connect / Health Services `MeasureCallback`); all of them funnel
+`LocationCallback`, Wear Health Services `MeasureCallback` in the watch app — the phone's
+Health Connect backfill is suspend reads, not a callback); all of them funnel
 into `StateFlow`s. All IO and state mutation runs in `viewModelScope.launch { }` coroutines.
 
 **Watch** (`wear/`, `com.morkstep.wear`, standalone) — relay/driver companion.
-`HrRelay` pushes watch HR (`/morkstep/hr`) to the phone; `StateRelay` decodes
-`/morkstep/state` (35-byte big-endian payload) and renders the phase tracker;
-`VibrateRelay` buzzes on `/morkstep/vibrate`; a Pause button sends `/morkstep/pause` back
-to the phone where `wearPauseListener` calls `engine.pause()/resume()`. Vibration gating
-happens on the phone.
+`HrRelay` pushes watch HR (`/morkstep/hr`) and `PaceRelay` the watch pedometer cadence
+(`/morkstep/pace`) to the phone; `StateRelay` decodes `/morkstep/state` (47-byte big-endian
+payload) and renders the phase tracker; `VibrateRelay` buzzes on `/morkstep/vibrate` while the
+watch-local **Vibrate** switch is on; a Pause button sends `/morkstep/pause` back to the phone
+where `wearPauseListener` calls `engine.pause()/resume()`. Cue-vibration *gating* happens on
+the phone (the active profile's mode decides what is relayed at all).
 
 ---
 
@@ -66,7 +88,7 @@ happens on the phone.
 |---|---|
 | `app/src/main/java/com/morkstep/` | Phone app, grouped by responsibility |
 | `…/engine/` | `SessionEngine` — pure IWT state machine + cues; `CueSink`/`CueVibration` interfaces |
-| `…/sensing/` | `SpeedSource` / `HeartRateSource` interfaces + GPS/BLE/Wear/Simulated/Health-Connect providers |
+| `…/sensing/` | `SpeedSource` / `PaceSource` / `HeartRateSource` interfaces + GPS/BLE/Wear/Simulated providers, the pace merge (`FallbackPaceSource`) and the Health Connect HR backfill (`HealthConnectHr.kt` — suspend reads, not a live source) |
 | `…/data/` | `ConfigStore` (DataStore), `WorkoutHistory` (Room DB), `Config.kt` models/enums, `Baseline.kt`, `Transfer.kt` (JSON backup) |
 | `…/ui/` | Compose screens + `MainViewModel` (state hub) |
 | `…/audio/` | `CueSpeaker` (TTS + tones) |
@@ -99,7 +121,7 @@ gradlew :app:help
 ```
 
 Wear release minification is enabled (R8 strips Guava/health-services); app release
-minification is disabled. Release packaging also runs `VerifyVersionTag` (see below).
+minification is disabled. App release packaging also runs `VerifyVersionTag` (see below).
 `release.bat` orchestrates a full release build + signing at the root.
 
 ---
@@ -116,7 +138,8 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
   It is advanced by a manual 1 Hz ticker, not a timer. Pause excludes paused wall-clock.
   Transient phase transitions are detected by `phaseAt().phase != lastPhase`, not an enum.
 - **Sensor contract**: anything providing speed implements `SpeedSource { val speed: StateFlow<Float?> }`;
-  pace implements `PaceSource { val pace: StateFlow<Int?> }` (steps/min, from the Wear pedometer);
+  pace implements `PaceSource { val pace: StateFlow<Int?> }` (steps/min, from the watch
+  pedometer relay or the phone's own step sensors, merged by `FallbackPaceSource`);
   HR implements `HeartRateSource { val hr: StateFlow<Int?> }` (in `sensing/Sensors.kt`).
 - **Output contract**: engine emits into `CueSink` (`beep()` / `speak(text)` / `vibrate(kind)`);
   `SpeakerSink` (in `MainViewModel`) bridges to `CueSpeaker` + haptics. Haptics are gated by
@@ -128,19 +151,20 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
 - **Naming**: tests `camelCase_describesBehavior`; parse helpers and pure functions are
   top-level `fun`s; enums `UPPER_SNAKE`. Background coroutines use `…Job` /
   `viewModelScope.launch { … }`.
-- **Known historical naming**: `speedCeilingMph` caps *recovery* ("Slow down"),
-  `speedFloorMph` floors *push* ("Speed up"). Pace mirrors these as `paceCeilingSpm` /
-  `paceFloorSpm`. Heart rate mirrors the same phase roles but is named by target
-  instead: `hrPushMin` (push keeps HR at/above, default 150), `hrRecoveryMax`
-  (recovery keeps HR at/below, default 120 — lower than the push min by design).
-  `Consume` for signal validity floors:
+- **Known historical naming**: the pre-rename speed fields were `speedCeilingMph` (caps
+  *recovery* — "Slow down") and `speedFloorMph` (floors *push* — "Speed up"); the current
+  `WorkoutProfile` fields are `recoverySpeedCapMph` / `pushSpeedFloorMph`, with pace mirroring
+  them as `recoveryPaceCapSpm` / `pushPaceFloorSpm`. Heart rate mirrors the same phase roles
+  but is named by target instead: `hrPushMin` (push keeps HR at/above, default 150),
+  `hrRecoveryMax` (recovery keeps HR at/below, default 120 — lower than the push min by
+  design). `Consume` for signal validity floors:
   `MIN_VALID_HR_BPM`, `MIN_VALID_SPEED_MPH`, `MIN_VALID_PACE_SPM`.
 - **Versioning**: per-module `versionCode`/`versionName` in each `build.gradle.kts`;
   releases tagged `v<versionName>`. `VerifyVersionTag` (app, release variants) fails
   `packageRelease` if the git tag already exists — bump version before release. `VersionApk`
   (both modules, via `androidComponents.onVariants` `finalizedBy` on `package<BuildType>`)
-  copies APKs to `morkStep-<version>-<buildType>.apk` / `morkStep-wear-…`, preserving
-  `-unsigned`/`-signed` suffixes.
+  copies APKs to `morkStep-<buildType>-<versionName>.apk` / `morkStep-wear-<buildType>-<versionName>.apk`
+  (the version goes after the build type), keeping the `-unsigned`/`-signed` suffix at the end.
 
 ---
 
@@ -154,13 +178,13 @@ minification is disabled. Release packaging also runs `VerifyVersionTag` (see be
 | `app/src/main/java/com/morkstep/engine/SessionEngine.kt` | IWT state machine; `CueSink`/`CueVibration`/`SessionClock` |
 | `app/src/main/java/com/morkstep/data/Config.kt` | Domain models + enums (`WorkoutProfile`, `PhaseType`, `WorkoutLength`, `VibrationMode`, `DarkMode`) |
 | `app/src/main/java/com/morkstep/data/WorkoutHistory.kt` | Room DB (v2 — profile name + per-phase averages) + `WorkoutDao` |
-| `app/src/main/java/com/morkstep/ui/HistoryScreen.kt` | History list; cards expand in place to the per-phase averages |
+| `app/src/main/java/com/morkstep/ui/HistoryScreen.kt` | History list; a collapsed card carries the pooled push/recovery averages beside the overall per metric, and opening one adds the HR extremes, the per-phase averages and the chart, re-reading Health Connect for that row (`onWorkoutOpened`) |
 | `app/src/main/java/com/morkstep/ui/HistoryPhaseChart.kt` | Canvas line chart of a workout's per-phase speed/pace/HR |
-| `app/src/main/java/com/morkstep/sensing/HealthConnectHr.kt` | Post-workout HR backfill: aggregates + per-phase buckets → entry |
+| `app/src/main/java/com/morkstep/sensing/HealthConnectHr.kt` | Post-workout HR backfill: aggregates + per-phase buckets → entry; SDK/permission/background-read status, provider probe and every read outcome traced under `[hc]`; the pure sweep-candidate filter (`hrSweepCandidates`) |
 | `wear/src/main/java/com/morkstep/wear/Constants.kt` | Cross-device protocol constants — MUST stay in sync with phone |
 | `wear/src/main/java/com/morkstep/wear/WearWorkoutGraphics.kt` | `decodeWearSessionState`, graphics panel |
 | `app/src/main/AndroidManifest.xml` / `wear/…` | Permissions + activity/service wiring |
-| `app/build.gradle.kts` / `wear/build.gradle.kts` | Versions, deps, `VersionApk`/`VerifyVersionTag` tasks |
+| `app/build.gradle.kts` / `wear/build.gradle.kts` | Versions, deps, `VersionApk` (both modules), `VerifyVersionTag` (app, release variants only) |
 
 ---
 
@@ -196,17 +220,19 @@ it via `:app/:wear:connectedDebugAndroidTest`.
   `ext:junit` 1.2.1, Compose `ui-test-junit4`, espresso-core 3.7.0 (pinned override — 3.5.1
   crashes on Android 15/16). No Kotest/Mockito/Robolectric.
 - **Unit test patterns**: pure helpers and the engine are tested directly with fakes —
-  `FakeClock (SessionClock)`, `FakeSensors (SpeedSource+HeartRateSource via MutableStateFlow)`,
+  `FakeClock (SessionClock)`, `FakeSensors (SpeedSource+PaceSource+HeartRateSource via MutableStateFlow)`,
   `RecordingCue (CueSink)`. This is the idiomatic way to test logic without Android APIs.
 - **Instrumented patterns**: `createAndroidComposeRule<MainActivity>` + Compose
-  `onNodeWithText`/`performClick`/`waitUntil`; `testOptions animationsDisabled=true`;
-  `clearPackageData=true` (does **not** clear data an already-installed app carries into
-  the run — the empty-state assertions assume a fresh install, so uninstall first if the
-  app has been used on that device).
+  `onNodeWithText`/`performClick`/`waitUntil`; `testOptions animationsDisabled=true` in both
+  modules; `clearPackageData=true` in the **app** module only (does **not** clear data an
+  already-installed app carries into the run — the empty-state assertions assume a fresh
+  install, so uninstall first if the app has been used on that device).
 - **Coverage today**: `engine/` (SessionEngine) is exhaustively covered; pure parsers
-  (BLE HR, Wear 35-byte decode), the Health Connect bucket/merge helpers, and
-  `Transfer`/`Baseline` logic are covered; the History card (expand, per-phase rows,
-  phase chart) is covered by the instrumented `WorkoutHistoryTest`. **Gaps**:
+  (BLE HR, Wear 47-byte decode), the Health Connect bucket/merge/gap/sweep-candidate
+  helpers, `DebugLog`'s export-vs-screen views, the collapsed History card's averages
+  (speed/pace/HR lines) and HR-line fallbacks, and `Transfer`/`Baseline` logic are covered;
+  the History card (expand, per-phase rows, phase chart) is covered by the instrumented
+  `WorkoutHistoryTest`. **Gaps**:
   `audio/CueSpeaker`, `WorkoutService`, `MainViewModel`, `data/Store` +
   `WorkoutHistory`, `GpsSpeedSource`, `WearHeartRateSource`, and the live-session phone UI
   (`WorkoutScreen`, `WorkoutPhasePanel`) have no direct tests. Follow the fake-based unit

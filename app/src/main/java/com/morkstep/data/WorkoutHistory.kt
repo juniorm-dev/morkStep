@@ -83,11 +83,30 @@ interface WorkoutDao {
     @Insert
     suspend fun insertAll(workouts: List<WorkoutEntity>)
 
+    /** @return rows written; 0 means the row is gone (deleted/imported over) and nothing was stored. */
     @Update
-    suspend fun update(workout: WorkoutEntity)
+    suspend fun update(workout: WorkoutEntity): Int
 
     @Query("SELECT * FROM workouts ORDER BY startTime DESC")
     fun observeAll(): Flow<List<WorkoutEntity>>
+
+    /** One row by id, for a fill-only write that must merge into the current state (null when the row is gone). */
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    suspend fun findById(id: Long): WorkoutEntity?
+
+    /**
+     * Recent workouts whose overall HR average is still unknown — the candidates
+     * for the post-hoc Health Connect read (see `MainViewModel.sweepHrBackfill`),
+     * newest first. That is a workout which recorded no heart rate at all, or one
+     * where only part of an earlier backfill landed (the overall average is the
+     * value the History card shows). A workout that holds it is left alone: the
+     * backfill only ever fills gaps, it never replaces a live reading.
+     */
+    @Query(
+        "SELECT * FROM workouts WHERE avgOverallHr IS NULL " +
+            "ORDER BY startTime DESC LIMIT :limit"
+    )
+    suspend fun needingHrBackfill(limit: Int): List<WorkoutEntity>
 }
 
 /**

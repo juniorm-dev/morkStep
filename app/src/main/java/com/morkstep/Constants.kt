@@ -107,6 +107,64 @@ object Constants {
     /** Fused-location maximum tolerated update delay before a batch is forced (ms). */
     const val GPS_MAX_UPDATE_DELAY_MS = 2_000L
 
+    // ---- health connect HR backfill ----
+    /**
+     * Delays (ms) between the post-workout Health Connect HR re-reads, measured
+     * from the previous attempt (so the chain spans ~1 minute to an hour after
+     * the finish). Health Connect holds only what another app has already
+     * synced, and a wrist heart-rate source (the watch's Health Services, a
+     * strap app) commonly lands its records minutes after the session ended, so
+     * the read at the finish line is a first attempt rather than the only one.
+     * The chain stops at the first attempt that fills heart rate.
+     */
+    val HC_BACKFILL_RETRY_DELAYS_MS: List<Long> = listOf(60_000L, 5 * 60_000L, 15 * 60_000L, 45 * 60_000L)
+
+    /**
+     * How many of the most recent workouts a History-open sweep re-reads from
+     * Health Connect when they recorded no heart rate at all — the catch-up for
+     * a session whose HR only reached Health Connect after the app was closed,
+     * when the retry chain above had nothing left to run in.
+     */
+    const val HC_BACKFILL_SWEEP_LIMIT = 10
+
+    /** Oldest workout (ms since its end) a History-open sweep still re-reads. */
+    const val HC_BACKFILL_SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000L
+
+    /**
+     * Grace (ms since a workout's end) before a History-open sweep re-reads it:
+     * Health Connect cannot hold the session's HR before the source that writes
+     * it has synced, which takes minutes. A sweep that runs inside the grace
+     * only reads emptiness, and because a pass that reads spends the throttle
+     * below, doing it right after a workout would leave the window in which the
+     * HR actually lands with no automatic re-read at all. Inside the grace the
+     * finish-line retry chain (HC_BACKFILL_RETRY_DELAYS_MS) covers the wait.
+     */
+    const val HC_BACKFILL_SWEEP_GRACE_MS = 5 * 60_000L
+
+    /** Minimum gap (ms) between two sweep passes, so repeatedly opening History does not re-query per tap. */
+    const val HC_BACKFILL_SWEEP_THROTTLE_MS = 15 * 60_000L
+
+    /**
+     * Minimum gap (ms) between two on-demand Health Connect reads for the same
+     * workout — the read fired when its History card is opened
+     * ([com.morkstep.ui.MainViewModel.backfillHrForWorkout]). A row whose HR is
+     * still missing is otherwise re-queried on every open, and a second open
+     * inside this window would only repeat the query that just ran.
+     */
+    const val HC_BACKFILL_CARD_THROTTLE_MS = 60_000L
+
+    // ---- debug tracing ----
+    /**
+     * Lines the debug log keeps per session — the exported trace. Sized for a
+     * whole workout plus its post-finish Health Connect backfill lines, which a
+     * few dozen events are not enough for: the backfill verdict has to survive
+     * the sensor chatter that follows the finish.
+     */
+    const val DEBUG_LOG_MAX_LINES = 400
+
+    /** Newest lines of the trace the workout screen mirrors on screen; the export keeps all of them. */
+    const val DEBUG_LOG_DISPLAY_LINES = 12
+
     // ---- haptics ----
     /** Phone cue haptic length in ms: a clearly tactile buzz for transitions and cues. */
     const val PHONE_VIBRATE_MS = 600L

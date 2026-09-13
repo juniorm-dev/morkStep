@@ -36,10 +36,14 @@ fun HomeScreen(
     activeId: Long,
     /** True while a workout session is running (or paused) — the start button turns into a status label. */
     workoutActive: Boolean = false,
+    /** Whether debug tracing is on — shows the anywhere-in-the-app log export. */
+    debugLog: Boolean = false,
     onSelectProfile: (Long) -> Unit,
     onStart: () -> Unit,
     onConfig: () -> Unit,
     onHistory: () -> Unit,
+    /** Exports the captured debug trace; only offered while [debugLog] is on. */
+    onExportLog: () -> Unit,
 ) {
     val active = profiles.firstOrNull { it.id == activeId } ?: profiles.firstOrNull()
 
@@ -136,6 +140,16 @@ fun HomeScreen(
                 OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f)) {
                     Text("History")
                 }
+            }
+        }
+
+        // Debug: export the captured trace from anywhere, not only mid-workout.
+        // The buffer keeps the whole session (and the post-workout Health Connect
+        // backfill verdict), so a capture after a workout exports its trace too.
+        if (debugLog) {
+            Spacer(Modifier.height(24.dp))
+            OutlinedButton(onClick = onExportLog, modifier = Modifier.fillMaxWidth()) {
+                Text("Export log")
             }
         }
     }

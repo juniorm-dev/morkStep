@@ -22,9 +22,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import com.morkstep.data.isBaselineProfile
+import com.morkstep.sensing.BackgroundReadAccess
+import com.morkstep.sensing.heartRateReadPermission
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -56,6 +59,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val wearVibrate by viewModel.wearVibrate.collectAsStateWithLifecycle()
     val hcBackfillHr by viewModel.hcBackfillHr.collectAsStateWithLifecycle()
     val hcGranted by viewModel.hcGranted.collectAsStateWithLifecycle()
+    val hcBackgroundRead by viewModel.hcBackgroundRead.collectAsStateWithLifecycle()
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
     val showDebugLog by viewModel.showDebugLog.collectAsStateWithLifecycle()
     val forcePhonePace by viewModel.forcePhonePace.collectAsStateWithLifecycle()
@@ -99,6 +103,10 @@ fun MorkApp(viewModel: MainViewModel) {
     fun launchHistoryImport() {
         openWorkoutDoc.launch(arrayOf("application/json"))
     }
+    /** Export the captured debug trace; the name carries the app version so a capture says which build it came from. */
+    fun launchLogExport() {
+        createLogDoc.launch("morkStep-debug-${viewModel.appVersionName()}-${System.currentTimeMillis()}.txt")
+    }
 
     // After saving a profile: confirm with a snackbar and return to Home.
     LaunchedEffect(savedProfileName) {
@@ -140,9 +148,11 @@ fun MorkApp(viewModel: MainViewModel) {
         viewModel.refreshActivityRecognitionState()
     }
 
-    // Health Connect's own permission screen (a system activity, not a runtime prompt).
-    // The library's 1.1.0 permission constants are internal; "android.permission.health.
-    // READ_HEART_RATE" is the stable manifest string for both the manifest and the request.
+    // Health Connect's own permission screen (a system activity, not a runtime
+    // prompt). Both grants the backfill needs: the heart-rate read, and — on a
+    // Health Connect that offers it — the background read, because every read
+    // after the finish-line one runs with the app out of the foreground, where
+    // Health Connect serves data only to an app that holds it.
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         androidx.health.connect.client.PermissionController.createRequestPermissionResultContract()
     ) {
@@ -155,7 +165,12 @@ fun MorkApp(viewModel: MainViewModel) {
     }
     val requestHealthConnectPermission = {
         healthConnectPermissionLauncher.launch(
-            setOf("android.permission.health.READ_HEART_RATE")
+            buildSet {
+                add(heartRateReadPermission())
+                if (hcBackgroundRead != BackgroundReadAccess.UNSUPPORTED) {
+                    add(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+                }
+            }
         )
     }
 
@@ -212,6 +227,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     profiles = profiles,
                     activeId = activeId,
                     workoutActive = live.running,
+                    debugLog = debugEnabled,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
@@ -219,6 +235,9 @@ fun MorkApp(viewModel: MainViewModel) {
                     },
                     onConfig = { navController.navigate(Routes.CONFIG) },
                     onHistory = { navController.navigate(Routes.HISTORY) },
+                    // Export at any point — before a workout, or after one to
+                    // capture its trace including the [hc] backfill verdict.
+                    onExportLog = ::launchLogExport,
                 )
             }
             composable(Routes.WORKOUT) {
@@ -229,9 +248,7 @@ WorkoutScreen(
                         simulated = simulated,
                         debugLog = debugEnabled,
                         showDebugLog = showDebugLog,
-                        onExportLog = {
-                            createLogDoc.launch("morkStep-debug-${System.currentTimeMillis()}.txt")
-                        },
+                        onExportLog = ::launchLogExport,
                                             onEnd = {
                         viewModel.endWorkout()
                         // Baseline: the finish event above returns Home itself.
@@ -285,6 +302,7 @@ WorkoutScreen(
                     onRequestActivityRecognition = maybeRequestActivityRecognition,
                     onMaybeRequestActivityRecognition = maybeRequestActivityRecognition,
                     hcGranted = hcGranted,
+                    hcBackgroundRead = hcBackgroundRead,
                     onHealthConnectPermission = { requestHealthConnectPermission() },
                     onDelete = viewModel::deleteProfile,
                     onRequestPermissions = requestPermissions,
@@ -295,9 +313,15 @@ WorkoutScreen(
                 )
             }
             composable(Routes.HISTORY) {
+                // Health Connect HR lags the workout, so opening History is where
+                // a late-arriving backfill catches up (throttled in the view model).
+                LaunchedEffect(Unit) { viewModel.sweepHrBackfill() }
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,
+                    // Opening a card re-reads Health Connect for that row, so a
+                    // workout whose HR landed after the automatic passes fills in.
+                    onWorkoutOpened = viewModel::backfillHrForWorkout,
                 )
             }
         }
