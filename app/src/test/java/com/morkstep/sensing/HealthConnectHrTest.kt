@@ -1,5 +1,6 @@
 package com.morkstep.sensing
 
+import com.morkstep.Constants
 import com.morkstep.data.PhaseAverages
 import com.morkstep.data.PhaseType
 import com.morkstep.data.WorkoutEntity
@@ -254,6 +255,34 @@ class HealthConnectHrTest {
             )
         )
     }
+
+    @Test
+    fun sweepCandidates_takeOnlyRowsHealthConnectCanAlreadyHoldHrFor() {
+        val now = 1_700_000_000_000L
+        val fresh = workout().copy(id = 1, endTime = now - 8_000L)
+        val exactlyAtTheGrace = workout().copy(id = 2, endTime = now - graceMs)
+        val syncedMinutesAgo = workout().copy(id = 3, endTime = now - 6 * 60_000L)
+        val pastTheWindow = workout().copy(id = 4, endTime = now - 9 * 24 * 60 * 60_000L)
+
+        assertEquals(
+            listOf(2L, 3L),
+            hrSweepCandidates(listOf(fresh, exactlyAtTheGrace, syncedMinutesAgo, pastTheWindow), now, graceMs, maxAgeMs)
+                .map { it.id },
+        )
+    }
+
+    @Test
+    fun sweepCandidates_readNothingWhileEveryRowIsStillInsideTheGrace() {
+        // The log's pass: History opened seconds after a workout. Reading now
+        // could only come back empty, so the sweep spends no throttle and leaves
+        // the pass that can fill the HR for later.
+        val fresh = workout().copy(endTime = 1_700_000_000_000L - 8_000L)
+
+        assertTrue(hrSweepCandidates(listOf(fresh), 1_700_000_000_000L, graceMs, maxAgeMs).isEmpty())
+    }
+
+    private val graceMs = Constants.HC_BACKFILL_SWEEP_GRACE_MS
+    private val maxAgeMs = Constants.HC_BACKFILL_SWEEP_MAX_AGE_MS
 
     /** A phone-only session summary: no HR unless a test fills a field in. */
     private fun workout(

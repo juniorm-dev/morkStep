@@ -130,6 +130,17 @@ object Constants {
     /** Oldest workout (ms since its end) a History-open sweep still re-reads. */
     const val HC_BACKFILL_SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000L
 
+    /**
+     * Grace (ms since a workout's end) before a History-open sweep re-reads it:
+     * Health Connect cannot hold the session's HR before the source that writes
+     * it has synced, which takes minutes. A sweep that runs inside the grace
+     * only reads emptiness, and because a pass that reads spends the throttle
+     * below, doing it right after a workout would leave the window in which the
+     * HR actually lands with no automatic re-read at all. Inside the grace the
+     * finish-line retry chain (HC_BACKFILL_RETRY_DELAYS_MS) covers the wait.
+     */
+    const val HC_BACKFILL_SWEEP_GRACE_MS = 5 * 60_000L
+
     /** Minimum gap (ms) between two sweep passes, so repeatedly opening History does not re-query per tap. */
     const val HC_BACKFILL_SWEEP_THROTTLE_MS = 15 * 60_000L
 

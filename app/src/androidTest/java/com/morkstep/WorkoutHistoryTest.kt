@@ -109,11 +109,14 @@ class WorkoutHistoryTest {
         assertTrue(rule.onAllNodesWithText("1 push intervals", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("speed mph", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("HR bpm", substring = true).fetchSemanticsNodes().isNotEmpty())
+        // The collapsed card carries the pooled push value beside the overall —
+        // the level the session was run against, not a detail behind the tap.
+        assertTrue(rule.onAllNodesWithText("speed mph:  push", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertFalse("empty-state text must be gone once a workout exists",
             rule.onAllNodesWithText("No workouts yet").fetchSemanticsNodes().isNotEmpty())
         // The entry names the profile the session ran under.
         assertTrue(rule.onAllNodesWithText("Default", substring = true).fetchSemanticsNodes().isNotEmpty())
-        // Collapsed, the card gives the overall averages only — no phase rows yet.
+        // Collapsed, the card gives the averages but no phase rows yet.
         assertTrue(rule.onAllNodesWithText("Show phase breakdown", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertFalse("the per-phase breakdown stays hidden until the card is tapped",
             rule.onAllNodesWithText("Warm-up").fetchSemanticsNodes().isNotEmpty())

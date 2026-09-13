@@ -22,9 +22,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import com.morkstep.data.isBaselineProfile
+import com.morkstep.sensing.BackgroundReadAccess
+import com.morkstep.sensing.heartRateReadPermission
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -56,6 +59,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val wearVibrate by viewModel.wearVibrate.collectAsStateWithLifecycle()
     val hcBackfillHr by viewModel.hcBackfillHr.collectAsStateWithLifecycle()
     val hcGranted by viewModel.hcGranted.collectAsStateWithLifecycle()
+    val hcBackgroundRead by viewModel.hcBackgroundRead.collectAsStateWithLifecycle()
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
     val showDebugLog by viewModel.showDebugLog.collectAsStateWithLifecycle()
     val forcePhonePace by viewModel.forcePhonePace.collectAsStateWithLifecycle()
@@ -144,9 +148,11 @@ fun MorkApp(viewModel: MainViewModel) {
         viewModel.refreshActivityRecognitionState()
     }
 
-    // Health Connect's own permission screen (a system activity, not a runtime prompt).
-    // The library's 1.1.0 permission constants are internal; "android.permission.health.
-    // READ_HEART_RATE" is the stable manifest string for both the manifest and the request.
+    // Health Connect's own permission screen (a system activity, not a runtime
+    // prompt). Both grants the backfill needs: the heart-rate read, and — on a
+    // Health Connect that offers it — the background read, because every read
+    // after the finish-line one runs with the app out of the foreground, where
+    // Health Connect serves data only to an app that holds it.
     val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         androidx.health.connect.client.PermissionController.createRequestPermissionResultContract()
     ) {
@@ -159,7 +165,12 @@ fun MorkApp(viewModel: MainViewModel) {
     }
     val requestHealthConnectPermission = {
         healthConnectPermissionLauncher.launch(
-            setOf("android.permission.health.READ_HEART_RATE")
+            buildSet {
+                add(heartRateReadPermission())
+                if (hcBackgroundRead != BackgroundReadAccess.UNSUPPORTED) {
+                    add(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+                }
+            }
         )
     }
 
@@ -291,6 +302,7 @@ WorkoutScreen(
                     onRequestActivityRecognition = maybeRequestActivityRecognition,
                     onMaybeRequestActivityRecognition = maybeRequestActivityRecognition,
                     hcGranted = hcGranted,
+                    hcBackgroundRead = hcBackgroundRead,
                     onHealthConnectPermission = { requestHealthConnectPermission() },
                     onDelete = viewModel::deleteProfile,
                     onRequestPermissions = requestPermissions,

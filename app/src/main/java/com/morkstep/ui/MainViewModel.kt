@@ -33,14 +33,18 @@ import com.morkstep.engine.CueSink
 import com.morkstep.engine.CueVibration
 import com.morkstep.engine.LiveState
 import com.morkstep.engine.SessionEngine
+import com.morkstep.sensing.BackgroundReadAccess
 import com.morkstep.sensing.GpsSpeedSource
 import com.morkstep.sensing.BleHeartRateSource
 import com.morkstep.sensing.HeartRateSource
 import com.morkstep.sensing.PaceSource
 import com.morkstep.sensing.WearPaceSource
+import com.morkstep.sensing.healthConnectBackgroundReadAccess
 import com.morkstep.sensing.healthConnectHrForWorkout
 import com.morkstep.sensing.healthConnectStatusNote
 import com.morkstep.sensing.hrBackfillGap
+import com.morkstep.sensing.hrSweepCandidates
+import com.morkstep.sensing.heartRateReadPermission
 import com.morkstep.sensing.mergeBackfilledHr
 import com.morkstep.sensing.SpeedSource
 import com.morkstep.sensing.SimulatedSensors
@@ -143,6 +147,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Health Connect READ_HEART_RATE granted state; refreshed on launch and after the permission screen. */
     private val _hcGranted = MutableStateFlow(false)
     val hcGranted: StateFlow<Boolean> = _hcGranted.asStateFlow()
+
+    /**
+     * Whether this device's Health Connect offers background reads and whether
+     * the app holds that grant — the state of every read the backfill runs while
+     * the app is not in the foreground. Surfaced in Settings so a user who
+     * granted Health Connect before it existed can see the grant is missing.
+     */
+    private val _hcBackgroundRead = MutableStateFlow(BackgroundReadAccess.UNSUPPORTED)
+    val hcBackgroundRead: StateFlow<BackgroundReadAccess> = _hcBackgroundRead.asStateFlow()
 
     /** Debug tracing toggle: gates the app debug log, the on-screen debug text and log export. */
     private val _debugEnabled = MutableStateFlow(false)
@@ -538,7 +551,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             appendLine("morkStep v${appVersionName()} debug log — " +
                 java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()))
             appendLine(_sensorNote.value)
-            appendLine("health connect: ${healthConnectStatusNote(getApplication())}")
+            appendLine("health connect: ${healthConnectStatusNote(getApplication(), _hcBackgroundRead.value)}")
             appendLine(
                 "workout: ${if (ls == null) "no engine" else if (ls.running) "running sec=${ls.totalSeconds}" else "not running"}" +
                     " · pace=${ls?.pace?.toString() ?: "null"}"
@@ -559,15 +572,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Re-check Health Connect availability and read permission (call after the permission screen). */
+    /** Re-check Health Connect availability and read permissions (call after the permission screen). */
     fun refreshHealthConnectState() {
         val context = getApplication<Application>()
         _hcGranted.value =
             androidx.health.connect.client.HealthConnectClient.getSdkStatus(context) ==
                 androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE &&
                 androidx.core.content.ContextCompat.checkSelfPermission(
-                    context, "android.permission.health.READ_HEART_RATE"
+                    context, heartRateReadPermission()
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        _hcBackgroundRead.value = healthConnectBackgroundReadAccess(context)
     }
     /** Relay gated cue vibrations to the paired Wear companion for watch haptics. */
     fun setWearVibrate(on: Boolean) {
@@ -958,8 +972,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * is not in the query, and a second pass inside
      * [Constants.HC_BACKFILL_SWEEP_THROTTLE_MS] does nothing. Only a pass that
      * actually reads Health Connect spends the throttle, so a pass that finds
-     * nothing to do — or one that runs before the profile list has loaded — does
-     * not hold the next one back.
+     * nothing to do — one whose rows are all still inside
+     * [Constants.HC_BACKFILL_SWEEP_GRACE_MS], or one that runs before the
+     * profile list has loaded — does not hold the next one back: opening History
+     * right after a workout must not cost the pass that could actually fill it.
      */
     fun sweepHrBackfill() {
         if (!_hcBackfillHr.value) {
@@ -980,9 +996,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val recent = runCatching {
                 container.workoutDao.needingHrBackfill(Constants.HC_BACKFILL_SWEEP_LIMIT)
             }.getOrDefault(emptyList())
-            val pending = recent.filter { now - it.endTime <= Constants.HC_BACKFILL_SWEEP_MAX_AGE_MS }
+            val pending = hrSweepCandidates(
+                pending = recent,
+                now = now,
+                graceMs = Constants.HC_BACKFILL_SWEEP_GRACE_MS,
+                maxAgeMs = Constants.HC_BACKFILL_SWEEP_MAX_AGE_MS,
+            )
             if (pending.isEmpty()) {
-                debugLog.log("[hc] sweep: no recent workout is missing its overall HR")
+                if (recent.isEmpty()) {
+                    debugLog.log("[hc] sweep: no recent workout is missing its overall HR")
+                } else {
+                    debugLog.log(
+                        "[hc] sweep: ${recent.size} workout(s) without overall HR, none past the " +
+                            "${Constants.HC_BACKFILL_SWEEP_GRACE_MS / 60_000}min Health Connect lag yet"
+                    )
+                }
                 return@launch
             }
             val profiles = _profiles.value

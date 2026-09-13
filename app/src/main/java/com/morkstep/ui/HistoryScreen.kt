@@ -47,39 +47,54 @@ private fun summaryLine(w: WorkoutEntity): String {
     return if (w.distanceMiles > 0f) "$base · %.2f mi".format(w.distanceMiles) else base
 }
 
-/** Whole-session averages, one line per recorded metric (the collapsed card). */
-private fun overallAverages(w: WorkoutEntity): List<String> = buildList {
-    w.avgOverallSpeed?.let { add("speed mph:  overall %.1f".format(it)) }
-    w.avgOverallPace?.let { add("pace spm:  overall $it") }
-    hrLine(w)?.let { add(it) }
+/**
+ * The collapsed card's averages: one line per metric, each naming the pooled
+ * value per phase type beside the whole-session one, `push 140 · rec 118 ·
+ * overall 128` — push and recovery are what the plan targets, so a card showing
+ * the overall alone would hide the numbers the session was run against. A value
+ * the session (or its Health Connect backfill) never recorded is left out, and a
+ * metric with no value at all draws no line.
+ */
+internal fun overallAverages(w: WorkoutEntity): List<String> = buildList {
+    metricLine(
+        label = "speed mph",
+        push = w.avgPushSpeed?.let { "%.1f".format(it) },
+        recovery = w.avgRecoverySpeed?.let { "%.1f".format(it) },
+        overall = w.avgOverallSpeed?.let { "%.1f".format(it) },
+    )?.let(::add)
+    metricLine(
+        label = "pace spm",
+        push = w.avgPushPace?.toString(),
+        recovery = w.avgRecoveryPace?.toString(),
+        overall = w.avgOverallPace?.toString(),
+    )?.let(::add)
+    hrLine(w)?.let(::add)
 }
 
 /**
- * The collapsed card's HR line: the whole-session average when Health Connect
- * has it, else the pooled push/recovery pair, else the min–max pair. A backfilled
- * row can hold only some of those — the aggregate and the per-minute buckets are
- * separate reads — and a row that recorded heart rate at all has to say so
- * without the card being opened.
+ * The collapsed card's HR line: the pooled push/recovery averages beside the
+ * whole-session one, else the min–max pair when that is all Health Connect held.
+ * A backfilled row can hold only part of what the read asked for — the aggregate
+ * and the per-minute buckets are separate reads, and a provider that rejects the
+ * statistical pair is re-read for the average alone — and a row that recorded
+ * heart rate at all has to say so without the card being opened.
  */
-internal fun hrLine(w: WorkoutEntity): String? = when {
-    w.avgOverallHr != null -> "HR bpm:  overall ${w.avgOverallHr}"
-    w.avgPushHr != null || w.avgRecoveryHr != null ->
-        "HR bpm:  push ${w.avgPushHr ?: "–"} · rec ${w.avgRecoveryHr ?: "–"}"
-    w.minHr != null && w.maxHr != null -> "HR bpm:  min–max ${w.minHr}–${w.maxHr}"
-    else -> null
-}
+internal fun hrLine(w: WorkoutEntity): String? =
+    metricLine(
+        label = "HR bpm",
+        push = w.avgPushHr?.toString(),
+        recovery = w.avgRecoveryHr?.toString(),
+        overall = w.avgOverallHr?.toString(),
+    ) ?: if (w.minHr != null && w.maxHr != null) "HR bpm:  min–max ${w.minHr}–${w.maxHr}" else null
 
-/** Pooled push/recovery averages — every round of a type taken together, the level above the per-phase rows. */
-private fun pooledAverages(w: WorkoutEntity): String? {
-    fun pair(push: String?, recovery: String?): String? =
-        if (push == null && recovery == null) null else "${push ?: "–"} / ${recovery ?: "–"}"
-    val parts = buildList {
-        pair(w.avgPushSpeed?.let { "%.1f".format(it) }, w.avgRecoverySpeed?.let { "%.1f".format(it) })
-            ?.let { add("speed $it mph") }
-        pair(w.avgPushPace?.toString(), w.avgRecoveryPace?.toString())?.let { add("pace $it spm") }
-        pair(w.avgPushHr?.toString(), w.avgRecoveryHr?.toString())?.let { add("HR $it bpm") }
-    }
-    return if (parts.isEmpty()) null else "pooled push / recovery:  " + parts.joinToString(" · ")
+/** One card line: `label:  push 140 · rec 118 · overall 128`, or null when the workout holds no value for it. */
+private fun metricLine(label: String, push: String?, recovery: String?, overall: String?): String? {
+    val parts = listOfNotNull(
+        push?.let { "push $it" },
+        recovery?.let { "rec $it" },
+        overall?.let { "overall $it" },
+    )
+    return if (parts.isEmpty()) null else "$label:  " + parts.joinToString(" · ")
 }
 
 /** HR extremes and time above the push-min HR — the session's non-average stats. */
@@ -93,10 +108,11 @@ private fun extraStats(w: WorkoutEntity): String? {
 
 /**
  * Workout history: every finished session as one card. Opening a card reveals
- * the pooled and per-phase breakdown — and [onWorkoutOpened] is where
- * MainViewModel re-reads Health Connect for that row, so a workout whose HR only
- * reached Health Connect after the automatic passes (finish-line read, retry
- * chain, History sweep) still fills in on demand.
+ * the session's HR extremes, its time above the push min and the per-phase
+ * breakdown — and [onWorkoutOpened] is where MainViewModel re-reads Health
+ * Connect for that row, so a workout whose HR only reached Health Connect after
+ * the automatic passes (finish-line read, retry chain, History sweep) still
+ * fills in on demand.
  */
 @Suppress("FunctionName")
 @Composable
@@ -172,9 +188,10 @@ fun HistoryScreen(
 
 /**
  * One history entry. Collapsed, it reads the session's headline numbers and its
- * overall averages; tapped open it adds the pooled push/recovery levels and the
- * per-phase breakdown — every warm-up, push, recovery and cool-down with its own
- * speed/pace/HR average — over the phase line chart.
+ * averages — the pooled push/recovery values beside the overall, per metric.
+ * Tapped open it adds the HR extremes and the time above the push min, then the
+ * per-phase breakdown: every warm-up, push, recovery and cool-down with its own
+ * speed/pace/HR average, over the phase line chart.
  */
 @Suppress("FunctionName")
 @Composable
@@ -207,10 +224,6 @@ private fun WorkoutRow(w: WorkoutEntity, expanded: Boolean, onToggle: () -> Unit
             )
             if (expanded) {
                 Spacer(Modifier.height(10.dp))
-                pooledAverages(w)?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(2.dp))
-                }
                 extraStats(w)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Spacer(Modifier.height(10.dp))
                 if (w.phaseAverages.isEmpty()) {
