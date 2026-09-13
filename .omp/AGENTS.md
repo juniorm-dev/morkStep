@@ -5,7 +5,8 @@
 - **Never commit directly to `main`.** Any auto-commit goes on a feature branch
   (e.g. `fix/<short-description>`), pushed to origin, then merged into `main` (or handed
   off for review first). Exception: the user explicitly asks to commit/tag on `main`
-  (e.g. running `release.bat`, which tags and pushes `main` itself).
+  (e.g. running `release.bat`, which tags the built version and pushes the current branch
+  plus the tag — it never merges or pushes `main` itself).
 
 This repo uses a **Kotlin-LSP-first development approach**. Kotlin code intelligence runs on
 `kotlin-lsp` = JetBrains `intellij-server` (2026.3 EAP, ILS-263.4702.0), launched via the
@@ -62,8 +63,9 @@ Treat LSP as a hard gate on editing — the same way the build is a hard gate on
   re-request before judging. `gradlew assembleDebug` / `testDebugUnitTest` is the authority
   on type errors.
 - APK outputs are versioned by post-packaging rename tasks: app →
-  `morkStep-<versionName>-<buildType>.apk`, wear → `morkStep-wear-<versionName>-<buildType>.apk`
-  (see README "Upgrade caveats").
+  `morkStep-<buildType>-<versionName>.apk`, wear → `morkStep-wear-<buildType>-<versionName>.apk`
+  (version after the build type; `-unsigned`/`-signed` stays at the end — see README
+  "Upgrade caveats").
 
 ## Code conventions
 

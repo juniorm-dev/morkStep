@@ -9,14 +9,15 @@ entirely and §1–§3 do not apply; they return with the phone path if the watc
 §4 is about the merged stream itself and applies on both paths (and specifically to a stalled
 watch).
 
-**Status (0.13.3):** §1 open · §2 open · §3 open for mid-phase samples; its
+**Status (verified at 0.14.3):** §1 open · §2 open · §3 open for mid-phase samples; its
 transition-adjacent case is mitigated engine-side by the
 `Constants.PHASE_TRANSITION_SETTLE_MS` warning mute (README → "Level out phase
 transitions") · §4 open. No other item implemented.
 
 ## 1. Stop floor for displayed pace (raw-rate deadband)
 
-**Log evidence** (`tmp/morkStep-debug-1788695494536.txt`):
+**Log evidence** (the capture `tmp/morkStep-debug-1788695494536.txt`, no longer retained in
+the repo):
 ```
 12:49:58 counter -> 35 spm (+16 steps, total 247)
 12:50:20 counter -> 39 spm (+16 steps, total 263)   # 0.5*35 + 0.5*(16*60k/22s = 43.6)
@@ -58,14 +59,18 @@ must keep this display deadband in mind (a stop floor is a *display* contract;
 
 ## 3. Counter rate overshoot on batched step-counter delivery (recorded 2026-09-10)
 
-**Log evidence** (`tmp/morkStep-debug-1789044514060.txt`):
+**Log evidence** (the capture `tmp/morkStep-debug-1789044514060.txt`, no longer retained in
+the repo):
 ```
 13:48:25 [pace-phone] step counter -> 78 spm (+1 steps, total 13240)
 13:48:26 [pace-phone] step counter -> 130 spm (+3 steps, total 13243)
 13:48:27 [warncue] Slow down: pace 130 > 110
 13:48:27 [pace-phone] step counter -> 95 spm (+1 steps, total 13244)
 ```
-- The 50/50 chain reproduces exactly: `(78 + 3·60_000/1_000) / 2 = 129` → the logged 130.
+- The 50/50 chain reproduces the logged 130: `(78 + 3·60_000/1_000) / 2 = 129` is what the
+  second-resolution stamps imply, and the logged value is that same blend on the true
+  sub-second delivery interval the stamps hide — `dt ≈ 989 ms` gives `raw = 3·60_000/989 ≈ 182`,
+  so `(78 + 182) / 2 = 130`.
 - Four steps across those two seconds is ~120 spm on average, so the smoothed value
   overshot the true cadence by ~10 spm for exactly one tick — enough to cross a 110 spm
   recovery cap from a walk that never exceeded it. The warning vanished on the next
