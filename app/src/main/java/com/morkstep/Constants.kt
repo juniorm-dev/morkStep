@@ -265,4 +265,12 @@ object Constants {
     const val BASELINE_MIN_HR_PUSH_MIN_BPM = 90
     /** Baseline calibrated: push-HR floor (bpm) upper bound. */
     const val BASELINE_MAX_HR_PUSH_MIN_BPM = 200
+
+    // ---- settings UI ----
+    /**
+     * Consecutive taps on the Settings "General" tab that reveal the hidden
+     * Debug card. Selecting any other tab resets the count before the gesture
+     * completes; once revealed the card stays visible while Settings is open.
+     */
+    const val SETTINGS_DEBUG_UNLOCK_TAPS = 6
 }

@@ -3,6 +3,8 @@ package com.morkstep.ui
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,8 +43,10 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.morkstep.Constants
 import com.morkstep.data.AudioMode
 import com.morkstep.data.DarkMode
 import com.morkstep.data.VibrationMode
@@ -86,6 +90,19 @@ private enum class SettingsPage(val label: String) {
     PROFILE("Profile"),
     GENERAL("General"),
 }
+
+/**
+ * Runs [onPress] on any touch that lands on this element, without consuming it —
+ * the child keeps its own click/drag behavior. Used to break the hidden-Debug
+ * reveal gesture: the General-tab taps only count while nothing else is pressed.
+ */
+private fun Modifier.resetDebugRevealOnPress(onPress: () -> Unit): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            onPress()
+        }
+    }
 
 /** Material `Slider` `steps` count giving [step] granularity across [range] (interval count minus the two endpoints). */
 private fun sliderSteps(range: ClosedFloatingPointRange<Float>, step: Float): Int =
@@ -181,67 +198,90 @@ fun ConfigScreen(
 ) {
     val profile = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
     var page by rememberSaveable { mutableStateOf(SettingsPage.PROFILE) }
+    // Hidden Debug card: revealed by [Constants.SETTINGS_DEBUG_UNLOCK_TAPS]
+    // consecutive taps on the General tab with nothing else pressed in between —
+    // any touch in the page area, or any other tab, resets the count. Once
+    // revealed it stays visible while Settings is open.
+    var generalTaps by rememberSaveable { mutableIntStateOf(0) }
+    var debugUnlocked by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = page.ordinal) {
             SettingsPage.entries.forEach { entry ->
                 Tab(
                     selected = page == entry,
-                    onClick = { page = entry },
+                    onClick = {
+                        if (entry == SettingsPage.GENERAL) {
+                            generalTaps++
+                            if (generalTaps >= Constants.SETTINGS_DEBUG_UNLOCK_TAPS) debugUnlocked = true
+                        } else {
+                            generalTaps = 0
+                        }
+                        page = entry
+                    },
                     text = { Text(entry.label) },
                 )
             }
         }
-        // Keeps the hidden page's scroll position and in-progress edits alive
-        // while the other one is shown.
-        val pageState = rememberSaveableStateHolder()
-        Box(Modifier.weight(1f)) {
-            pageState.SaveableStateProvider(page.name) {
-                when (page) {
-                    SettingsPage.PROFILE -> ProfileSettingsPage(
-                        profile = profile,
-                        profiles = profiles,
-                        selectedId = selectedId,
-                        onSelect = onSelect,
-                        onSave = onSave,
-                        onNewProfile = onNewProfile,
-                        onCreateBaseline = onCreateBaseline,
-                        onExportProfiles = onExportProfiles,
-                        onImportProfiles = onImportProfiles,
-                        onDelete = onDelete,
-                    )
-                    SettingsPage.GENERAL -> GeneralSettingsPage(
-                        darkMode = darkMode,
-                        onDarkModeChange = onDarkModeChange,
-                        simulated = simulated,
-                        sensorNote = sensorNote,
-                        onSimulatedChange = onSimulatedChange,
-                        wearHr = wearHr,
-                        onWearHrChange = onWearHrChange,
-                        wearVibrate = wearVibrate,
-                        onWearVibrateChange = onWearVibrateChange,
-                        hcBackfillHr = hcBackfillHr,
-                        onHcBackfillChange = onHcBackfillChange,
-                        debugLog = debugLog,
-                        onDebugLogChange = onDebugLogChange,
-                        showDebugLog = showDebugLog,
-                        onShowDebugLogChange = onShowDebugLogChange,
-                        forcePhonePace = forcePhonePace,
-                        onForcePhonePaceChange = onForcePhonePaceChange,
-                        batteryUnrestricted = batteryUnrestricted,
-                        onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
-                        activityRecognitionGranted = activityRecognitionGranted,
-                        hcGranted = hcGranted,
-                        hcBackgroundRead = hcBackgroundRead,
-                        onHealthConnectPermission = onHealthConnectPermission,
-                        onRequestPermissions = onRequestPermissions,
-                        locationGranted = locationGranted,
-                        bluetoothGranted = bluetoothGranted,
-                    )
+        // Everything below the tabs counts as "something else pressed": any touch
+        // here breaks the consecutive General-tab reveal gesture.
+        Column(
+            Modifier
+                .weight(1f)
+                .resetDebugRevealOnPress { generalTaps = 0 }
+        ) {
+            // Keeps the hidden page's scroll position and in-progress edits alive
+            // while the other one is shown.
+            val pageState = rememberSaveableStateHolder()
+            Box(Modifier.weight(1f)) {
+                pageState.SaveableStateProvider(page.name) {
+                    when (page) {
+                        SettingsPage.PROFILE -> ProfileSettingsPage(
+                            profile = profile,
+                            profiles = profiles,
+                            selectedId = selectedId,
+                            onSelect = onSelect,
+                            onSave = onSave,
+                            onNewProfile = onNewProfile,
+                            onCreateBaseline = onCreateBaseline,
+                            onExportProfiles = onExportProfiles,
+                            onImportProfiles = onImportProfiles,
+                            onDelete = onDelete,
+                        )
+                        SettingsPage.GENERAL -> GeneralSettingsPage(
+                            showDebug = debugUnlocked,
+                            darkMode = darkMode,
+                            onDarkModeChange = onDarkModeChange,
+                            simulated = simulated,
+                            sensorNote = sensorNote,
+                            onSimulatedChange = onSimulatedChange,
+                            wearHr = wearHr,
+                            onWearHrChange = onWearHrChange,
+                            wearVibrate = wearVibrate,
+                            onWearVibrateChange = onWearVibrateChange,
+                            hcBackfillHr = hcBackfillHr,
+                            onHcBackfillChange = onHcBackfillChange,
+                            debugLog = debugLog,
+                            onDebugLogChange = onDebugLogChange,
+                            showDebugLog = showDebugLog,
+                            onShowDebugLogChange = onShowDebugLogChange,
+                            forcePhonePace = forcePhonePace,
+                            onForcePhonePaceChange = onForcePhonePaceChange,
+                            batteryUnrestricted = batteryUnrestricted,
+                            onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
+                            activityRecognitionGranted = activityRecognitionGranted,
+                            hcGranted = hcGranted,
+                            hcBackgroundRead = hcBackgroundRead,
+                            onHealthConnectPermission = onHealthConnectPermission,
+                            onRequestPermissions = onRequestPermissions,
+                            locationGranted = locationGranted,
+                            bluetoothGranted = bluetoothGranted,
+                        )
+                    }
                 }
             }
+            AppVersionFooter()
         }
-        AppVersionFooter()
     }
 }
 
@@ -671,6 +711,7 @@ private fun ProfileSettingsPage(
 @Suppress("FunctionName")
 @Composable
 private fun GeneralSettingsPage(
+    showDebug: Boolean,
     darkMode: DarkMode,
     onDarkModeChange: (DarkMode) -> Unit,
     simulated: Boolean,
@@ -850,37 +891,41 @@ private fun GeneralSettingsPage(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-        Text("Debug", style = MaterialTheme.typography.titleMedium)
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SwitchRow(
-                    label = "Debug tracing",
-                    checked = debugLog,
-                    onCheckedChange = onDebugLogChange,
-                )
-                Text(
-                    "When on, pace connection/step events are traced live on the workout screen and can be exported " +
-                        "from there with the Export log button. Off by default; no trace data is collected while off.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                // Display the captured log on the workout screen (own toggle;
-                // capture/export are controlled by "Debug tracing" above).
-                SwitchRow(
-                    label = "Show debug log on workout screen",
-                    checked = showDebugLog,
-                    onCheckedChange = onShowDebugLogChange,
-                )
-                SwitchRow(
-                    label = "Force phone pedometer",
-                    checked = forcePhonePace,
-                    onCheckedChange = onForcePhonePaceChange,
-                )
-                Text(
-                    "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
-                        "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+        // Hidden until the General tab is tapped [Constants.SETTINGS_DEBUG_UNLOCK_TAPS]
+        // times in a row — the tab counter lives in ConfigScreen.
+        if (showDebug) {
+            Spacer(Modifier.height(16.dp))
+            Text("Debug", style = MaterialTheme.typography.titleMedium)
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SwitchRow(
+                        label = "Debug tracing",
+                        checked = debugLog,
+                        onCheckedChange = onDebugLogChange,
+                    )
+                    Text(
+                        "When on, pace connection/step events are traced live on the workout screen and can be exported " +
+                            "from there with the Export log button. Off by default; no trace data is collected while off.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    // Display the captured log on the workout screen (own toggle;
+                    // capture/export are controlled by "Debug tracing" above).
+                    SwitchRow(
+                        label = "Show debug log on workout screen",
+                        checked = showDebugLog,
+                        onCheckedChange = onShowDebugLogChange,
+                    )
+                    SwitchRow(
+                        label = "Force phone pedometer",
+                        checked = forcePhonePace,
+                        onCheckedChange = onForcePhonePaceChange,
+                    )
+                    Text(
+                        "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
+                            "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
 
