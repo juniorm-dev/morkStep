@@ -54,7 +54,7 @@ class BaselineFlowTest {
     fun createBaseline_activatesCalibrationAndShowsStartBaselineOnHome() {
         // Settings → Create baseline.
         rule.onAllNodesWithText("Settings").onFirst().performClick()
-        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Profile").assertExists()
         rule.onNodeWithText("Create baseline").performScrollTo().performClick()
 
         // The save flow returns to Home with the Baseline profile active: the
@@ -83,7 +83,7 @@ class BaselineFlowTest {
 
         // Settings → Create baseline → auto-returns Home with Baseline active.
         rule.onAllNodesWithText("Settings").onFirst().performClick()
-        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Profile").assertExists()
         rule.onNodeWithText("Create baseline").performScrollTo().performClick()
         rule.waitUntil(timeoutMillis = 15_000) {
             rule.onAllNodesWithText("Start baseline").fetchSemanticsNodes().isNotEmpty()
@@ -139,7 +139,7 @@ class BaselineFlowTest {
         // onFinished re-derives the calibrated baseline; the app jumps to
         // Settings and confirms with a snackbar.
         rule.waitUntil(timeoutMillis = 15_000) {
-            rule.onAllNodesWithText("Profile settings").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithText("Profile").fetchSemanticsNodes().isNotEmpty()
         }
         rule.waitUntil(timeoutMillis = 15_000) {
             rule.onAllNodesWithText("Baseline created").fetchSemanticsNodes().isNotEmpty()

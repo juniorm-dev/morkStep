@@ -4,6 +4,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,8 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,9 +37,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.morkstep.data.AudioMode
 import com.morkstep.data.DarkMode
@@ -73,6 +78,15 @@ private val DARK_MODES = listOf(
     DarkMode.LIGHT to "Light",
 )
 
+/**
+ * The two Settings pages: [PROFILE] holds everything saved with a profile,
+ * [GENERAL] holds the app-wide settings (no profile involved).
+ */
+private enum class SettingsPage(val label: String) {
+    PROFILE("Profile"),
+    GENERAL("General"),
+}
+
 /** Material `Slider` `steps` count giving [step] granularity across [range] (interval count minus the two endpoints). */
 private fun sliderSteps(range: ClosedFloatingPointRange<Float>, step: Float): Int =
     ((range.endInclusive - range.start) / step).toInt() - 1
@@ -104,7 +118,28 @@ private fun SliderRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** On/off row with a label and an explanatory line, used by the Sensors card. */
+@Suppress("FunctionName")
+@Composable
+private fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
 @Suppress("FunctionName")
 @Composable
 fun ConfigScreen(
@@ -134,8 +169,6 @@ fun ConfigScreen(
     batteryUnrestricted: Boolean,
     onRequestBatteryUnrestricted: () -> Unit,
     activityRecognitionGranted: Boolean,
-    onRequestActivityRecognition: () -> Unit,
-    onMaybeRequestActivityRecognition: () -> Unit,
     hcGranted: Boolean,
     hcBackgroundRead: BackgroundReadAccess,
     onHealthConnectPermission: () -> Unit,
@@ -147,16 +180,115 @@ fun ConfigScreen(
     onImportProfiles: () -> Unit,
 ) {
     val profile = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
+    var page by rememberSaveable { mutableStateOf(SettingsPage.PROFILE) }
 
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = page.ordinal) {
+            SettingsPage.entries.forEach { entry ->
+                Tab(
+                    selected = page == entry,
+                    onClick = { page = entry },
+                    text = { Text(entry.label) },
+                )
+            }
+        }
+        // Keeps the hidden page's scroll position and in-progress edits alive
+        // while the other one is shown.
+        val pageState = rememberSaveableStateHolder()
+        Box(Modifier.weight(1f)) {
+            pageState.SaveableStateProvider(page.name) {
+                when (page) {
+                    SettingsPage.PROFILE -> ProfileSettingsPage(
+                        profile = profile,
+                        profiles = profiles,
+                        selectedId = selectedId,
+                        onSelect = onSelect,
+                        onSave = onSave,
+                        onNewProfile = onNewProfile,
+                        onCreateBaseline = onCreateBaseline,
+                        onExportProfiles = onExportProfiles,
+                        onImportProfiles = onImportProfiles,
+                        onDelete = onDelete,
+                    )
+                    SettingsPage.GENERAL -> GeneralSettingsPage(
+                        darkMode = darkMode,
+                        onDarkModeChange = onDarkModeChange,
+                        simulated = simulated,
+                        sensorNote = sensorNote,
+                        onSimulatedChange = onSimulatedChange,
+                        wearHr = wearHr,
+                        onWearHrChange = onWearHrChange,
+                        wearVibrate = wearVibrate,
+                        onWearVibrateChange = onWearVibrateChange,
+                        hcBackfillHr = hcBackfillHr,
+                        onHcBackfillChange = onHcBackfillChange,
+                        debugLog = debugLog,
+                        onDebugLogChange = onDebugLogChange,
+                        showDebugLog = showDebugLog,
+                        onShowDebugLogChange = onShowDebugLogChange,
+                        forcePhonePace = forcePhonePace,
+                        onForcePhonePaceChange = onForcePhonePaceChange,
+                        batteryUnrestricted = batteryUnrestricted,
+                        onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
+                        activityRecognitionGranted = activityRecognitionGranted,
+                        hcGranted = hcGranted,
+                        hcBackgroundRead = hcBackgroundRead,
+                        onHealthConnectPermission = onHealthConnectPermission,
+                        onRequestPermissions = onRequestPermissions,
+                        locationGranted = locationGranted,
+                        bluetoothGranted = bluetoothGranted,
+                    )
+                }
+            }
+        }
+        AppVersionFooter()
+    }
+}
+
+/** App version, shown under both pages — it describes the app, not a profile. */
+@Suppress("FunctionName")
+@Composable
+private fun AppVersionFooter() {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            info.versionName ?: info.longVersionCode.toString()
+        }.getOrNull() ?: "?"
+    }
+    Text(
+        "morkStep  v$version",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+    )
+}
+
+/** Profile page: everything that is saved against (and restored with) a profile. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("FunctionName")
+@Composable
+private fun ProfileSettingsPage(
+    profile: WorkoutProfile?,
+    profiles: List<WorkoutProfile>,
+    selectedId: Long,
+    onSelect: (Long) -> Unit,
+    onSave: (WorkoutProfile) -> Unit,
+    onNewProfile: () -> Unit,
+    onCreateBaseline: () -> Unit,
+    onExportProfiles: () -> Unit,
+    onImportProfiles: () -> Unit,
+    onDelete: (Long) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text("Profile settings", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
-
         // Profile picker: select any saved profile to edit it.
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
@@ -206,7 +338,7 @@ fun ConfigScreen(
 
         if (profile == null) {
             Spacer(Modifier.height(16.dp))
-            Text("No profiles yet — tap New to create one.", style = MaterialTheme.typography.bodyMedium)
+            Text("No profiles yet — tap Clone to create one.", style = MaterialTheme.typography.bodyMedium)
             return@Column
         }
 
@@ -238,47 +370,6 @@ fun ConfigScreen(
                     onValueChange = { name = it },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text("Appearance", style = MaterialTheme.typography.titleMedium)
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                var darkExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = darkExpanded,
-                    onExpandedChange = { darkExpanded = it },
-                ) {
-                    OutlinedTextField(
-                        value = DARK_MODES.first { it.first == darkMode }.second,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Dark mode") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = darkExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                    )
-                    ExposedDropdownMenu(
-                        expanded = darkExpanded,
-                        onDismissRequest = { darkExpanded = false },
-                    ) {
-                        DARK_MODES.forEach { (mode, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    onDarkModeChange(mode)
-                                    darkExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-                Text(
-                    "Applies to the whole app; System follows the device setting.",
-                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
@@ -509,208 +600,13 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Sensors", style = MaterialTheme.typography.titleMedium)
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Simulated sensors (debug)",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(checked = simulated, onCheckedChange = onSimulatedChange)
-                }
-                Text(
-                    "Off uses real hardware: GPS speed, pedometer pace from the Wear watch, and a Bluetooth heart-rate strap. " +
-                        "No automatic fallback — if off and a signal is missing, readings stay blank.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                if (!simulated) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Heart rate from Wear companion",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(checked = wearHr, onCheckedChange = onWearHrChange)
-                    }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Vibrate watch",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(checked = wearVibrate, onCheckedChange = onWearVibrateChange)
-                    }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Health Connect HR (after workout)",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(checked = hcBackfillHr, onCheckedChange = onHcBackfillChange)
-                    }
-                    Text(
-                        "When the Wear relay is off, average/min/max heart rate for a finished " +
-                            "workout is backfilled from Health Connect (no live readings).",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = onRequestPermissions,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Grant sensor permissions")
-                        }
-                        OutlinedButton(
-                            onClick = onHealthConnectPermission,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Grant Health Connect access")
-                        }
-                    }
-                    Text(
-                        "Location: ${if (locationGranted) "granted" else "not granted"} · " +
-                            "Bluetooth: ${if (bluetoothGranted) "granted" else "not granted"} · " +
-                            "Health Connect: ${if (hcGranted) "granted" else "not granted"}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    if (hcBackgroundRead != BackgroundReadAccess.UNSUPPORTED) {
-                        Text(
-                            "Health Connect background reads: ${hcBackgroundRead.note} — " +
-                                "required for the post-workout rereads (1/6/21/66 min) " +
-                                "and every History re-read.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                } else {
-                    Text(
-                        sensorNote,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text("Debug", style = MaterialTheme.typography.titleMedium)
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Debug tracing",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(checked = debugLog, onCheckedChange = onDebugLogChange)
-                }
-                Text(
-                    "When on, pace connection/step events are traced live on the workout screen and can be exported " +
-                        "from there with the Export log button. Off by default; no trace data is collected while off.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                // Display the captured log on the workout screen (own toggle;
-                // capture/export are controlled by "Debug tracing" above).
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Show debug log on workout screen",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(checked = showDebugLog, onCheckedChange = onShowDebugLogChange)
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Force phone pedometer",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(checked = forcePhonePace, onCheckedChange = onForcePhonePaceChange)
-                }
-                Text(
-                    "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
-                        "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Unrestricted battery", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            if (batteryUnrestricted) "Allowed — sensors stay live" else "Optimized — sensors may be gated",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    OutlinedButton(onClick = onRequestBatteryUnrestricted) {
-                        Text(if (batteryUnrestricted) "Granted" else "Allow")
-                    }
-                }
-                Text(
-                    "Battery optimization can suspend sensor delivery when the screen is off. Allowing unrestricted " +
-                        "battery keeps the step sensors live during workouts.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Step sensor access", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            if (activityRecognitionGranted) "Granted — pace sensors work"
-                            else "Not granted — step sensors blocked",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    OutlinedButton(onClick = onRequestActivityRecognition) {
-                        Text(if (activityRecognitionGranted) "Granted" else "Allow")
-                    }
-                }
-                Text(
-                    "Android 10+ requires the activity-recognition permission for step sensors; without it, step " +
-                        "pace stays empty no matter what.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
         Text("Backup", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Export saves the current profiles or workout history to a file you pick; import restores it.",
+                    "Export saves every profile to a JSON file you pick; import replaces your profiles with that " +
+                        "file's list and activates its first profile. Workout history has its own Export/Import on " +
+                        "the History screen.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -767,19 +663,227 @@ fun ConfigScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
 
-        val context = LocalContext.current
-        val version = remember {
-            runCatching {
-                val info = context.packageManager.getPackageInfo(context.packageName, 0)
-                info.versionName ?: info.longVersionCode.toString()
-            }.getOrNull() ?: "?"
+/** General page: app-wide settings — nothing here is saved with a profile. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("FunctionName")
+@Composable
+private fun GeneralSettingsPage(
+    darkMode: DarkMode,
+    onDarkModeChange: (DarkMode) -> Unit,
+    simulated: Boolean,
+    sensorNote: String,
+    onSimulatedChange: (Boolean) -> Unit,
+    wearHr: Boolean,
+    onWearHrChange: (Boolean) -> Unit,
+    wearVibrate: Boolean,
+    onWearVibrateChange: (Boolean) -> Unit,
+    hcBackfillHr: Boolean,
+    onHcBackfillChange: (Boolean) -> Unit,
+    debugLog: Boolean,
+    onDebugLogChange: (Boolean) -> Unit,
+    showDebugLog: Boolean,
+    onShowDebugLogChange: (Boolean) -> Unit,
+    forcePhonePace: Boolean,
+    onForcePhonePaceChange: (Boolean) -> Unit,
+    batteryUnrestricted: Boolean,
+    onRequestBatteryUnrestricted: () -> Unit,
+    activityRecognitionGranted: Boolean,
+    hcGranted: Boolean,
+    hcBackgroundRead: BackgroundReadAccess,
+    onHealthConnectPermission: () -> Unit,
+    onRequestPermissions: () -> Unit,
+    locationGranted: Boolean,
+    bluetoothGranted: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        Text("Appearance", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                var darkExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = darkExpanded,
+                    onExpandedChange = { darkExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = DARK_MODES.first { it.first == darkMode }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Dark mode") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = darkExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = darkExpanded,
+                        onDismissRequest = { darkExpanded = false },
+                    ) {
+                        DARK_MODES.forEach { (mode, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onDarkModeChange(mode)
+                                    darkExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+                Text(
+                    "Applies to the whole app; System follows the device setting.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
-        Text(
-            "morkStep  v$version",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        )
+
+        Spacer(Modifier.height(16.dp))
+        Text("Sensors", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SwitchRow(
+                    label = "Simulated sensors (debug)",
+                    checked = simulated,
+                    onCheckedChange = onSimulatedChange,
+                )
+                Text(
+                    "Off uses real hardware: GPS speed, pedometer pace from the Wear watch, and a Bluetooth heart-rate strap. " +
+                        "No automatic fallback — if off and a signal is missing, readings stay blank.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (!simulated) {
+                    SwitchRow(
+                        label = "Heart rate from Wear companion",
+                        checked = wearHr,
+                        onCheckedChange = onWearHrChange,
+                    )
+                    SwitchRow(
+                        label = "Vibrate watch",
+                        checked = wearVibrate,
+                        onCheckedChange = onWearVibrateChange,
+                    )
+                    SwitchRow(
+                        label = "Health Connect HR (after workout)",
+                        checked = hcBackfillHr,
+                        onCheckedChange = onHcBackfillChange,
+                    )
+                    Text(
+                        "When the Wear relay is off, average/min/max heart rate for a finished " +
+                            "workout is backfilled from Health Connect (no live readings).",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onRequestPermissions,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Grant sensor permissions")
+                        }
+                        OutlinedButton(
+                            onClick = onHealthConnectPermission,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Grant Health Connect access")
+                        }
+                    }
+                    Text(
+                        "Location: ${if (locationGranted) "granted" else "not granted"} · " +
+                            "Bluetooth: ${if (bluetoothGranted) "granted" else "not granted"} · " +
+                            "Health Connect: ${if (hcGranted) "granted" else "not granted"}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (hcBackgroundRead != BackgroundReadAccess.UNSUPPORTED) {
+                        Text(
+                            "Health Connect background reads: ${hcBackgroundRead.note} — " +
+                                "required for the post-workout rereads (1/6/21/66 min) " +
+                                "and every History re-read.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                } else {
+                    Text(
+                        sensorNote,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Unrestricted battery", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (batteryUnrestricted) "Allowed — sensors stay live" else "Optimized — sensors may be gated",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    OutlinedButton(onClick = onRequestBatteryUnrestricted) {
+                        Text(if (batteryUnrestricted) "Granted" else "Allow")
+                    }
+                }
+                Text(
+                    "Battery optimization can suspend sensor delivery when the screen is off. Allowing unrestricted " +
+                        "battery keeps the step sensors live during workouts.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Column {
+                    Text("Step sensor access", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (activityRecognitionGranted) "Granted — pace sensors work"
+                        else "Not granted — step sensors blocked; allow it via \"Grant sensor permissions\"",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Text(
+                    "Android 10+ requires the activity-recognition permission for step sensors; without it, step " +
+                        "pace stays empty no matter what.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Debug", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SwitchRow(
+                    label = "Debug tracing",
+                    checked = debugLog,
+                    onCheckedChange = onDebugLogChange,
+                )
+                Text(
+                    "When on, pace connection/step events are traced live on the workout screen and can be exported " +
+                        "from there with the Export log button. Off by default; no trace data is collected while off.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                // Display the captured log on the workout screen (own toggle;
+                // capture/export are controlled by "Debug tracing" above).
+                SwitchRow(
+                    label = "Show debug log on workout screen",
+                    checked = showDebugLog,
+                    onCheckedChange = onShowDebugLogChange,
+                )
+                SwitchRow(
+                    label = "Force phone pedometer",
+                    checked = forcePhonePace,
+                    onCheckedChange = onForcePhonePaceChange,
+                )
+                Text(
+                    "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
+                        "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
 }
