@@ -4,6 +4,13 @@ Modern Android fitness app for **Interval Walking Training** (IWT / "Japanese wa
 
 IWT alternates brisk "push" intervals with slower "recovery" intervals. morkStep guides a session through a configurable plan, gives live speed, pace and heart-rate feedback, plays audio cues when you drift from your targets, and records every completed workout to a history log.
 
+## Docs
+
+Design notes and surveys that are **not** part of the shipped feature set — each records findings only and needs explicit approval before any of it is implemented:
+
+- **[docs/pace-future-improvements.md](docs/pace-future-improvements.md)** — pace-sensor gaps found from real captures (stop floor for displayed pace, GPS blip filter, counter overshoot on batched step delivery, no staleness expiry on the merged pace), with the log lines that show each one.
+- **[docs/ad-monetization-options.md](docs/ad-monetization-options.md)** — what ad support would take: Google's GMA Next-Gen vs legacy SDK and the mediation ad-source catalogue, which ad format fits which screen (and why none fits a running session or the watch), and the Play policy gates that have to clear first — chiefly the prohibition on using health and fitness data for advertising, which binds this app through `READ_HEART_RATE` / `BODY_SENSORS`.
+
 ## Features
 
 - **Profile** — save unlimited named workout configurations; pick the active one on the **home screen** or in **Settings**, which also lists every saved profile and can **clone** or **delete** any of them. Starts from a single profile named *Default* with the **Adhoc** length.
