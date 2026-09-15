@@ -1,0 +1,185 @@
+# Ad monetization — options survey (recorded 2026-09-15)
+
+Do NOT implement without explicit approval. This is a survey of what is available, not a
+plan of record; nothing below is wired into the app.
+
+**Scope.** Ad/mediation SDKs, which formats can legally and sensibly go on which morkStep
+surface, and the store-policy gates this app has to clear first. Google SDK artifact names
+and versions were read from the vendor docs on 2026-09-15 and will rot — re-check them
+before building.
+
+**Status (verified at 0.15.1):** nothing implemented. No ad SDK, no mediation adapter, no
+billing library, no ad unit IDs, no `AD_ID` declaration anywhere in the tree.
+
+## 0. What the app already has (evidence)
+
+| Fact | Where |
+| --- | --- |
+| `android.permission.INTERNET` already declared | `app/src/main/AndroidManifest.xml` |
+| `minSdk 26` / `compileSdk 36` / `targetSdk 36`, Kotlin 2.2.10 | `app/build.gradle.kts` |
+| No ads/billing code: `grep -i "ads\|AdView\|AdMob\|billing\|Purchase\|premium\|Advert"` over `app/src`, `wear/src`, both build files and `settings.gradle.kts` returns only incidental matches ("re**ads**") | repo |
+| Two modules: phone `:app`, standalone Wear companion `:wear` (Wearable message layer, `com.google.android.wearable.standalone = true`) | `settings.gradle.kts`, `wear/src/main/AndroidManifest.xml` |
+| Health data in play: `health.READ_HEART_RATE`, `health.READ_HEALTH_DATA_IN_BACKGROUND` on `:app`; `BODY_SENSORS` on `:wear` | both manifests |
+| No privacy policy document in the repo (`docs/` holds this survey and `pace-future-improvements.md`) | repo |
+
+The manifest permissions and SDK levels clear every prerequisite below; the missing pieces
+are an ad account, a privacy policy, and the Play Console declarations.
+
+## 1. Google's own stack — two live variants
+
+| | Artifact / version (docs 2026-09-15) | Floors | Notes |
+| --- | --- | --- | --- |
+| **GMA Next-Gen SDK** (the recommended one) | `com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.4.0` | minSdk 24, compileSdk 35, Kotlin ≥ 1.9 | App ID is passed **in code** — `MobileAds.initialize(context, InitializationConfig.Builder("ca-app-pub-…").build()) { … }` — not as manifest meta-data. Must be called on a background thread: the docs call out an ANR otherwise. |
+| **Google Mobile Ads SDK (legacy)** | `com.google.android.gms:play-services-ads:25.4.0` | minSdk 23, compileSdk 35 | Carries a **maintenance-mode banner**: "For the latest updates and features, migrate and set up GMA Next-Gen SDK". App ID goes in the manifest as `com.google.android.gms.ads.APPLICATION_ID`; SDK ≥ 20.4.0 self-declares `com.google.android.gms.permission.AD_ID`. Legacy docs are what the mediation adapter catalogue still points at. |
+| **Google Ad Manager (GAM)** | same SDKs, GAM account instead of AdMob | as above | Only needed for direct-sold inventory, price floors, or running your own sales. |
+
+Both expose the same format set: **banner, interstitial, native, rewarded, rewarded
+interstitial, app open** (plus native custom rendering). Mediation then attaches third-party
+demand without changing the app-facing call sites.
+
+Only `:app` would get the dependency; `:wear` has no ad surface (see §3).
+
+Worth checking at implementation time: the ads SDK pulls `play-services-*` transitively, and
+`:app` already pins `play-services-location:21.3.0` / `play-services-wearable:20.0.1`.
+Aligning those is a Gradle-level task, not a design one. [INFERENCE — no conflict observed,
+just untested version mixing.]
+
+## 2. Third-party demand — two routes
+
+**Route A — through AdMob/GAM mediation** (add adapters, keep one call site). Ad-source
+catalogue as of the vendor page's own "Last updated 2026-09-14 UTC":
+
+- **SDK-required, open-sourced adapters:** AppLovin, BidMachine, BIGO Ads, Chartboost,
+  DT Exchange, i-mobile, InMobi, ironSource Ads, Liftoff Monetize, LY Ads Network, maio,
+  **Meta Audience Network**, Mintegral, Moloco, myTarget, Pangle, PubMatic OpenWrap,
+  Unity Ads, Vpon, Zucks.
+- **Bidding-only, no third-party SDK:** Ad Generation, Bidease, Chocolate Platform,
+  Equativ, Fluct, Improve Digital, Index Exchange, InMobi Exchange, Magnite DV+, Media.net,
+  MobFox, Nativo, Nexxen, OneTag Exchange, OpenX, PubMatic, Rise, Sharethrough, Smaato,
+  Sonobi, TripleLift, Verve Group, Yieldmo, YieldOne.
+- Anything not listed → **custom events** (your own adapter).
+
+**Route B — a different primary mediation platform**, replacing the Google SDK rather than
+sitting under it: **AppLovin MAX**, **Unity LevelPlay** (ironSource), **Amazon Publisher
+Services**. More fill/eCPM upside, more work: your own consent flow, account, reporting
+webhooks, and a second adapter set.
+
+For this app the practical middle ground is Route A: AdMob alone first, add adapters only
+if fill/revenue justifies the integration and policy review each network carries.
+
+## 3. Formats × surfaces (what is legal and sensible here)
+
+Google Play's Ads policy is explicit about the patterns that get apps rejected — the ones
+that matter for morkStep:
+
+- **No interstitial at the start of a content segment or during gameplay**, and none before
+  a splash/loading screen. A running workout is this app's "gameplay": **no interstitial may
+  fire during a session** — not at start, not on a phase change, not on the finish line
+  while audio cues are still playing.
+- **Full-screen interstitials must be dismissible within 15 s** (rewarded ads are exempt
+  from that rule).
+- **"Made for ads"**: no interstitials chained after consecutive user actions.
+- No lockscreen monetization, no ads rendered outside the app, no false dismiss buttons, and
+  ad content must fit the app's content rating.
+
+| Surface | Viable format | Reasoning |
+| --- | --- | --- |
+| Home (`ui/HomeScreen.kt`) | banner or a native card below the profile/plan cards | Passive, above the nav bar, never between the user and *Start workout* |
+| History list (`ui/HistoryScreen.kt`) | native, rendered into the list | Matches the existing card layout; scroll-safe |
+| After finish / discard | interstitial **after** the summary and snackbar, never during | Natural break in the flow; the finish path already navigates |
+| Optional extras (extra chart views, on-demand export, re-calibration) | rewarded / rewarded interstitial | The only formats where a > 15 s unskippable ad is allowed |
+| Workout screen (`ui/WorkoutScreen.kt`) | **none** | Live session plus spoken cues (`audio/CueSpeaker.kt`); policy and UX both exclude it |
+| Wear companion (`:wear`) | **none available** | No Wear OS form factor or format appears anywhere in the GMA platform/format docs (Android, iOS, Unity, Flutter, Android-Legacy). The watch screens stay ad-free. |
+
+## 4. Policy and compliance gates (blocking, not optional)
+
+**Health data may not drive ads.** Play's *Android Health Permissions: Guidance and FAQs*
+lists under **Prohibited uses of Android Health and Fitness data → Commercial exploitation
+and advertising**:
+
+> Transferring or selling user health or fitness data to third parties like advertising
+> platforms, data brokers, or any information resellers.
+>
+> Transferring, selling, or using user health and fitness data for serving ads, including
+> personalized or interest-based advertising.
+
+morkStep reads HR through Health Connect and steps/sensors on both modules, so this binds it
+directly: ads are permitted, but **no targeting, profiling, or audience-building from
+HR/pace/workout data**, and no health data handed to an ad SDK. In practice that means
+contextual / limited-ads serving only, and a network-by-network read of the data-sharing
+terms in any mediation adapter before enabling it. The same guidance states it applies to
+Wear OS apps too.
+
+Other gates:
+
+- **Data safety (Play Console)**: declare Advertising ID and "Advertising or marketing"
+  collection. `AD_ID` comes auto-declared with SDK ≥ 20.4.0; the declaration is still yours.
+- **Advertising ID rules**: honor "Opt out of Ads Personalization" / a deleted AD_ID on
+  every access; never join AAID to SSAID/MAC/IMEI.
+- **Consent (EEA/UK/Switzerland)**: Google's UMP SDK must complete before
+  `MobileAds.initialize()` / before any ad load. Ads can be preloaded by the SDK at
+  initialization, so consent has to be settled first.
+- **`app-ads.txt`** published for the app's store listing domain in the AdMob flow.
+- **Privacy policy** linked from the store listing and the app — required once AAID is
+  collected, and required anyway by the health-data guidance. Not in the repo today.
+- **Location**: policy forbids requesting location *for ads*; the app's `ACCESS_FINE_LOCATION`
+  is the GPS pace source (`sensing/GpsSpeedSource.kt`), which stays compliant as long as
+  location is never handed to the ad stack.
+- **Content rating**: ad creative must match the app's rating; the app is a general-audience
+  fitness app, not Designed for Families.
+
+## 5. Non-SDK monetization (worth weighing before an SDK)
+
+- **Play Billing one-time unlock / subscription** ("remove ads", premium analysis), paired
+  with ads, is the standard shape and adds no SDK policy surface beyond billing itself.
+- **Sponsor / affiliate cards** (shoe, strap, race) avoid the SDK, the AAID and the
+  health-data review surface entirely, at the cost of manual sales.
+
+## 6. Recommended default shape (not implemented, not approved)
+
+GMA Next-Gen SDK + AdMob mediation; banner on Home, native in History, rewarded behind
+optional extras; nothing during a session and nothing on the watch; every request served
+contextually. Integration touch points if this is approved:
+
+- `MorkApplication` (existing `Application` subclass) — background-thread
+  `MobileAds.initialize()` after consent, gated so debug builds use Google's test unit IDs.
+- `Constants.kt` — a `// ---- ads ----` region for unit IDs, refresh interval, and a
+  minimum-interval-between-interstitials value, per the repo rule that tuning values live in
+  `Constants`, never inline.
+- `data/Store.kt` (DataStore) — the app-wide "ads enabled / purchased" flag, alongside
+  `debugLog` / `darkMode`; `MainViewModel` exposes it the way it exposes the other app-wide
+  settings, and Settings → General gets the toggle.
+- Compose surfaces — an `AndroidView` wrapper per format (`AdView` for banner,
+  `NativeAdView` for the History card), no ad code inside `WorkoutScreen`.
+- `docs/` + store listing — privacy policy text covering the Advertising ID and the
+  health-data exclusions.
+
+## 7. Open decisions
+
+1. SDK: GMA Next-Gen (new, documented path) vs legacy `play-services-ads` (more adapter
+   coverage today). The mediation catalogue still links legacy pages, so this is the first
+   thing to settle.
+2. Formats to ship: banner-only is the lowest-risk, lowest-revenue end; rewarded is the
+   highest-value per impression and the most compatible with a workout app.
+3. AdMob alone vs AdMob + mediation adapters (each adapter is one more privacy/terms review
+   against the health-data prohibition).
+4. Whether ads ship with a paid "remove ads" unlock at the same time.
+
+## Sources
+
+Read 2026-09-15:
+
+- GMA Next-Gen setup (artifact, floors, in-code app ID, background-thread init) —
+  <https://developers.google.com/admob/android/next-gen/quick-start>
+- Google Mobile Ads SDK legacy setup (maintenance-mode banner, `play-services-ads:25.4.0`,
+  manifest app ID, `AD_ID` note) — <https://developers.google.com/admob/android/quick-start>
+- AdMob mediation ad sources (catalogue above; page states "Last updated 2026-09-14 UTC") —
+  <https://developers.google.com/admob/android/choose-networks>
+- Play Ads policy (interstitial 15 s rule, no ads at content-segment start, made-for-ads,
+  lockscreen, AAID rules) —
+  <https://support.google.com/googleplay/android-developer/answer/9857753>
+- Android Health Permissions guidance (prohibited advertising uses of health data; applies
+  to Wear OS) —
+  <https://support.google.com/googleplay/android-developer/answer/12991134>
+- Permissions and APIs that Access Sensitive Information (location never for ads) —
+  <https://support.google.com/googleplay/android-developer/answer/16558241>
