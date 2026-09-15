@@ -58,7 +58,7 @@ class AppSmokeTest {
         val versionName = rule.activity.packageManager
             .getPackageInfo(rule.activity.packageName, 0).versionName
         rule.onAllNodesWithText("Settings").onFirst().performClick()
-        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Profile").assertExists()
         rule.onNodeWithText("morkStep  v$versionName").assertExists()
     }
 
@@ -66,16 +66,16 @@ class AppSmokeTest {
     fun configShowsVibrationIntensitySlider() {
         // The seeded default profile vibrates at 50% intensity.
         rule.onAllNodesWithText("Settings").onFirst().performClick()
-        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Profile").assertExists()
         rule.onNodeWithText("Intensity").assertExists()
         rule.onNodeWithText("50%").assertExists()
     }
 
     @Test
     fun configShowsDarkModeToggle() {
-        // Profile settings exposes a Dark mode switch (default off = follow system).
+        // The Dark mode menu is app-wide, so it lives on the General page (default off = follow system).
         rule.onAllNodesWithText("Settings").onFirst().performClick()
-        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("General").performClick()
         rule.onNodeWithText("Dark mode").performScrollTo().assertExists()
         rule.onNodeWithText("Applies to the whole app; System follows the device setting.")
             .performScrollTo().assertExists()

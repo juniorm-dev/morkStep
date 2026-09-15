@@ -53,7 +53,7 @@ class PhaseAveragesToggleTest {
         assertTrue("default profile must have resetPhaseAverages on", activeProfile().resetPhaseAverages)
 
         rule.onAllNodesWithText("Settings").onFirst().performClick()
-        rule.onNodeWithText("Profile settings").assertExists()
+        rule.onNodeWithText("Profile").assertExists()
 
         // The switch sits beside the "Level out phase transitions" label;
         // only the Switch node is toggleable, so this matches exactly one node.

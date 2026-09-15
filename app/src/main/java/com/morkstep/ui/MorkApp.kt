@@ -185,12 +185,6 @@ fun MorkApp(viewModel: MainViewModel) {
         }
         permissionLauncher.launch(needed.toTypedArray())
     }
-    val maybeRequestActivityRecognition = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissionLauncher.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
-        }
-    }
-
     val bottomTabs = listOf(
         Triple(Routes.HOME, "Home", Icons.Filled.Home),
         Triple(Routes.HISTORY, "History", Icons.AutoMirrored.Filled.List),
@@ -299,8 +293,6 @@ WorkoutScreen(
                         )
                     },
                     activityRecognitionGranted = activityRecognitionGranted,
-                    onRequestActivityRecognition = maybeRequestActivityRecognition,
-                    onMaybeRequestActivityRecognition = maybeRequestActivityRecognition,
                     hcGranted = hcGranted,
                     hcBackgroundRead = hcBackgroundRead,
                     onHealthConnectPermission = { requestHealthConnectPermission() },
