@@ -63,6 +63,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
     val showDebugLog by viewModel.showDebugLog.collectAsStateWithLifecycle()
     val forcePhonePace by viewModel.forcePhonePace.collectAsStateWithLifecycle()
+    val testAds by viewModel.testAds.collectAsStateWithLifecycle()
     val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
     val activityRecognitionGranted by viewModel.activityRecognitionGranted.collectAsStateWithLifecycle()
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
@@ -222,6 +223,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     activeId = activeId,
                     workoutActive = live.running,
                     debugLog = debugEnabled,
+                    adsEnabled = testAds,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
@@ -283,6 +285,8 @@ WorkoutScreen(
                     onShowDebugLogChange = viewModel::setShowDebugLog,
                     forcePhonePace = forcePhonePace,
                     onForcePhonePaceChange = viewModel::setForcePhonePace,
+                    testAds = testAds,
+                    onTestAdsChange = viewModel::setTestAds,
                     batteryUnrestricted = batteryUnrestricted,
                     onRequestBatteryUnrestricted = {
                         batteryOptimizationLauncher.launch(
@@ -311,6 +315,7 @@ WorkoutScreen(
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,
+                    adsEnabled = testAds,
                     // Opening a card re-reads Health Connect for that row, so a
                     // workout whose HR landed after the automatic passes fills in.
                     onWorkoutOpened = viewModel::backfillHrForWorkout,

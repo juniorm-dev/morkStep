@@ -16,6 +16,7 @@ import com.morkstep.Constants
 import com.morkstep.DebugLog
 import com.morkstep.MorkApplication
 import com.morkstep.WorkoutService
+import com.morkstep.ads.Ads
 import com.morkstep.audio.CueSpeaker
 import com.morkstep.data.DarkMode
 import com.morkstep.data.PhaseType
@@ -168,6 +169,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Debug: force the phone pedometer to drive pace instead of the watch-relay fallback. */
     private val _forcePhonePace = MutableStateFlow(false)
     val forcePhonePace: StateFlow<Boolean> = _forcePhonePace.asStateFlow()
+
+    /** Whether ads are served at all (hidden Debug switch); off means every placement is inert. */
+    private val _testAds = MutableStateFlow(false)
+    val testAds: StateFlow<Boolean> = _testAds.asStateFlow()
 
     /** Whether the app is exempt from battery optimization (sensors stay live in background). */
     private val _batteryUnrestricted = MutableStateFlow(false)
@@ -383,6 +388,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+        viewModelScope.launch {
+            container.configStore.testAds.collect { on ->
+                _testAds.value = on
+                // The gate owns SDK initialization: enabling starts serving (initializing the
+                // SDK once, off the main thread), disabling makes every placement inert.
+                Ads.setEnabled(getApplication(), on, debugLog)
+            }
+        }
         refreshHealthConnectState()
         refreshBatteryOptimizationState()
         refreshActivityRecognitionState()
@@ -542,6 +555,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Debug: force the phone pedometer to drive pace; the watch relay is ignored. */
     fun setForcePhonePace(on: Boolean) {
         viewModelScope.launch { container.configStore.setForcePhonePace(on) }
+    }
+
+    /**
+     * Toggle ad serving — the hidden **Test ads (debug)** switch. On serves Google's test
+     * inventory; off means no placement requests, loads or shows anything.
+     */
+    fun setTestAds(on: Boolean) {
+        viewModelScope.launch { container.configStore.setTestAds(on) }
     }
 
     /** Export the captured debug log to the SAF document at [uri]; result shows in a snackbar. */

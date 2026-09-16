@@ -38,6 +38,8 @@ fun HomeScreen(
     workoutActive: Boolean = false,
     /** Whether debug tracing is on — shows the anywhere-in-the-app log export. */
     debugLog: Boolean = false,
+    /** Whether ads are served (hidden Debug switch); off draws no banner and makes no request. */
+    adsEnabled: Boolean = false,
     onSelectProfile: (Long) -> Unit,
     onStart: () -> Unit,
     onConfig: () -> Unit,
@@ -152,5 +154,8 @@ fun HomeScreen(
                 Text("Export log")
             }
         }
+
+        // Last in the column, so the ad never sits between the user and Start workout.
+        BannerAdSlot(enabled = adsEnabled, modifier = Modifier.padding(top = 24.dp))
     }
 }

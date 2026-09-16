@@ -120,6 +120,8 @@ fun HistoryScreen(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onWorkoutOpened: (WorkoutEntity) -> Unit,
+    /** Whether ads are served (hidden Debug switch); off draws no ad card and makes no request. */
+    adsEnabled: Boolean = false,
 ) {
     val app = LocalContext.current.applicationContext as MorkApplication
     val dao = app.container.workoutDao
@@ -152,6 +154,10 @@ fun HistoryScreen(
                 Text("Import history")
             }
         }
+
+        // One ad card, above the list and never over a row.
+        NativeAdSlot(enabled = adsEnabled, modifier = Modifier.padding(bottom = 12.dp))
+
         if (workouts.isEmpty()) {
             Column(
                 modifier = Modifier

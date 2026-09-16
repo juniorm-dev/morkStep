@@ -145,8 +145,8 @@ android {
         applicationId = "com.morkstep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "0.15.1"
+        versionCode = 36
+        versionName = "0.16.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Instrumented (emulator) tests start from a clean app state: no leftover
         // profiles or history, so assertions are deterministic. These tests are
@@ -235,6 +235,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
     ksp("androidx.room:room-compiler:2.7.2")
+
+    // Google Mobile Ads (GMA Next-Gen SDK). Serving is test-only for now, behind
+    // the hidden Debug switch "Test ads (debug)" — see docs/ad-monetization-options.md.
+    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.4.0")
 
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
