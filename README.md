@@ -325,6 +325,19 @@ Jetpack Compose + Material 3 with a bottom navigation shell (`Home`, `History`, 
   `.classpath.absolute` and machine-specific `.omp/lsp.json`. The JetBrains Kotlin Language
   Server resolves Gradle/AGP projects itself; config is the machine-independent
   `~/.omp/agent/lsp.json` (global) plus the matching `.omp/lsp.json` in this repo.
+- **A newly added dependency needs the persisted workspace wiped.** The server keeps its
+  workspace (index + imported Gradle model) under
+  `%LOCALAPPDATA%\JetBrains\IntelliJServer\workspaces\<project-hash>\`, and a restart *reuses*
+  it rather than re-running the import — so after adding a library, `gradlew assembleDebug`
+  builds cleanly while every `lsp` request reports `Unresolved reference` for the new package
+  (`lsp reload *` alone does not fix it; the model is unchanged). Fix: stop the server
+  (`pkill -f intellij-server`), delete that workspace directory (it holds only `index/`, a few
+  hundred MB), then issue any `lsp` request — the server re-imports the Gradle project from
+  scratch, exactly as on a cold start, and the dependency resolves. Verified at 0.16.0 with
+  `ads-mobile-sdk`: `AdSlots.kt` went from 69 unresolved-reference errors to none, and
+  `lsp references` on `Ads.setEnabled` again returns its cross-file call site in
+  `MainViewModel.kt`. Expect a multi-minute re-index, and no `workspace/symbol` support (that
+  request falls through to `pylsp` and fails with `Method Not Found`).
 - **Versioned APK artifact names.** AGP 9 removed `applicationVariants`/`BaseVariantOutputImpl`
   and the public per-output rename (`SingleArtifact.APK` is now a `ContainsMany` directory
   artifact), so both modules add a `versioned` post-packaging task (`rename<Variant>Apk`,
