@@ -391,7 +391,6 @@ private fun ProfileSettingsPage(
         var rounds by rememberSaveable(profile.id) { mutableIntStateOf(profile.rounds) }
         var distanceMiles by rememberSaveable(profile.id) { mutableFloatStateOf(profile.distanceMiles.toFloat()) }
         var timeMinutes by rememberSaveable(profile.id) { mutableIntStateOf(profile.timeMinutes) }
-        var adhocCueEveryNPush by rememberSaveable(profile.id) { mutableIntStateOf(profile.adhocCueEveryNPush) }
         var fastSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.pushSec) }
         var slowSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.slowSec) }
         var warmupSec by rememberSaveable(profile.id) { mutableIntStateOf(profile.warmupSec) }
@@ -468,10 +467,9 @@ private fun ProfileSettingsPage(
                         "Duration", "$timeMinutes min",
                         timeMinutes.toFloat(), 5f..120f, 46,
                     ) { timeMinutes = it.toInt() }
-                    WorkoutLength.ADHOC -> SliderRow(
-                        "Cue every N push rounds (0 = off)", "$adhocCueEveryNPush",
-                        adhocCueEveryNPush.toFloat(), 0f..10f, 10,
-                    ) { adhocCueEveryNPush = it.toInt() }
+                    // ADHOC runs until the session is ended by hand, so it has no
+                    // length dimension of its own to set here.
+                    WorkoutLength.ADHOC -> Unit
                 }
             }
         }
@@ -561,7 +559,7 @@ private fun ProfileSettingsPage(
                 }
                 Text(
                     "Off: no spoken cues or transition beeps. On phase change: announce warm-up, push, recovery, cooldown and finish. " +
-                        "All cues: also announce quarter, push-round and warning cues.",
+                        "All cues: also announce quarter and warning cues.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -605,7 +603,7 @@ private fun ProfileSettingsPage(
                 }
                 Text(
                     "Off: no haptics. On phase change: buzz at warm-up, push, recovery, cooldown and finish. " +
-                        "All cues: also buzz on quarter, push-round and warning cues.",
+                        "All cues: also buzz on quarter and warning cues.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 SliderRow(
@@ -675,7 +673,6 @@ private fun ProfileSettingsPage(
                         rounds = rounds,
                         distanceMiles = distanceMiles.toDouble(),
                         timeMinutes = timeMinutes,
-                        adhocCueEveryNPush = adhocCueEveryNPush,
                         pushSec = fastSec,
                         slowSec = slowSec,
                         warmupSec = warmupSec,
@@ -795,16 +792,23 @@ private fun GeneralSettingsPage(
         Text("Sensors", style = MaterialTheme.typography.titleMedium)
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SwitchRow(
-                    label = "Simulated sensors (debug)",
-                    checked = simulated,
-                    onCheckedChange = onSimulatedChange,
-                )
-                Text(
-                    "Off uses real hardware: GPS speed, pedometer pace from the Wear watch, and a Bluetooth heart-rate strap. " +
-                        "No automatic fallback — if off and a signal is missing, readings stay blank.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                // Debug-only control: it belongs with the hidden Debug card, so
+                // the switch (and the description of what "off" means) appears
+                // only once that card is revealed. Leaving the mode on is still
+                // visible below — the card shows the simulated-sensor note
+                // instead of the hardware controls while it is on.
+                if (showDebug) {
+                    SwitchRow(
+                        label = "Simulated sensors (debug)",
+                        checked = simulated,
+                        onCheckedChange = onSimulatedChange,
+                    )
+                    Text(
+                        "Off uses real hardware: GPS speed, pedometer pace from the Wear watch, and a Bluetooth heart-rate strap. " +
+                            "No automatic fallback — if off and a signal is missing, readings stay blank.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 if (!simulated) {
                     SwitchRow(
                         label = "Heart rate from Wear companion",
