@@ -187,7 +187,7 @@ class SessionEngineTest {
 
     @Test
     fun tick_adhoc_runsUntilEndNow() {
-        val adhoc = WorkoutProfile(id = 7, name = "A", lengthMode = WorkoutLength.ADHOC, pushSec = 60, slowSec = 60, adhocCueEveryNPush = 2)
+        val adhoc = WorkoutProfile(id = 7, name = "A", lengthMode = WorkoutLength.ADHOC, pushSec = 60, slowSec = 60)
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(adhoc, clock, cue)
@@ -196,15 +196,12 @@ class SessionEngineTest {
         eng.tick()
         assertFalse(eng.snapshot.finished)
         assertNull(eng.snapshot.progress)
-        // 180s warm-up + 2 full fast/slow pairs (2*120s) = past push round 3,
-        // so every-2nd-push cue fires at push 2 — but this is a phase-change
-        // tick, so the ADHOC cue follows on the next tick.
-        clock.advance(430_000) // t=440 → FAST entry
-        eng.tick() // phase change announced; ADHOC cue sits until the next tick
-        clock.advance(1_000) // t=441
+        // 180s warm-up + 2 full fast/slow pairs (2*120s) — no natural end: the
+        // session runs on until endNow().
+        clock.advance(430_000) // t=440 → FAST entry, push round 3 underway
         eng.tick()
         assertEquals(2, eng.snapshot.pushSegmentsDone)
-        assertTrue(cue.spoken.any { it.contains("Push round 2") })
+        assertFalse(eng.snapshot.finished)
         eng.endNow()
         assertTrue(eng.snapshot.finished)
         assertFalse(eng.snapshot.running)
@@ -647,27 +644,6 @@ class SessionEngineTest {
         clock.advance(1_000) // t=122
         eng.tick()
         assertTrue(cue.spoken.any { it.contains("One quarter") }) // quarter now fires
-    }
-
-    @Test
-    fun adhocCue_defersBehindPhaseChangeOnEntryTick() {
-        // The ADHOC every-Nth-push cue falls on a phase-change tick and must
-        // wait until the following tick, exactly like the quarter cues.
-        val p = WorkoutProfile(
-            id = 31, name = "ADHOCP", lengthMode = WorkoutLength.ADHOC,
-            pushSec = 60, slowSec = 60, adhocCueEveryNPush = 2, warmupSec = 180,
-        )
-        val clock = FakeClock(1_000)
-        val cue = RecordingCue()
-        val eng = engineWith(p, clock, cue)
-        eng.run() // t=0 → WARMUP
-        clock.advance(440_000) // t=440 → FAST entry, push round 2 complete
-        eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Push phase") }) // phase-change cue
-        assertFalse(cue.spoken.any { it.contains("Push round 2") }) // ADHOC deferred
-        clock.advance(1_000) // t=441
-        eng.tick()
-        assertTrue(cue.spoken.any { it.contains("Push round 2") }) // ADHOC cue now fires
     }
 
     @Test

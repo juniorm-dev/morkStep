@@ -269,8 +269,10 @@ object Constants {
     // ---- settings UI ----
     /**
      * Consecutive taps on the Settings "General" tab that reveal the hidden
-     * Debug card. Selecting any other tab resets the count before the gesture
-     * completes; once revealed the card stays visible while Settings is open.
+     * Debug card — and, with it, the "Simulated sensors (debug)" switch in the
+     * Sensors card, which is debug-only. Selecting any other tab resets the
+     * count before the gesture completes; once revealed both stay visible while
+     * Settings is open.
      */
     const val SETTINGS_DEBUG_UNLOCK_TAPS = 6
 }

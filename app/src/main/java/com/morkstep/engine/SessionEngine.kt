@@ -156,10 +156,10 @@ internal fun progressAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: 
  * Interval Walking Training session engine with pluggable length modes.
  *
  * ROUNDS/TIME/DISTANCE run to a natural end; ADHOC runs until [endNow].
- * Emits phase-change beeps + announcements, speed/HR/pace warning cues, quarter
- * progress cues (finite modes), and every-Nth-push cues (ADHOC). Phase-change
- * cues take precedence: warnings and workout-length cues that coincide with a
- * transition are deferred to the following tick.
+ * Emits phase-change beeps + announcements, speed/HR/pace warning cues and
+ * quarter progress cues (finite modes). Phase-change cues take precedence:
+ * warnings and workout-length cues that coincide with a transition are
+ * deferred to the following tick.
  */
 class SessionEngine(
     val profile: WorkoutProfile,
@@ -193,7 +193,6 @@ class SessionEngine(
      */
     private var warningSettleUntilMs = 0L
     private var lastQuarter = 0
-    private var lastAdhocCueN = 0
     private val lastCueAt = mutableMapOf<String, Long>()
     /**
      * Min gap between repeats of the same warning cue, in millis. Driven by the
@@ -267,7 +266,6 @@ class SessionEngine(
         lastDistTick = 0
         lastPhase = null
         lastQuarter = 0
-        lastAdhocCueN = 0
         pushSpeedSum = 0.0; pushSpeedCnt = 0
         slowSpeedSum = 0.0; slowSpeedCnt = 0
         allSpeedSum = 0.0; allSpeedCnt = 0
@@ -403,7 +401,7 @@ class SessionEngine(
 
         // Quarter cues keyed to the length dimension the user chose:
         // ROUNDS → quarters of the round count; DISTANCE/TIME → quarters of
-        // miles/minutes; ADHOC → every-Nth-push cue only.
+        // miles/minutes; ADHOC → no cue, it has no length dimension.
         val prog = progressAt(t, profile, coreEndSec, finishSec, distance)
         val q = when (profile.lengthMode) {
             WorkoutLength.ROUNDS -> {
@@ -426,25 +424,15 @@ class SessionEngine(
             }
             WorkoutLength.ADHOC -> 0
         }
-        // Workout-length cues — quarters of the chosen length dimension and the
-        // ADHOC every-Nth-push cue. Phase-change cues take precedence over every
-        // other cue: when a length cue falls on the same tick as a phase change
-        // it is deferred to the next tick (the threshold is still unmet, so it
-        // fires then), mirroring the warning-cue precedence below.
+        // Workout-length cues — quarters of the chosen length dimension.
+        // Phase-change cues take precedence over every other cue: when a length
+        // cue falls on the same tick as a phase change it is deferred to the
+        // next tick (the threshold is still unmet, so it fires then), mirroring
+        // the warning-cue precedence below.
         if (!entered) {
             if (q > lastQuarter) {
                 lastQuarter = q
                 speak(qText(q))
-                cue.vibrate(CueVibration.GUIDANCE)
-            }
-
-            // ADHOC: cue on every Nth completed push round.
-            val n = profile.adhocCueEveryNPush
-            if (profile.lengthMode == WorkoutLength.ADHOC && n > 0 && pa.pushDone > lastAdhocCueN &&
-                pa.pushDone % n == 0
-            ) {
-                lastAdhocCueN = pa.pushDone
-                speak("Push round ${pa.pushDone} complete")
                 cue.vibrate(CueVibration.GUIDANCE)
             }
         }
@@ -555,7 +543,7 @@ class SessionEngine(
     }
 
     private fun speak(text: String) {
-        // Guidance cues (quarters, push rounds) are only "all cues" audio.
+        // Guidance cues (quarters) are only "all cues" audio.
         if (profile.audioMode != AudioMode.ALL || text.isBlank()) return
         cue.speak(text)
     }

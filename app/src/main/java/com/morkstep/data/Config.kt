@@ -37,8 +37,6 @@ data class WorkoutProfile(
     val distanceMiles: Double = 2.0,
     /** TIME: target total duration in minutes. */
     val timeMinutes: Int = 35,
-    /** ADHOC: speak a cue on every Nth completed push round (0 = off). */
-    val adhocCueEveryNPush: Int = 3,
     val warmupSec: Int = 180,
     val pushSec: Int = 180,
     val slowSec: Int = 180,
@@ -92,7 +90,7 @@ data class WorkoutProfile(
     val warningThresholdSec: Int = 8,
     /**
      * Audio cue class: phase-change announcements only, or every cue (phase
-     * intros, quarters, push rounds, warnings). OFF silences all audio; the
+     * intros, quarters, warnings). OFF silences all audio; the
      * finish announcement counts as a phase change.
      */
     val audioMode: AudioMode = AudioMode.ALL,
