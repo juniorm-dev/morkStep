@@ -193,6 +193,8 @@ fun ConfigScreen(
     onRequestPermissions: () -> Unit,
     locationGranted: Boolean,
     bluetoothGranted: Boolean,
+    testAds: Boolean,
+    onTestAdsChange: (Boolean) -> Unit,
     onExportProfiles: () -> Unit,
     onImportProfiles: () -> Unit,
 ) {
@@ -267,6 +269,8 @@ fun ConfigScreen(
                             onShowDebugLogChange = onShowDebugLogChange,
                             forcePhonePace = forcePhonePace,
                             onForcePhonePaceChange = onForcePhonePaceChange,
+                            testAds = testAds,
+                            onTestAdsChange = onTestAdsChange,
                             batteryUnrestricted = batteryUnrestricted,
                             onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
                             activityRecognitionGranted = activityRecognitionGranted,
@@ -738,6 +742,8 @@ private fun GeneralSettingsPage(
     onRequestPermissions: () -> Unit,
     locationGranted: Boolean,
     bluetoothGranted: Boolean,
+    testAds: Boolean,
+    onTestAdsChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -923,6 +929,17 @@ private fun GeneralSettingsPage(
                     Text(
                         "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
                             "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    SwitchRow(
+                        label = "Test ads (debug)",
+                        checked = testAds,
+                        onCheckedChange = onTestAdsChange,
+                    )
+                    Text(
+                        "Off by default, and off means no ad is requested, loaded or shown anywhere in the app. On " +
+                            "serves Google's test inventory: an anchored banner under Home and a native ad card above " +
+                            "the History list, both labelled as ads. Nothing is served during a workout.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

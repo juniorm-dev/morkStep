@@ -30,6 +30,7 @@ class ConfigStore(private val context: Context) {
         private val DEBUG_LOG = booleanPreferencesKey("debugLog")
         private val SHOW_DEBUG_LOG = booleanPreferencesKey("showDebugLog")
         private val FORCE_PHONE_PACE = booleanPreferencesKey("forcePhonePace")
+        private val TEST_ADS = booleanPreferencesKey("testAds")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -88,6 +89,17 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setForcePhonePace(value: Boolean) = context.dataStore.edit { p ->
         p[FORCE_PHONE_PACE] = value
+    }
+
+    /**
+     * Whether the app serves ads at all — the hidden **Test ads (debug)** switch in
+     * Settings → General → Debug. Default OFF, and off means no ad is requested, loaded or
+     * shown anywhere; on serves Google's test inventory ([com.morkstep.ads.AdUnits]).
+     */
+    val testAds: Flow<Boolean> = context.dataStore.data.map { it[TEST_ADS] ?: false }
+
+    suspend fun setTestAds(value: Boolean) = context.dataStore.edit { p ->
+        p[TEST_ADS] = value
     }
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]

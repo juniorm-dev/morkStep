@@ -8,8 +8,11 @@ surface, and the store-policy gates this app has to clear first. Google SDK arti
 and versions were read from the vendor docs on 2026-09-15 and will rot — re-check them
 before building.
 
-**Status (verified at 0.15.1):** nothing implemented. No ad SDK, no mediation adapter, no
-billing library, no ad unit IDs, no `AD_ID` declaration anywhere in the tree.
+**Status (0.16.0):** implemented **test-only, behind the hidden Debug switch** (§6). The GMA
+Next-Gen SDK is wired and two placements exist (Home banner, History native); there is no
+interstitial, no rewarded ad, no mediation adapter, no billing library, no live ad unit ID
+and no `AD_ID` declaration. With the switch off the SDK is never initialized and nothing is
+requested.
 
 ## 0. What the app already has (evidence)
 
@@ -17,7 +20,7 @@ billing library, no ad unit IDs, no `AD_ID` declaration anywhere in the tree.
 | --- | --- |
 | `android.permission.INTERNET` already declared | `app/src/main/AndroidManifest.xml` |
 | `minSdk 26` / `compileSdk 36` / `targetSdk 36`, Kotlin 2.2.10 | `app/build.gradle.kts` |
-| No ads/billing code: `grep -i "ads\|AdView\|AdMob\|billing\|Purchase\|premium\|Advert"` over `app/src`, `wear/src`, both build files and `settings.gradle.kts` returns only incidental matches ("re**ads**") | repo |
+| Ads code at the survey's first pass: none (the `grep -i "ads\|AdView\|AdMob\|billing\|Purchase\|premium\|Advert"` sweep over `app/src`, `wear/src`, both build files and `settings.gradle.kts` matched only "re**ads**"). 0.16.0 added the framework described in §6 | repo |
 | Two modules: phone `:app`, standalone Wear companion `:wear` (Wearable message layer, `com.google.android.wearable.standalone = true`) | `settings.gradle.kts`, `wear/src/main/AndroidManifest.xml` |
 | Health data in play: `health.READ_HEART_RATE`, `health.READ_HEALTH_DATA_IN_BACKGROUND` on `:app`; `BODY_SENSORS` on `:wear` | both manifests |
 | No privacy policy document in the repo (`docs/` holds this survey and `pace-future-improvements.md`) | repo |
@@ -135,35 +138,47 @@ Other gates:
 - **Sponsor / affiliate cards** (shoe, strap, race) avoid the SDK, the AAID and the
   health-data review surface entirely, at the cost of manual sales.
 
-## 6. Recommended default shape (not implemented, not approved)
+## 6. What shipped (0.16.0) — and what is still open
 
-GMA Next-Gen SDK + AdMob mediation; banner on Home, native in History, rewarded behind
-optional extras; nothing during a session and nothing on the watch; every request served
-contextually. Integration touch points if this is approved:
+Implemented **test-only**, behind the hidden **Test ads (debug)** switch (Settings → General
+→ Debug, itself revealed by the six-tap gesture). Nothing is live and nothing is requested
+with the switch off.
 
-- `MorkApplication` (existing `Application` subclass) — background-thread
-  `MobileAds.initialize()` after consent, gated so debug builds use Google's test unit IDs.
-- `Constants.kt` — a `// ---- ads ----` region for unit IDs, refresh interval, and a
-  minimum-interval-between-interstitials value, per the repo rule that tuning values live in
-  `Constants`, never inline.
-- `data/Store.kt` (DataStore) — the app-wide "ads enabled / purchased" flag, alongside
-  `debugLog` / `darkMode`; `MainViewModel` exposes it the way it exposes the other app-wide
-  settings, and Settings → General gets the toggle.
-- Compose surfaces — an `AndroidView` wrapper per format (`AdView` for banner,
-  `NativeAdView` for the History card), no ad code inside `WorkoutScreen`.
-- `docs/` + store listing — privacy policy text covering the Advertising ID and the
-  health-data exclusions.
+- **SDK** — GMA Next-Gen `com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.4.0`,
+  initialized once and off the main thread the first time the switch is turned on; the sample
+  AdMob app ID is passed in code, as the Next-Gen guide requires (no manifest meta-data).
+- **Gate** — `ads/Ads.kt` owns the SDK lifecycle and `ads/AdUnits.kt` the demo unit IDs.
+  With the switch off nothing initializes and no placement composes, so the app issues no ad
+  request at all (verified: an empty SDK log after a cold start with the switch off).
+- **Placements** — an anchored adaptive banner at the end of the Home column and a native
+  card above the History list (`ui/AdSlots.kt`), each destroyed when it leaves composition.
+  No interstitial, no rewarded ad, no ad code on the workout screen or the watch.
+- **Trace** — ad lifecycle lines land in the debug log under `[ads]` while "Debug tracing" is on.
+- **Test device** — Google's demo units are not tied to an AdMob account, so a developer
+  cannot generate invalid traffic; the SDK additionally reports the emulator as a test device.
+
+Deliberately not implemented:
+
+- **Rewarded** — there is no in-app reward to attach it to (extra chart views, on-demand
+  export and similar are product decisions); an unattached rewarded loader would be dead code.
+- **Interstitial** — the format with the most policy surface (15-second dismissibility, no
+  unexpected full-screen ads), and the finish flow already navigates and shows a snackbar.
+
+Required before any of this could serve live inventory:
+
+1. An AdMob account, a registered app, and real app/unit IDs replacing the demo ones.
+2. Google's consent (UMP) flow for the EEA/UK/Switzerland, completed before the first request.
+3. Play Console declarations (Data safety, Advertising ID) and a published privacy policy.
+4. `app-ads.txt` published for the store-listing domain.
+5. A pass over the placements with a real fill, including the no-fill and offline cases.
 
 ## 7. Open decisions
 
-1. SDK: GMA Next-Gen (new, documented path) vs legacy `play-services-ads` (more adapter
-   coverage today). The mediation catalogue still links legacy pages, so this is the first
-   thing to settle.
-2. Formats to ship: banner-only is the lowest-risk, lowest-revenue end; rewarded is the
-   highest-value per impression and the most compatible with a workout app.
+1. Formats beyond the two shipped: rewarded (needs a reward surface first) and interstitial
+   (product and policy sign-off).
+2. Whether ads ship alongside a paid "remove ads" unlock at the same time.
 3. AdMob alone vs AdMob + mediation adapters (each adapter is one more privacy/terms review
-   against the health-data prohibition).
-4. Whether ads ship with a paid "remove ads" unlock at the same time.
+   against the health-data prohibition in §4).
 
 ## Sources
 
