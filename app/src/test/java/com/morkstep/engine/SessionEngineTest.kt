@@ -208,6 +208,37 @@ class SessionEngineTest {
     }
 
     @Test
+    fun endNow_reportsTrueOnTheEndingTransitionOnly() {
+        val adhoc = WorkoutProfile(id = 12, name = "A2", lengthMode = WorkoutLength.ADHOC, pushSec = 60, slowSec = 60)
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(adhoc, clock, cue)
+        eng.run()
+        clock.advance(10_000)
+        eng.tick()
+        assertTrue(eng.endNow())
+        assertFalse(eng.endNow())
+    }
+
+    @Test
+    fun endNow_reportsFalseWhenTheSessionRanToItsNaturalEnd() {
+        // A finite-mode session ends on a tick, which clears `running` the way a
+        // manual stop does. A later stop — the user tapping Done on the finished
+        // screen — must therefore report false, so the history entry written at the
+        // finish line is not written again.
+        val clock = FakeClock(1_000)
+        val cue = RecordingCue()
+        val eng = engineWith(roundsProfile, clock, cue)
+        eng.run()
+        clock.advance(364_000)
+        eng.tick()
+        assertTrue(eng.snapshot.finished)
+        assertFalse(eng.snapshot.running)
+        assertFalse(eng.endNow())
+        assertTrue(eng.snapshot.finished)
+    }
+
+    @Test
     fun roundsMode_quarterCuesByPushCount() {
         val p = WorkoutProfile(
             id = 20, name = "QR", lengthMode = WorkoutLength.ROUNDS, rounds = 4,

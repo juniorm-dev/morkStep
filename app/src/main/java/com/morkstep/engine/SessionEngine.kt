@@ -160,6 +160,10 @@ internal fun progressAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: 
  * quarter progress cues (finite modes). Phase-change cues take precedence:
  * warnings and workout-length cues that coincide with a transition are
  * deferred to the following tick.
+ *
+ * [LiveState.running] and [LiveState.finished] are mutually exclusive: the
+ * plan's own end clears `running` exactly as [endNow] does, so a finished
+ * session is never a running one, and only [run] starts a session again.
  */
 class SessionEngine(
     val profile: WorkoutProfile,
@@ -444,6 +448,12 @@ class SessionEngine(
 
         _state.value = snapshot.copy(
             totalSeconds = t,
+            // The plan's own end stops the session exactly as a manual stop does
+            // ([endNow] sets the same pair): a finished workout is not a running
+            // one. Leaving the flag set read as "Active workout" on Home, told the
+            // watch the session was still live as it ended, and let a stop of an
+            // already-finished session pass the owner's running-guard.
+            running = !finished,
             phase = pa.phase,
             phaseOrdinal = pa.phaseOrdinal,
             secondsInPhase = pa.secondsInPhase,
@@ -496,15 +506,26 @@ class SessionEngine(
         curPaceSum = 0L; curPaceCnt = 0
     }
 
-    /** Manually end an ADHOC workout (or stop any workout early). */
-    fun endNow() {
-        if (!snapshot.running || snapshot.finished) return
+    /**
+     * Manually end an ADHOC workout (or stop any workout early). Returns true when
+     * this call is the one that ended the session, false when there was nothing to
+     * end — already finished, or never started.
+     *
+     * A session that ran to its natural end is `finished` but still `running` (the
+     * finish line is a tick, and only the owner stops driving the clock), so the
+     * caller cannot tell "just ended" from "ended a while ago" out of the snapshot.
+     * The return value is that answer, and the owner writes the history entry on
+     * the true branch alone.
+     */
+    fun endNow(): Boolean {
+        if (!snapshot.running || snapshot.finished) return false
         flushPhase()
         log?.log("[workout] finished: ${profile.name}")
         _state.value = snapshot.copy(
             running = false, finished = true, paused = false,
             phaseAverages = completedPhases,
         )
+        return true
     }
 
     /** Freeze the session at the current instant: elapsed time, distance and cues stop until [resume]. */

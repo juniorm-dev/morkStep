@@ -1052,9 +1052,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** End the running session now (ADHOC finish, or early stop for finite modes). */
     fun endWorkout() {
-        if (engine?.snapshot?.running != true) return
-        engine?.endNow()
-        onFinished()
+        val e = engine ?: return
+        if (!e.snapshot.running) return
+        // A finite-mode session that ran to its natural end is finished but still
+        // running — the ticker wrote its history entry at the finish line. endNow()
+        // reports false there, so tapping Done afterwards records nothing a second
+        // time; only a session this call actually ends gets recorded here.
+        if (e.endNow()) onFinished()
         tickerJob?.cancel()
     }
     /** Pause or resume the running session (toggles on the live paused flag). */
