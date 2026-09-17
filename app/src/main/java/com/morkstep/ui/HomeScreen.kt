@@ -1,6 +1,5 @@
 package com.morkstep.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,8 +41,6 @@ fun HomeScreen(
     adsEnabled: Boolean = false,
     onSelectProfile: (Long) -> Unit,
     onStart: () -> Unit,
-    onConfig: () -> Unit,
-    onHistory: () -> Unit,
     /** Exports the captured debug trace; only offered while [debugLog] is on. */
     onExportLog: () -> Unit,
 ) {
@@ -131,17 +128,6 @@ fun HomeScreen(
                     else "Start workout",
                     style = MaterialTheme.typography.titleMedium,
                 )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onConfig, modifier = Modifier.weight(1f)) {
-                    Text("Settings")
-                }
-                OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f)) {
-                    Text("History")
-                }
             }
         }
 
