@@ -835,6 +835,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 avgRecoveryPace = ls.avgRecoveryPace,
                 avgOverallPace = ls.avgOverallPace,
                 profileName = activeProfileAtFinish?.name,
+                lengthLabel = ls.lengthLabel,
                 phaseAverages = ls.phaseAverages,
             )
             val id = container.workoutDao.insert(entity)

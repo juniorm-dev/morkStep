@@ -214,9 +214,11 @@ private fun WorkoutRow(w: WorkoutEntity, expanded: Boolean, onToggle: () -> Unit
                 .padding(16.dp),
         ) {
             Text(formatDate(w.startTime), style = MaterialTheme.typography.titleMedium)
-            w.profileName?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = colors.secondary)
-            }
+            // Profile and length on one line — what the session ran under, and the
+            // length it was run to ("Default · 5 rounds").
+            listOfNotNull(w.profileName, w.lengthLabel).joinToString(" · ")
+                .takeIf { it.isNotEmpty() }
+                ?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = colors.secondary) }
             Spacer(Modifier.height(4.dp))
             Text(summaryLine(w), style = MaterialTheme.typography.bodyMedium)
             overallAverages(w).forEach { line ->

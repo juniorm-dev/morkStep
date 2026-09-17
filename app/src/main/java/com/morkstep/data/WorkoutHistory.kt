@@ -65,6 +65,14 @@ data class WorkoutEntity(
     /** Name of the profile the session ran under; null for rows saved before it was recorded. */
     val profileName: String? = null,
     /**
+     * The profile's length label at the time the session ran, e.g. "5 rounds" /
+     * "35 min" / "Adhoc" — the same string the profile picker, the Home plan card
+     * and the workout screen show. Stored rather than derived so editing the
+     * profile afterwards never rewrites what a past session was. Null for rows
+     * saved before it was recorded.
+     */
+    val lengthLabel: String? = null,
+    /**
      * Per-phase averages in workout order (warm-up → push/recovery pairs →
      * cool-down), driving the expanded history card and its line chart. Empty
      * for rows saved before per-phase recording, or when no sample arrived.
@@ -128,11 +136,11 @@ class PhaseAveragesConverters {
 }
 
 /**
- * Room schema v2. v1 rows are dropped rather than migrated on upgrade (the app
- * has not shipped; see the destructive fallback in `AppContainer`); v2 adds the
- * profile name and the per-phase average list.
+ * Room schema v3. v1 rows are dropped rather than migrated on upgrade (the app
+ * has not shipped; see the destructive fallback in `AppContainer`); v2 added the
+ * profile name and the per-phase average list, v3 the profile's length label.
  */
-@Database(entities = [WorkoutEntity::class], version = 2, exportSchema = false)
+@Database(entities = [WorkoutEntity::class], version = 3, exportSchema = false)
 @TypeConverters(PhaseAveragesConverters::class)
 abstract class MorkDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao
