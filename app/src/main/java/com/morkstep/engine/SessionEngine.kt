@@ -496,15 +496,26 @@ class SessionEngine(
         curPaceSum = 0L; curPaceCnt = 0
     }
 
-    /** Manually end an ADHOC workout (or stop any workout early). */
-    fun endNow() {
-        if (!snapshot.running || snapshot.finished) return
+    /**
+     * Manually end an ADHOC workout (or stop any workout early). Returns true when
+     * this call is the one that ended the session, false when there was nothing to
+     * end — already finished, or never started.
+     *
+     * A session that ran to its natural end is `finished` but still `running` (the
+     * finish line is a tick, and only the owner stops driving the clock), so the
+     * caller cannot tell "just ended" from "ended a while ago" out of the snapshot.
+     * The return value is that answer, and the owner writes the history entry on
+     * the true branch alone.
+     */
+    fun endNow(): Boolean {
+        if (!snapshot.running || snapshot.finished) return false
         flushPhase()
         log?.log("[workout] finished: ${profile.name}")
         _state.value = snapshot.copy(
             running = false, finished = true, paused = false,
             phaseAverages = completedPhases,
         )
+        return true
     }
 
     /** Freeze the session at the current instant: elapsed time, distance and cues stop until [resume]. */

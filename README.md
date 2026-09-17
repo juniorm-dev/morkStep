@@ -378,14 +378,14 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 ## Test plan
 
-`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (54 tests):
+`app/src/test/java/com/morkstep/engine/SessionEngineTest.kt` covers (56 tests):
 - plan computation for ROUNDS / TIME length modes
 - time→phase mapping, seconds-in-phase, and phase ordinal (fast=1, slow=2)
 - plan-relative fast-segment counting (tick-cadence independent)
 - progress fraction for finite modes; `null` for Adhoc; distance-based for DISTANCE
 - engine behavior: phase advance + beeps + announcements, finish marking
 - TIME mode finishes exactly at the target duration
-- ADHOC runs until `endNow()`
+- ADHOC runs until `endNow()`; `endNow()` reports the ending transition only — true once, false on any later call, and false for a session that already ran to its natural end (the caller writes the history entry on the true branch alone, so tapping Done on a finished session cannot record it twice)
 - quarter cues fire at 25% / 50% / 75%
 - push warning cues: "Speed up" when speed is below the Push Min, pace below the Push Min spm, or HR below the Push Min bpm (incl. HR inside the band 120–150); over-max-HR counter (push) without a push cue
 - pace (pedometer) warning cues: "Speed up" on push when pace is below the floor and "Slow down" on recovery when pace is above the ceiling; no-signal pace (0 spm) never cues; exactly one shared cue when only pace is off
@@ -416,4 +416,4 @@ The remaining suite classes:
 - `sensing/FallbackPaceSourceTest.kt` (4 tests): the watch/phone merge — the phone drives until the watch appears, the phone takes over after the watch goes silent and hands back when it resumes, a null watch sample does not blank the phone value, and a 0 staleness window forces the phone pedometer.
 - `wear/…/WearSessionStateTest.kt` (5 tests): the 47-byte `/morkstep/state` payload decode — full round-trip, NaN speed and negative pace/total becoming null, and a short payload yielding defaults.
 
-126 phone unit tests plus 5 in the wear module — `./gradlew testDebugUnitTest` runs both.
+128 phone unit tests plus 5 in the wear module — `./gradlew testDebugUnitTest` runs both.
