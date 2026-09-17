@@ -31,6 +31,7 @@ class ConfigStore(private val context: Context) {
         private val SHOW_DEBUG_LOG = booleanPreferencesKey("showDebugLog")
         private val FORCE_PHONE_PACE = booleanPreferencesKey("forcePhonePace")
         private val TEST_ADS = booleanPreferencesKey("testAds")
+        private val PINNED_ADS = booleanPreferencesKey("pinnedAds")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -100,6 +101,19 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setTestAds(value: Boolean) = context.dataStore.edit { p ->
         p[TEST_ADS] = value
+    }
+
+    /**
+     * Which placement the app draws — the hidden **Pinned ads (debug)** switch in Settings →
+     * General → Debug, meaningful only while [testAds] is on. Default OFF keeps the original
+     * layout (a banner at the end of the Home column, a native card above the History list);
+     * on moves the banner into the bottom bar, where no screen's scrolling can push it away,
+     * and replaces the History card with a full-page native ad on every third History access.
+     */
+    val pinnedAds: Flow<Boolean> = context.dataStore.data.map { it[PINNED_ADS] ?: false }
+
+    suspend fun setPinnedAds(value: Boolean) = context.dataStore.edit { p ->
+        p[PINNED_ADS] = value
     }
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]

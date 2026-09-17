@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -19,7 +21,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.permission.HealthPermission
@@ -64,6 +69,8 @@ fun MorkApp(viewModel: MainViewModel) {
     val showDebugLog by viewModel.showDebugLog.collectAsStateWithLifecycle()
     val forcePhonePace by viewModel.forcePhonePace.collectAsStateWithLifecycle()
     val testAds by viewModel.testAds.collectAsStateWithLifecycle()
+    val pinnedAds by viewModel.pinnedAds.collectAsStateWithLifecycle()
+    val fullPageAdDue by viewModel.fullPageAdDue.collectAsStateWithLifecycle()
     val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
     val activityRecognitionGranted by viewModel.activityRecognitionGranted.collectAsStateWithLifecycle()
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
@@ -192,22 +199,34 @@ fun MorkApp(viewModel: MainViewModel) {
         Triple(Routes.CONFIG, "Settings", Icons.Filled.Settings),
     )
 
+    // The pinned placement: the banner lives in the app's own bottom bar, above the tabs, so no
+    // screen's scrolling can carry it away and every route shows the same one. It is the only
+    // placement outside the Home/History screens (no full-screen ad opens during a session).
+    val bannerPin = testAds && pinnedAds
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            NavigationBar {
-                bottomTabs.forEach { (route, label, icon) ->
-                    NavigationBarItem(
-                        selected = currentDestination?.hierarchy?.any { it.route == route } == true,
-                        onClick = {
-                            navController.navigate(route) {
-                                popUpTo(navController.graph.id) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        },
-                        icon = { Icon(icon, contentDescription = label) },
-                        label = { Text(label) },
-                    )
+            Column {
+                BannerAdSlot(
+                    enabled = bannerPin,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalInsetDp = 0,
+                )
+                NavigationBar {
+                    bottomTabs.forEach { (route, label, icon) ->
+                        NavigationBarItem(
+                            selected = currentDestination?.hierarchy?.any { it.route == route } == true,
+                            onClick = {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            },
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(label) },
+                        )
+                    }
                 }
             }
         },
@@ -223,7 +242,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     activeId = activeId,
                     workoutActive = live.running,
                     debugLog = debugEnabled,
-                    adsEnabled = testAds,
+                    adsEnabled = testAds && !pinnedAds,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
@@ -287,6 +306,8 @@ WorkoutScreen(
                     onForcePhonePaceChange = viewModel::setForcePhonePace,
                     testAds = testAds,
                     onTestAdsChange = viewModel::setTestAds,
+                    pinnedAds = pinnedAds,
+                    onPinnedAdsChange = viewModel::setPinnedAds,
                     batteryUnrestricted = batteryUnrestricted,
                     onRequestBatteryUnrestricted = {
                         batteryOptimizationLauncher.launch(
@@ -311,11 +332,23 @@ WorkoutScreen(
             composable(Routes.HISTORY) {
                 // Health Connect HR lags the workout, so opening History is where
                 // a late-arriving backfill catches up (throttled in the view model).
-                LaunchedEffect(Unit) { viewModel.sweepHrBackfill() }
+                // The same entry counts once as an access for the pinned placement's
+                // every-third full-page ad — a configuration change re-enters this
+                // composition but is the same access, not a new one.
+                var counted by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    viewModel.sweepHrBackfill()
+                    if (!counted) {
+                        counted = true
+                        viewModel.onHistoryOpened()
+                    }
+                }
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,
-                    adsEnabled = testAds,
+                    adsEnabled = testAds && !pinnedAds,
+                    fullPageAd = testAds && pinnedAds && fullPageAdDue,
+                    onFullPageAdDismiss = viewModel::consumeFullPageAd,
                     // Opening a card re-reads Health Connect for that row, so a
                     // workout whose HR landed after the automatic passes fills in.
                     onWorkoutOpened = viewModel::backfillHrForWorkout,

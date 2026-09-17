@@ -16,6 +16,12 @@ import kotlinx.coroutines.launch
  * (`ConfigStore.testAds`). With the switch off the placements in `ui/AdSlots.kt` compose
  * nothing at all and no request is made, so the app is ad-free by default.
  *
+ * A second hidden switch, **Pinned ads (debug)** (`ConfigStore.pinnedAds`), only picks the
+ * *placement*: off keeps the original layout (a banner at the end of the Home column, a native
+ * card above the History list), on hosts the banner in the app's bottom bar so every screen
+ * shows the same pinned one and gives History a full-page native ad on every third access.
+ * It never enables serving on its own — this gate still decides that.
+ *
  * Serving is **test-only** today: requests go to Google's demo ad units [AdUnits] under the
  * sample AdMob app ID, so there is no live inventory and no account attached. Going live
  * means real IDs, Google's consent flow for the EEA/UK/Switzerland before the first
