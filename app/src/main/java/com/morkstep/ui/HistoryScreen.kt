@@ -185,7 +185,8 @@ fun HistoryScreen(
         if (workouts.isEmpty()) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .weight(1f)
                     .padding(32.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -194,10 +195,13 @@ fun HistoryScreen(
                 Text("Finish a session and it will appear here.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+            // The list takes what the ad above it leaves, rather than the whole parent: with a
+            // full-size ad card in the column, `fillMaxSize` laid the list out past the bottom
+            // edge, where no row could be seen or reached.
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
+                    .fillMaxWidth()
+                    .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(workouts, key = { it.id }) { w ->

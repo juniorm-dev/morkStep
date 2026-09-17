@@ -8,6 +8,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.libraries.ads.mobile.sdk.banner.AdSize
@@ -56,6 +59,28 @@ private const val SCREEN_PADDING_DP = 16
 
 /** Icon edge length of a native ad, in dp. */
 private const val AD_ICON_DP = 40
+
+/**
+ * Share of the screen height the creative takes in the full-page History ad, in dp. Fixed
+ * rather than "whatever the text leaves" so every height in the page is known up front and
+ * nothing (the ad's own call-to-action above all) can be pushed past the bottom edge.
+ */
+private const val FULL_PAGE_AD_MEDIA_SHARE = 0.45f
+
+/**
+ * Clearance the full-page ad's own call-to-action keeps from the bottom edge, in dp. The page is
+ * drawn edge to edge (the platform enforces that for this target), so the bottom of the screen
+ * is the system's gesture area — the ad's button is not put under it.
+ */
+private const val FULL_PAGE_AD_CTA_BOTTOM_DP = 48
+
+/**
+ * Height of the card layout's creative, in dp. A `MediaView` left to itself takes the
+ * creative's own size — a tall image ad then filled the History screen and left the list no
+ * room — and the SDK's own validator warns below 120 dp. This is the native template's
+ * 16:9-ish treatment: bounded, and comfortably above the floor.
+ */
+private const val INLINE_AD_MEDIA_HEIGHT_DP = 240
 
 /**
  * The app's ad placements. [enabled] is false in every one of them while the hidden **Test ads
@@ -159,6 +184,7 @@ fun NativeAdSlot(enabled: Boolean, modifier: Modifier = Modifier) {
     val titleColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val ctaColor = MaterialTheme.colorScheme.primary.toArgb()
+    val mediaHeightPx = with(LocalDensity.current) { INLINE_AD_MEDIA_HEIGHT_DP.dp.roundToPx() }
     if (dismissed) return
     loadedAd?.let { ad ->
         Card(modifier = modifier.fillMaxWidth()) {
@@ -166,7 +192,7 @@ fun NativeAdSlot(enabled: Boolean, modifier: Modifier = Modifier) {
                 AdCloseRow { dismissed = true }
                 AndroidView(
                     modifier = Modifier.fillMaxWidth(),
-                    factory = { ctx -> nativeAdView(ctx, ad, titleColor, bodyColor, ctaColor) },
+                    factory = { ctx -> nativeAdView(ctx, ad, titleColor, bodyColor, ctaColor, cardMediaHeightPx = mediaHeightPx) },
                 )
             }
         }
@@ -208,16 +234,26 @@ fun FullPageNativeAdSlot(enabled: Boolean, onDismiss: () -> Unit, modifier: Modi
     val titleColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val ctaColor = MaterialTheme.colorScheme.primary.toArgb()
+    // The creative gets a fixed share of the page rather than "whatever the text leaves":
+    // every height in the page is then known up front, so nothing can be pushed past the
+    // bottom edge (the stretch that took the slack put the ad's own call-to-action off screen).
+    val mediaHeightPx = with(LocalDensity.current) {
+        (LocalConfiguration.current.screenHeightDp * FULL_PAGE_AD_MEDIA_SHARE).dp.roundToPx()
+    }
     loadedAd?.let { ad ->
-        // Opaque, so the screen the ad was opened over is not visible under it.
+        // Opaque, so the screen the ad was opened over is not visible under it. The content
+        // stays inside the safe area — the close control and the ad's call-to-action were
+        // running under the system bars with the window's full height.
         Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 AdCloseRow(onDismiss)
                 AndroidView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    factory = { ctx -> nativeAdView(ctx, ad, titleColor, bodyColor, ctaColor, fullPage = true) },
+                    factory = { ctx ->
+                        nativeAdView(ctx, ad, titleColor, bodyColor, ctaColor, fullPageMediaHeightPx = mediaHeightPx)
+                    },
                 )
             }
         }
@@ -254,8 +290,13 @@ private fun nativeAdView(
     titleColor: Int,
     bodyColor: Int,
     ctaColor: Int,
-    /** The whole-screen treatment: the content fills its host and the media takes the slack. */
-    fullPage: Boolean = false,
+    /** Fixed height for the card's creative, in px (0 leaves the creative its own size). */
+    cardMediaHeightPx: Int = 0,
+    /**
+     * The whole-screen treatment: the content fills its host, the creative is given exactly
+     * [fullPageMediaHeightPx] (0 keeps the card layout).
+     */
+    fullPageMediaHeightPx: Int = 0,
 ): NativeAdView {
     val density = context.resources.displayMetrics.density
     fun dp(value: Int) = (value * density).toInt()
@@ -291,6 +332,7 @@ private fun nativeAdView(
             },
         )
     }
+    val fullPage = fullPageMediaHeightPx > 0
     val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(SCREEN_PADDING_DP), dp(SCREEN_PADDING_DP), dp(SCREEN_PADDING_DP), dp(SCREEN_PADDING_DP))
@@ -304,19 +346,46 @@ private fun nativeAdView(
         addView(header, params(topMarginDp = 8))
         addView(body, params(topMarginDp = 12))
         addView(advertiser, params(topMarginDp = 4))
-        // Full page: the media takes every pixel the text leaves, so the ad reads as a page
-        // rather than a card floating in one.
         if (fullPage) {
+            // Text on top, the creative at its own size, the call-to-action at the foot of the
+            // page, the slack between them — every height known, so the page can never overflow.
+            // The media is measured inside a FrameLayout: a MediaView sizes itself from the
+            // creative's own aspect ratio and ignores a height constraint, so adding it straight
+            // to the column overflowed the page and pushed the call-to-action off the bottom
+            // edge. The frame hands it an exact size.
+            val mediaHost = FrameLayout(context).apply {
+                addView(
+                    media,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+            }
             addView(
-                media,
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+                mediaHost,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fullPageMediaHeightPx).apply {
                     topMargin = dp(12)
                 },
             )
+            addView(View(context), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            // The call-to-action keeps a wide margin below it: the page is drawn edge to edge
+            // (the platform enforces that for this target), so the bottom of the screen is the
+            // system's gesture area, not ours.
+            addView(
+                callToAction,
+                params(topMarginDp = 12).apply { bottomMargin = dp(FULL_PAGE_AD_CTA_BOTTOM_DP) },
+            )
         } else {
-            addView(media)
+            addView(
+                media,
+                params(
+                    height = if (cardMediaHeightPx > 0) cardMediaHeightPx else ViewGroup.LayoutParams.WRAP_CONTENT,
+                    topMarginDp = 12,
+                ),
+            )
+            addView(callToAction, params(topMarginDp = 12))
         }
-        addView(callToAction, params(topMarginDp = 12))
     }
 
     // An asset the ad does not carry keeps its place but shows nothing.
