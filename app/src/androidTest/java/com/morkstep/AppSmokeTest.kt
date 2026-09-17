@@ -47,7 +47,7 @@ class AppSmokeTest {
 
     @Test
     fun navigateToHistoryShowsEmptyState() {
-        // "History" appears twice (bottom nav + Home button) — act on the first.
+        // The bottom-nav "History" tab.
         rule.onAllNodesWithText("History").onFirst().performClick()
         rule.onNodeWithText("No workouts yet").assertExists()
         rule.onNodeWithText("Finish a session and it will appear here.").assertExists()
