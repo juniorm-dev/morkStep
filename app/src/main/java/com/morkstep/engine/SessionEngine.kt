@@ -160,6 +160,10 @@ internal fun progressAt(t: Int, p: WorkoutProfile, coreEndSec: Long, finishSec: 
  * quarter progress cues (finite modes). Phase-change cues take precedence:
  * warnings and workout-length cues that coincide with a transition are
  * deferred to the following tick.
+ *
+ * [LiveState.running] and [LiveState.finished] are mutually exclusive: the
+ * plan's own end clears `running` exactly as [endNow] does, so a finished
+ * session is never a running one, and only [run] starts a session again.
  */
 class SessionEngine(
     val profile: WorkoutProfile,
@@ -444,6 +448,12 @@ class SessionEngine(
 
         _state.value = snapshot.copy(
             totalSeconds = t,
+            // The plan's own end stops the session exactly as a manual stop does
+            // ([endNow] sets the same pair): a finished workout is not a running
+            // one. Leaving the flag set read as "Active workout" on Home, told the
+            // watch the session was still live as it ended, and let a stop of an
+            // already-finished session pass the owner's running-guard.
+            running = !finished,
             phase = pa.phase,
             phaseOrdinal = pa.phaseOrdinal,
             secondsInPhase = pa.secondsInPhase,

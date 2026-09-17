@@ -222,10 +222,10 @@ class SessionEngineTest {
 
     @Test
     fun endNow_reportsFalseWhenTheSessionRanToItsNaturalEnd() {
-        // A finite-mode session ends on a tick and stays `running` (the finish
-        // line stops the clock, the owner stops driving it). A later stop — the
-        // user tapping Done on the finished screen — must therefore report false,
-        // so the history entry written at the finish line is not written again.
+        // A finite-mode session ends on a tick, which clears `running` the way a
+        // manual stop does. A later stop — the user tapping Done on the finished
+        // screen — must therefore report false, so the history entry written at the
+        // finish line is not written again.
         val clock = FakeClock(1_000)
         val cue = RecordingCue()
         val eng = engineWith(roundsProfile, clock, cue)
@@ -233,7 +233,7 @@ class SessionEngineTest {
         clock.advance(364_000)
         eng.tick()
         assertTrue(eng.snapshot.finished)
-        assertTrue(eng.snapshot.running)
+        assertFalse(eng.snapshot.running)
         assertFalse(eng.endNow())
         assertTrue(eng.snapshot.finished)
     }
