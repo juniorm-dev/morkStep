@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.morkstep.MorkApplication
 import com.morkstep.data.PhaseAverages
@@ -113,6 +115,11 @@ private fun extraStats(w: WorkoutEntity): String? {
  * Connect for that row, so a workout whose HR only reached Health Connect after
  * the automatic passes (finish-line read, retry chain, History sweep) still
  * fills in on demand.
+ *
+ * Two ad shapes, both decided by the hidden Debug switches: the inline ad card
+ * above the list ([adsEnabled]), or — under the pinned placement — a full-page
+ * native ad over the whole screen on the accesses [fullPageAd] names, closed by
+ * its own button or the system back gesture ([onFullPageAdDismiss]).
  */
 @Suppress("FunctionName")
 @Composable
@@ -120,14 +127,31 @@ fun HistoryScreen(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onWorkoutOpened: (WorkoutEntity) -> Unit,
-    /** Whether ads are served (hidden Debug switch); off draws no ad card and makes no request. */
+    /** Whether the inline ad card is drawn (hidden Debug switch); off draws nothing and requests nothing. */
     adsEnabled: Boolean = false,
+    /** Whether this access opens the full-page native ad instead of the inline card. */
+    fullPageAd: Boolean = false,
+    /** The user closed the full-page ad. */
+    onFullPageAdDismiss: () -> Unit = {},
 ) {
     val app = LocalContext.current.applicationContext as MorkApplication
     val dao = app.container.workoutDao
     val workouts by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
     // At most one card is open at a time, and the open one survives rotation.
     var expandedId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    if (fullPageAd) {
+        // Its own window, so the ad covers the bottom bar too and back closes it.
+        Dialog(
+            onDismissRequest = onFullPageAdDismiss,
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnClickOutside = false,
+            ),
+        ) {
+            FullPageNativeAdSlot(enabled = true, onDismiss = onFullPageAdDismiss)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -161,7 +185,8 @@ fun HistoryScreen(
         if (workouts.isEmpty()) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .weight(1f)
                     .padding(32.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -170,10 +195,13 @@ fun HistoryScreen(
                 Text("Finish a session and it will appear here.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+            // The list takes what the ad above it leaves, rather than the whole parent: with a
+            // full-size ad card in the column, `fillMaxSize` laid the list out past the bottom
+            // edge, where no row could be seen or reached.
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
+                    .fillMaxWidth()
+                    .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(workouts, key = { it.id }) { w ->

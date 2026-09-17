@@ -195,6 +195,8 @@ fun ConfigScreen(
     bluetoothGranted: Boolean,
     testAds: Boolean,
     onTestAdsChange: (Boolean) -> Unit,
+    pinnedAds: Boolean,
+    onPinnedAdsChange: (Boolean) -> Unit,
     onExportProfiles: () -> Unit,
     onImportProfiles: () -> Unit,
 ) {
@@ -271,6 +273,8 @@ fun ConfigScreen(
                             onForcePhonePaceChange = onForcePhonePaceChange,
                             testAds = testAds,
                             onTestAdsChange = onTestAdsChange,
+                            pinnedAds = pinnedAds,
+                            onPinnedAdsChange = onPinnedAdsChange,
                             batteryUnrestricted = batteryUnrestricted,
                             onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
                             activityRecognitionGranted = activityRecognitionGranted,
@@ -741,6 +745,8 @@ private fun GeneralSettingsPage(
     bluetoothGranted: Boolean,
     testAds: Boolean,
     onTestAdsChange: (Boolean) -> Unit,
+    pinnedAds: Boolean,
+    onPinnedAdsChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -944,6 +950,19 @@ private fun GeneralSettingsPage(
                         "Off by default, and off means no ad is requested, loaded or shown anywhere in the app. On " +
                             "serves Google's test inventory: an anchored banner under Home and a native ad card above " +
                             "the History list, both labelled as ads. Nothing is served during a workout.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    SwitchRow(
+                        label = "Pinned ads (debug)",
+                        checked = pinnedAds,
+                        onCheckedChange = onPinnedAdsChange,
+                    )
+                    Text(
+                        "Moves the banner into the bottom bar, above the tabs, where no screen's scrolling can " +
+                            "carry it away — every screen shows the same pinned banner. On the History screen it " +
+                            "replaces the ad card with a full-page native ad that opens on every third History " +
+                            "access and stays until it is closed. Inert while Test ads is off; the full-page ad " +
+                            "never opens during a workout.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

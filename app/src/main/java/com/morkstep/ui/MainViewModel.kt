@@ -174,6 +174,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _testAds = MutableStateFlow(false)
     val testAds: StateFlow<Boolean> = _testAds.asStateFlow()
 
+    /** Debug placement: banner pinned in the bottom bar + a full-page History ad every third access. */
+    private val _pinnedAds = MutableStateFlow(false)
+    val pinnedAds: StateFlow<Boolean> = _pinnedAds.asStateFlow()
+
+    /**
+     * Whether the History route should open a full-page ad right now — set on every third
+     * access while [pinnedAds] is on, cleared when the user closes it. Process-lifetime: the
+     * count restarts with the app (a debug placement needs no memory across launches).
+     */
+    private val _fullPageAdDue = MutableStateFlow(false)
+    val fullPageAdDue: StateFlow<Boolean> = _fullPageAdDue.asStateFlow()
+
+    /** History accesses counted for the full-page placement, while that placement is on. */
+    private var historyAccesses = 0
+
     /** Whether the app is exempt from battery optimization (sensors stay live in background). */
     private val _batteryUnrestricted = MutableStateFlow(false)
     val batteryUnrestricted: StateFlow<Boolean> = _batteryUnrestricted.asStateFlow()
@@ -396,6 +411,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Ads.setEnabled(getApplication(), on, debugLog)
             }
         }
+        viewModelScope.launch {
+            container.configStore.pinnedAds.collect { on ->
+                _pinnedAds.value = on
+                // Placement only — the gate above still decides whether anything is served.
+                // Turning it off mid-visit takes the pending full-page ad down with it.
+                if (!on) _fullPageAdDue.value = false
+            }
+        }
         refreshHealthConnectState()
         refreshBatteryOptimizationState()
         refreshActivityRecognitionState()
@@ -563,6 +586,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setTestAds(on: Boolean) {
         viewModelScope.launch { container.configStore.setTestAds(on) }
+    }
+
+    /**
+     * Choose the placement — the hidden **Pinned ads (debug)** switch. Inert while Test ads is
+     * off: it moves the banner into the bottom bar and makes History open a full-page native
+     * ad every [Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES] accesses.
+     */
+    fun setPinnedAds(on: Boolean) {
+        viewModelScope.launch { container.configStore.setPinnedAds(on) }
+    }
+
+    /**
+     * Count one access to the History route. Under the pinned placement every third access is
+     * due a full-page ad; [consumeFullPageAd] clears it once the user closes that ad. Accesses
+     * are not counted while the placement is off, so turning it on always starts a fresh
+     * count rather than firing on the next screen entry.
+     */
+    fun onHistoryOpened() {
+        if (!_pinnedAds.value) return
+        historyAccesses++
+        if (historyAccesses % Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES == 0) {
+            debugLog.log("[ads] full-page History ad due (access $historyAccesses)")
+            _fullPageAdDue.value = true
+        }
+    }
+
+    /** The user closed the full-page History ad. */
+    fun consumeFullPageAd() {
+        _fullPageAdDue.value = false
     }
 
     /** Export the captured debug log to the SAF document at [uri]; result shows in a snackbar. */

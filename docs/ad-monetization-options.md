@@ -91,7 +91,7 @@ that matter for morkStep:
 | History list (`ui/HistoryScreen.kt`) | native, rendered into the list | Matches the existing card layout; scroll-safe |
 | After finish / discard | interstitial **after** the summary and snackbar, never during | Natural break in the flow; the finish path already navigates |
 | Optional extras (extra chart views, on-demand export, re-calibration) | rewarded / rewarded interstitial | The only formats where a > 15 s unskippable ad is allowed |
-| Workout screen (`ui/WorkoutScreen.kt`) | **none** | Live session plus spoken cues (`audio/CueSpeaker.kt`); policy and UX both exclude it |
+| Workout screen (`ui/WorkoutScreen.kt`) | **none by placement** | Live session plus spoken cues (`audio/CueSpeaker.kt`); policy and UX both exclude a full-screen ad there, and nothing opens an interstitial. The **Pinned ads (debug)** placement does put the shared bottom-bar banner on this route too — see §6 |
 | Wear companion (`:wear`) | **none available** | No Wear OS form factor or format appears anywhere in the GMA platform/format docs (Android, iOS, Unity, Flutter, Android-Legacy). The watch screens stay ad-free. |
 
 ## 4. Policy and compliance gates (blocking, not optional)
@@ -150,9 +150,21 @@ with the switch off.
 - **Gate** — `ads/Ads.kt` owns the SDK lifecycle and `ads/AdUnits.kt` the demo unit IDs.
   With the switch off nothing initializes and no placement composes, so the app issues no ad
   request at all (verified: an empty SDK log after a cold start with the switch off).
-- **Placements** — an anchored adaptive banner at the end of the Home column and a native
-  card above the History list (`ui/AdSlots.kt`), each destroyed when it leaves composition.
-  No interstitial, no rewarded ad, no ad code on the workout screen or the watch.
+- **Placements** — two layouts, picked by a second hidden switch, **Pinned ads (debug)**
+  (`ConfigStore.pinnedAds`; placement only — the Test-ads gate still decides whether anything
+  is served), both in `ui/AdSlots.kt`, each slot destroyed when it leaves composition:
+  - **off** (the default) — an anchored adaptive banner at the end of the Home column and a
+    native card above the History list;
+  - **on** — the banner moves into the app's own bottom bar, above the tabs, so no screen's
+    scrolling can carry it away and every route (the Workout route included — a banner, never
+    a full-screen ad, and nothing opens during a session from the app's side) shows the same
+    pinned banner; the History inline card is replaced by a **full-page** native ad that opens
+    on every third History access (`Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES`) and is
+    closed by its own button or the system back gesture. Both history ads carry a **Close ad**
+    control of the app's, drawn above the `NativeAdView` and never over it.
+  No interstitial, no rewarded ad, and no ad code on the watch. The full-page native ad is the
+  full-screen shape the 15-second dismissibility rule is written for, and it is closable at
+  any moment — the rule that keeps a screen from being trapped.
 - **Trace** — ad lifecycle lines land in the debug log under `[ads]` while "Debug tracing" is on.
 - **Test device** — Google's demo units are not tied to an AdMob account, so a developer
   cannot generate invalid traffic; the SDK additionally reports the emulator as a test device.

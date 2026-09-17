@@ -275,4 +275,12 @@ object Constants {
      * Settings is open.
      */
     const val SETTINGS_DEBUG_UNLOCK_TAPS = 6
+
+    // ---- ads ----
+    /**
+     * History accesses per full-page ad under the **Pinned ads (debug)** placement: every
+     * third entry the History route composes, the native ad takes the whole screen until it
+     * is closed. Counted only while that switch is on, and only for the life of the process.
+     */
+    const val HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES = 3
 }
