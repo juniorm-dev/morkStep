@@ -229,8 +229,6 @@ fun MorkApp(viewModel: MainViewModel) {
                         viewModel.startWorkout()
                         navController.navigate(Routes.WORKOUT)
                     },
-                    onConfig = { navController.navigate(Routes.CONFIG) },
-                    onHistory = { navController.navigate(Routes.HISTORY) },
                     // Export at any point — before a workout, or after one to
                     // capture its trace including the [hc] backfill verdict.
                     onExportLog = ::launchLogExport,
