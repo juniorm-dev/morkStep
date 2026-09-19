@@ -15,6 +15,7 @@ import com.morkstep.AppContainer
 import com.morkstep.Constants
 import com.morkstep.DebugLog
 import com.morkstep.MorkApplication
+import com.morkstep.UpdateCheck
 import com.morkstep.WorkoutService
 import com.morkstep.ads.Ads
 import com.morkstep.audio.CueSpeaker
@@ -58,12 +59,15 @@ import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private class SpeakerSink(
     private val speaker: CueSpeaker,
@@ -179,15 +183,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val pinnedAds: StateFlow<Boolean> = _pinnedAds.asStateFlow()
 
     /**
+     * Whether the ad SDK has finished initializing, so a placement may load — the placements
+     * gate on this, not on [testAds] alone, because a request made before initialization
+     * completes throws from the SDK (`Ads.serving`).
+     */
+    val adsServing: StateFlow<Boolean> = Ads.serving
+
+    /**
      * Whether the History route should open a full-page ad right now — set on every third
-     * access while [pinnedAds] is on, cleared when the user closes it. Process-lifetime: the
-     * count restarts with the app (a debug placement needs no memory across launches).
+     * access while [pinnedAds] is on, cleared when the user closes it. The access count is
+     * persisted (`ConfigStore.historyAdAccesses`), so it resumes across an app restart rather
+     * than restarting with the process.
      */
     private val _fullPageAdDue = MutableStateFlow(false)
     val fullPageAdDue: StateFlow<Boolean> = _fullPageAdDue.asStateFlow()
 
-    /** History accesses counted for the full-page placement, while that placement is on. */
-    private var historyAccesses = 0
+    /**
+     * Newer build published to the internal alpha folder, or null while the running build is
+     * current or the check could not read the folder. See `UpdateCheck` and the README's
+     * *Internal alpha update check* note.
+     */
+    private val _updateAvailable = MutableStateFlow<String?>(null)
+    val updateAvailable: StateFlow<String?> = _updateAvailable.asStateFlow()
 
     /** Whether the app is exempt from battery optimization (sensors stay live in background). */
     private val _batteryUnrestricted = MutableStateFlow(false)
@@ -419,6 +436,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (!on) _fullPageAdDue.value = false
             }
         }
+        // Internal alpha update check: one listing read per launch, off the main thread. A
+        // failure is silent (the folder is a personal public link, not an update service).
+        viewModelScope.launch {
+            val latest = withContext(Dispatchers.IO) {
+                runCatching { UpdateCheck.fetchLatestVersion() }.getOrNull()
+            }
+            val current = appVersionName()
+            if (latest != null && UpdateCheck.isNewer(latest, current)) {
+                _updateAvailable.value = latest
+                debugLog.log("[update] newer build available: v$latest (running v$current)")
+            } else {
+                debugLog.log("[update] no newer build (published=${latest ?: "unknown"}, running v$current)")
+            }
+        }
         refreshHealthConnectState()
         refreshBatteryOptimizationState()
         refreshActivityRecognitionState()
@@ -502,6 +533,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         sim = null
     }
 
+    /**
+     * Re-derive the active profile and rebuild the engine from it. Reached when the profile list
+     * or the active id actually changes — `ConfigStore`'s flows are `distinctUntilChanged`, so a
+     * write to an unrelated key no longer lands here and can no longer discard a running session.
+     *
+     * Known limitation: a *genuine* profile change still does. Rebuilding replaces the engine
+     * (and so resets `live.running`) without ending the session, the ticker, or the foreground
+     * service — see the README's *Interval engine* section.
+     */
     private fun refreshActive() {
         val id = _activeId.value
         _activeProfile.value = _profiles.value.firstOrNull { it.id == id }
@@ -599,16 +639,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Count one access to the History route. Under the pinned placement every third access is
-     * due a full-page ad; [consumeFullPageAd] clears it once the user closes that ad. Accesses
-     * are not counted while the placement is off, so turning it on always starts a fresh
-     * count rather than firing on the next screen entry.
+     * due a full-page ad; [consumeFullPageAd] clears it once the user closes that ad. The count
+     * is persisted, so it resumes across an app restart rather than resetting with the process;
+     * accesses are not counted while the placement is off.
      */
     fun onHistoryOpened() {
         if (!_pinnedAds.value) return
-        historyAccesses++
-        if (historyAccesses % Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES == 0) {
-            debugLog.log("[ads] full-page History ad due (access $historyAccesses)")
-            _fullPageAdDue.value = true
+        viewModelScope.launch {
+            val accesses = container.configStore.historyAdAccesses.first() + 1
+            container.configStore.setHistoryAdAccesses(accesses)
+            if (accesses % Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES == 0) {
+                debugLog.log("[ads] full-page History ad due (access $accesses)")
+                _fullPageAdDue.value = true
+            }
         }
     }
 

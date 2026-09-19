@@ -280,7 +280,16 @@ object Constants {
     /**
      * History accesses per full-page ad under the **Pinned ads (debug)** placement: every
      * third entry the History route composes, the native ad takes the whole screen until it
-     * is closed. Counted only while that switch is on, and only for the life of the process.
+     * is closed. Counted only while that switch is on, and persisted
+     * ([com.morkstep.data.ConfigStore.historyAdAccesses]) so the count survives an app restart.
      */
     const val HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES = 3
+
+    // ---- update check ----
+    /**
+     * Connect/read timeout for the internal alpha update check's listing request, in ms. Short
+     * on purpose: a slow or unreachable link must not hold the check open, it just reports
+     * nothing.
+     */
+    const val UPDATE_CHECK_TIMEOUT_MS = 8_000
 }

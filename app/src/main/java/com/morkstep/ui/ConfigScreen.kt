@@ -199,6 +199,8 @@ fun ConfigScreen(
     onPinnedAdsChange: (Boolean) -> Unit,
     onExportProfiles: () -> Unit,
     onImportProfiles: () -> Unit,
+    /** Newer build in the internal alpha folder, or null — see `UpdateCheck`. */
+    updateAvailable: String? = null,
 ) {
     val profile = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
     var page by rememberSaveable { mutableStateOf(SettingsPage.PROFILE) }
@@ -288,15 +290,18 @@ fun ConfigScreen(
                     }
                 }
             }
-            AppVersionFooter()
+            AppVersionFooter(updateAvailable = updateAvailable)
         }
     }
 }
 
-/** App version, shown under both pages — it describes the app, not a profile. */
+/**
+ * App version, shown under both pages — it describes the app, not a profile. When the internal
+ * alpha update check finds a newer published build ([updateAvailable]), a second line says so.
+ */
 @Suppress("FunctionName")
 @Composable
-private fun AppVersionFooter() {
+private fun AppVersionFooter(updateAvailable: String? = null) {
     val context = LocalContext.current
     val version = remember {
         runCatching {
@@ -304,15 +309,28 @@ private fun AppVersionFooter() {
             info.versionName ?: info.longVersionCode.toString()
         }.getOrNull() ?: "?"
     }
-    Text(
-        "morkStep  v$version",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp),
-    )
+    ) {
+        Text(
+            "morkStep  v$version",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (updateAvailable != null) {
+            Text(
+                "Update available · v$updateAvailable",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
 }
 
 /** Profile page: everything that is saved against (and restored with) a profile. */
@@ -949,7 +967,7 @@ private fun GeneralSettingsPage(
                     Text(
                         "Off by default, and off means no ad is requested, loaded or shown anywhere in the app. On " +
                             "serves Google's test inventory: an anchored banner under Home and a native ad card above " +
-                            "the History list, both labelled as ads. Nothing is served during a workout.",
+                            "the History list, both labelled as ads. No full-screen ad opens during a workout.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     SwitchRow(
