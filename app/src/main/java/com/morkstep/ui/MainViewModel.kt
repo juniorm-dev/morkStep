@@ -183,6 +183,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val pinnedAds: StateFlow<Boolean> = _pinnedAds.asStateFlow()
 
     /**
+     * Whether the ad SDK has finished initializing, so a placement may load — the placements
+     * gate on this, not on [testAds] alone, because a request made before initialization
+     * completes throws from the SDK (`Ads.serving`).
+     */
+    val adsServing: StateFlow<Boolean> = Ads.serving
+
+    /**
      * Whether the History route should open a full-page ad right now — set on every third
      * access while [pinnedAds] is on, cleared when the user closes it. The access count is
      * persisted (`ConfigStore.historyAdAccesses`), so it resumes across an app restart rather

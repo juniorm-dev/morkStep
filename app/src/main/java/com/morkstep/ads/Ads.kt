@@ -6,6 +6,9 @@ import com.google.android.libraries.ads.mobile.sdk.initialization.Initialization
 import com.morkstep.DebugLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -30,8 +33,24 @@ import kotlinx.coroutines.launch
  * here may be targeted with heart rate, pace or workout data.
  */
 object Ads {
+    /**
+     * Whether a placement may load right now: the **Test ads (debug)** gate is on *and* the SDK
+     * has finished initializing. This, not the switch alone, is what the placements are gated
+     * on.
+     *
+     * The distinction matters because `MobileAds.initialize` blocks until initialization is done
+     * but runs off the main thread: a banner composed in the meantime calls `AdView.loadAd`
+     * before the SDK is ready, and the SDK answers with
+     * `IllegalStateException: MobileAds.initialize must be called before using the Google Mobile
+     * Ads SDK.` — a crash, since the load happens inside a `DisposableEffect`. Waiting for
+     * [serving] removes the window entirely.
+     */
+    private val _serving = MutableStateFlow(false)
+    val serving: StateFlow<Boolean> = _serving.asStateFlow()
+
+    /** Guards against a second `initialize` while the first is still running. */
     @Volatile
-    private var initialized = false
+    private var initializing = false
 
     private var log: DebugLog? = null
 
@@ -42,30 +61,41 @@ object Ads {
      * the main thread — the SDK documents an ANR if `initialize` runs on it. Disabling stops
      * every placement: their composables drop their views and no further request is made.
      *
+     * Serving does not begin until `initialize` returns; a failure leaves it off rather than
+     * letting a placement call into an uninitialized SDK. A later enable retries.
+     *
      * [debugLog] is the app's trace, used only to record ad lifecycle lines under the `[ads]`
      * tag while "Debug tracing" is on.
      */
     fun setEnabled(context: Context, enabled: Boolean, debugLog: DebugLog? = null) {
         if (debugLog != null) log = debugLog
         if (!enabled) {
+            _serving.value = false
             note("serving disabled")
             return
         }
-        if (initialized) return
-        initialized = true
+        if (_serving.value) return
+        if (MobileAds.isInitialized) {
+            _serving.value = true
+            note("serving enabled (SDK already initialized)")
+            return
+        }
+        if (initializing) return
+        initializing = true
         note("initializing SDK (test inventory ${AdUnits.APP_ID})")
         val appContext = context.applicationContext
         scope.launch {
             runCatching {
-                MobileAds.initialize(
-                    appContext,
-                    InitializationConfig.Builder(AdUnits.APP_ID).build(),
-                ) {}
+                MobileAds.initialize(appContext, InitializationConfig.Builder(AdUnits.APP_ID).build())
             }.onSuccess {
+                // initialize() blocks, so the SDK reports itself initialized by the time this
+                // runs — placements may load from here on.
                 note("SDK initialized")
+                _serving.value = true
             }.onFailure {
                 note("SDK initialization failed: ${it.message}")
             }
+            initializing = false
         }
     }
 

@@ -967,7 +967,7 @@ private fun GeneralSettingsPage(
                     Text(
                         "Off by default, and off means no ad is requested, loaded or shown anywhere in the app. On " +
                             "serves Google's test inventory: an anchored banner under Home and a native ad card above " +
-                            "the History list, both labelled as ads. Nothing is served during a workout.",
+                            "the History list, both labelled as ads. No full-screen ad opens during a workout.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     SwitchRow(

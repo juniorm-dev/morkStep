@@ -149,7 +149,13 @@ with the switch off.
   AdMob app ID is passed in code, as the Next-Gen guide requires (no manifest meta-data).
 - **Gate** — `ads/Ads.kt` owns the SDK lifecycle and `ads/AdUnits.kt` the demo unit IDs.
   With the switch off nothing initializes and no placement composes, so the app issues no ad
-  request at all (verified: an empty SDK log after a cold start with the switch off).
+  request at all (verified: an empty SDK log after a cold start with the switch off). `Ads`
+  also exposes `serving`, which turns true only after `MobileAds.initialize` has returned; the
+  placements gate on it rather than on the switch alone, because `AdView.loadAd` /
+  `NativeAdLoader.loadAd` throw `IllegalStateException: MobileAds.initialize must be called
+  before using the Google Mobile Ads SDK.` while the SDK is uninitialized — and the switch
+  flips on the main thread while initialization runs off it, so a banner composed in between
+  used to crash on a slow device.
 - **Placements** — two layouts, picked by a second hidden switch, **Pinned ads (debug)**
   (`ConfigStore.pinnedAds`; placement only — the Test-ads gate still decides whether anything
   is served), both in `ui/AdSlots.kt`, each slot destroyed when it leaves composition:

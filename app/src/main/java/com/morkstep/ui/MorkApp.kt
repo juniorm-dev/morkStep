@@ -69,6 +69,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val showDebugLog by viewModel.showDebugLog.collectAsStateWithLifecycle()
     val forcePhonePace by viewModel.forcePhonePace.collectAsStateWithLifecycle()
     val testAds by viewModel.testAds.collectAsStateWithLifecycle()
+    val adsServing by viewModel.adsServing.collectAsStateWithLifecycle()
     val pinnedAds by viewModel.pinnedAds.collectAsStateWithLifecycle()
     val fullPageAdDue by viewModel.fullPageAdDue.collectAsStateWithLifecycle()
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
@@ -205,7 +206,9 @@ fun MorkApp(viewModel: MainViewModel) {
     // placement outside the Home/History screens (no full-screen ad opens during a session).
     // On the Workout route the banner drops to the fixed 320×50 size so the live session
     // keeps its height; every other route shows the large anchored adaptive one.
-    val bannerPin = testAds && pinnedAds
+    // [adsServing], not [testAds], gates every placement: a request before the SDK has
+    // initialized throws.
+    val bannerPin = adsServing && pinnedAds
     val onWorkoutRoute = currentDestination?.route == Routes.WORKOUT
 
     Scaffold(
@@ -247,7 +250,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     activeId = activeId,
                     workoutActive = live.running,
                     debugLog = debugEnabled,
-                    adsEnabled = testAds && !pinnedAds,
+                    adsEnabled = adsServing && !pinnedAds,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
@@ -350,8 +353,8 @@ WorkoutScreen(
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,
-                    adsEnabled = testAds && !pinnedAds,
-                    fullPageAd = testAds && pinnedAds && fullPageAdDue,
+                    adsEnabled = adsServing && !pinnedAds,
+                    fullPageAd = adsServing && pinnedAds && fullPageAdDue,
                     onFullPageAdDismiss = viewModel::consumeFullPageAd,
                     // Opening a card re-reads Health Connect for that row, so a
                     // workout whose HR landed after the automatic passes fills in.
