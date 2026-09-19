@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -195,13 +196,13 @@ fun HistoryScreen(
                 modifier = Modifier.weight(1f),
                 enabled = workouts.isNotEmpty(),
             ) {
-                Text("Export history")
+                Text("Export history", textAlign = TextAlign.Center)
             }
             OutlinedButton(
                 onClick = onImport,
                 modifier = Modifier.weight(1f),
             ) {
-                Text("Import history")
+                Text("Import history", textAlign = TextAlign.Center)
             }
         }
 
