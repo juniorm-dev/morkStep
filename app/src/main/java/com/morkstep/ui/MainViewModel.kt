@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private class SpeakerSink(
@@ -180,14 +181,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Whether the History route should open a full-page ad right now — set on every third
-     * access while [pinnedAds] is on, cleared when the user closes it. Process-lifetime: the
-     * count restarts with the app (a debug placement needs no memory across launches).
+     * access while [pinnedAds] is on, cleared when the user closes it. The access count is
+     * persisted (`ConfigStore.historyAdAccesses`), so it resumes across an app restart rather
+     * than restarting with the process.
      */
     private val _fullPageAdDue = MutableStateFlow(false)
     val fullPageAdDue: StateFlow<Boolean> = _fullPageAdDue.asStateFlow()
-
-    /** History accesses counted for the full-page placement, while that placement is on. */
-    private var historyAccesses = 0
 
     /** Whether the app is exempt from battery optimization (sensors stay live in background). */
     private val _batteryUnrestricted = MutableStateFlow(false)
@@ -599,16 +598,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Count one access to the History route. Under the pinned placement every third access is
-     * due a full-page ad; [consumeFullPageAd] clears it once the user closes that ad. Accesses
-     * are not counted while the placement is off, so turning it on always starts a fresh
-     * count rather than firing on the next screen entry.
+     * due a full-page ad; [consumeFullPageAd] clears it once the user closes that ad. The count
+     * is persisted, so it resumes across an app restart rather than resetting with the process;
+     * accesses are not counted while the placement is off.
      */
     fun onHistoryOpened() {
         if (!_pinnedAds.value) return
-        historyAccesses++
-        if (historyAccesses % Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES == 0) {
-            debugLog.log("[ads] full-page History ad due (access $historyAccesses)")
-            _fullPageAdDue.value = true
+        viewModelScope.launch {
+            val accesses = container.configStore.historyAdAccesses.first() + 1
+            container.configStore.setHistoryAdAccesses(accesses)
+            if (accesses % Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES == 0) {
+                debugLog.log("[ads] full-page History ad due (access $accesses)")
+                _fullPageAdDue.value = true
+            }
         }
     }
 

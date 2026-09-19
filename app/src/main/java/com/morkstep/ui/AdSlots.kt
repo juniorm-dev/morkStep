@@ -29,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -94,6 +95,8 @@ private const val INLINE_AD_MEDIA_HEIGHT_DP = 240
  * - on — the banner is hosted by the app's bottom bar instead, so no screen's scrolling can
  *   carry it away, and the History card is replaced by a **full-page** native ad that opens on
  *   every third History access (`MainViewModel.onHistoryOpened`) and stays until it is closed.
+ *   On the Workout route that bottom-bar banner drops to the fixed 320×50 size, so it takes
+ *   less of the live session's height.
  *
  * Every slot is destroyed when it leaves composition, and each history ad carries its own
  * close control **outside** the `NativeAdView`, so it is never mistakable for an ad asset.
@@ -102,7 +105,10 @@ private const val INLINE_AD_MEDIA_HEIGHT_DP = 240
 /**
  * Anchored adaptive banner. [horizontalInsetDp] is the per-side gutter the hosting surface
  * leaves — the screens inset their own content by [SCREEN_PADDING_DP], the bottom bar by
- * nothing — so the ad may not exceed the width that is left. The ad is registered into the
+ * nothing — so the ad may not exceed the width that is left. [large] picks the full-width
+ * large anchored adaptive size (the default) or the fixed 320×50 [AdSize.BANNER] used on the
+ * Workout route, which is the smaller non-deprecated format (the SDK deprecates every
+ * non-large anchored adaptive size in favour of the large one). The ad is registered into the
  * [AdView] that hosts it (the supported path — `BannerAd.load`/`getView` are deprecated) and
  * the view is destroyed when the slot leaves composition.
  */
@@ -112,37 +118,43 @@ fun BannerAdSlot(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     horizontalInsetDp: Int = SCREEN_PADDING_DP,
+    large: Boolean = true,
 ) {
     if (!enabled) return
     val activity = LocalContext.current.findActivity() ?: return
     // The SDK sizes an anchored adaptive banner from an explicit width.
     val widthDp = LocalConfiguration.current.screenWidthDp - 2 * horizontalInsetDp
-    val adSize = remember(widthDp) {
-        AdSize.getLargeAnchoredAdaptiveBannerAdSize(activity, widthDp)
+    val adSize = remember(widthDp, large) {
+        if (large) AdSize.getLargeAnchoredAdaptiveBannerAdSize(activity, widthDp)
+        else AdSize.BANNER
     }
-    val adView = remember { AdView(activity) }
-    DisposableEffect(Unit) {
-        adView.loadAd(
-            BannerAdRequest.Builder(AdUnits.BANNER, adSize).build(),
-            object : AdLoadCallback<BannerAd> {
-                override fun onAdLoaded(ad: BannerAd) {
-                    adView.registerBannerAd(ad, activity)
-                    Ads.note("banner loaded")
-                }
+    // Keyed on the size: a route switch that changes it (large ⇄ 320×50) drops the AdView
+    // loaded for the old size and loads a fresh one, rather than reusing a destroyed view.
+    key(adSize) {
+        val adView = remember { AdView(activity) }
+        DisposableEffect(Unit) {
+            adView.loadAd(
+                BannerAdRequest.Builder(AdUnits.BANNER, adSize).build(),
+                object : AdLoadCallback<BannerAd> {
+                    override fun onAdLoaded(ad: BannerAd) {
+                        adView.registerBannerAd(ad, activity)
+                        Ads.note("banner loaded")
+                    }
 
-                override fun onAdFailedToLoad(adError: LoadAdError) {
-                    Ads.note("banner failed: ${adError.message}")
-                }
-            },
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        Ads.note("banner failed: ${adError.message}")
+                    }
+                },
+            )
+            onDispose { adView.destroy() }
+        }
+        AndroidView(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(adSize.height.dp),
+            factory = { adView },
         )
-        onDispose { adView.destroy() }
     }
-    AndroidView(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(adSize.height.dp),
-        factory = { adView },
-    )
 }
 
 /**

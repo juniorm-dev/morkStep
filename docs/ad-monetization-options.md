@@ -158,13 +158,39 @@ with the switch off.
   - **on** — the banner moves into the app's own bottom bar, above the tabs, so no screen's
     scrolling can carry it away and every route (the Workout route included — a banner, never
     a full-screen ad, and nothing opens during a session from the app's side) shows the same
-    pinned banner; the History inline card is replaced by a **full-page** native ad that opens
-    on every third History access (`Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES`) and is
-    closed by its own button or the system back gesture. Both history ads carry a **Close ad**
-    control of the app's, drawn above the `NativeAdView` and never over it.
+    pinned banner; on the Workout route that banner uses the fixed **320×50** size rather than
+    the large anchored adaptive one, so the live session keeps its height. The History inline
+    card is replaced by a **full-page** native ad that opens on every third History access
+    (`Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES`) and is closed by its own button or the
+    system back gesture. Both history ads carry a **Close ad** control of the app's, drawn
+    above the `NativeAdView` and never over it.
   No interstitial, no rewarded ad, and no ad code on the watch. The full-page native ad is the
   full-screen shape the 15-second dismissibility rule is written for, and it is closable at
   any moment — the rule that keeps a screen from being trapped.
+- **The full-page guard count is persisted.** The History access count behind the every-third
+  full-page ad is `ConfigStore.historyAdAccesses` (DataStore, default 0), so it resumes across
+  an app restart instead of resetting with the process. It only advances while the pinned
+  placement is on.
+- **Banner formats the SDK offers** (GMA Next-Gen `ads-mobile-sdk:1.4.0`, read from the AAR on
+  2026-09-18). `AdSize` exposes both fixed and adaptive sizes:
+
+  | `AdSize` | Size (dp) | Notes |
+  | --- | --- | --- |
+  | `BANNER` | 320×50 | the app's Workout-route size |
+  | `LARGE_BANNER` | 320×100 | |
+  | `FULL_BANNER` | 468×60 | wider than a phone |
+  | `LEADERBOARD` | 728×90 | tablet / landscape |
+  | `MEDIUM_RECTANGLE` | 300×250 | |
+  | `FLUID` | fills its container | |
+
+  Adaptive sizes: `getLargeAnchoredAdaptiveBannerAdSize` / `getLargePortraitAnchoredAdaptiveBannerAdSize`
+  / `getLargeLandscapeAnchoredAdaptiveBannerAdSize` (anchored, full-width — what the app uses),
+  plus the inline variants `getInlineAdaptiveBannerAdSize(width, maxHeight)` /
+  `getCurrentOrientationInlineAdaptiveBannerAdSize`. **Every non-large anchored adaptive size is
+  deprecated in 1.4.0** ("Use `AdSize.getLargeAnchoredAdaptiveBannerAdSize` instead"), so the
+  smaller banner on the Workout route is the fixed `BANNER` (320×50), not a "standard" anchored
+  adaptive one. What an individual request returns still depends on the account's inventory —
+  with the demo units everything renders as a labelled "Test Ad".
 - **Trace** — ad lifecycle lines land in the debug log under `[ads]` while "Debug tracing" is on.
 - **Test device** — Google's demo units are not tied to an AdMob account, so a developer
   cannot generate invalid traffic; the SDK additionally reports the emulator as a test device.

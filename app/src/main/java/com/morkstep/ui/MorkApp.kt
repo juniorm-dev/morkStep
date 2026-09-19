@@ -202,7 +202,10 @@ fun MorkApp(viewModel: MainViewModel) {
     // The pinned placement: the banner lives in the app's own bottom bar, above the tabs, so no
     // screen's scrolling can carry it away and every route shows the same one. It is the only
     // placement outside the Home/History screens (no full-screen ad opens during a session).
+    // On the Workout route the banner drops to the fixed 320×50 size so the live session
+    // keeps its height; every other route shows the large anchored adaptive one.
     val bannerPin = testAds && pinnedAds
+    val onWorkoutRoute = currentDestination?.route == Routes.WORKOUT
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -212,6 +215,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     enabled = bannerPin,
                     modifier = Modifier.fillMaxWidth(),
                     horizontalInsetDp = 0,
+                    large = !onWorkoutRoute,
                 )
                 NavigationBar {
                     bottomTabs.forEach { (route, label, icon) ->

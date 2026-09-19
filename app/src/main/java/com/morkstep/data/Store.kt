@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -32,6 +33,7 @@ class ConfigStore(private val context: Context) {
         private val FORCE_PHONE_PACE = booleanPreferencesKey("forcePhonePace")
         private val TEST_ADS = booleanPreferencesKey("testAds")
         private val PINNED_ADS = booleanPreferencesKey("pinnedAds")
+        private val HISTORY_AD_ACCESSES = intPreferencesKey("historyAdAccesses")
     }
 
     /** Whether to use simulated sensor readings (developer testing). Default OFF. */
@@ -115,6 +117,19 @@ class ConfigStore(private val context: Context) {
     suspend fun setPinnedAds(value: Boolean) = context.dataStore.edit { p ->
         p[PINNED_ADS] = value
     }
+
+    /**
+     * History accesses counted toward the pinned placement's every-third full-page ad
+     * (`Constants.HISTORY_FULL_PAGE_AD_EVERY_N_ACCESSES`). Persisted so the guard count
+     * survives an app restart instead of resetting with the process; it only advances while
+     * the pinned placement is on. Default 0.
+     */
+    val historyAdAccesses: Flow<Int> = context.dataStore.data.map { it[HISTORY_AD_ACCESSES] ?: 0 }
+
+    suspend fun setHistoryAdAccesses(value: Int) = context.dataStore.edit { p ->
+        p[HISTORY_AD_ACCESSES] = value
+    }
+
     val profiles: Flow<List<WorkoutProfile>> = context.dataStore.data.map { p ->
         val raw = p[PROFILES_JSON]
         if (raw.isNullOrBlank()) listOf(defaultProfile()) else runCatching {
