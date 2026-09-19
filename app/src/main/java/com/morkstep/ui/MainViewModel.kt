@@ -186,6 +186,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _smallHomeBanner = MutableStateFlow(false)
     val smallHomeBanner: StateFlow<Boolean> = _smallHomeBanner.asStateFlow()
 
+    /** Debug: a finished workout opens its History report instead of returning to Home. */
+    private val _finishToReport = MutableStateFlow(false)
+    val finishToReport: StateFlow<Boolean> = _finishToReport.asStateFlow()
+
+    /**
+     * Row id of the workout the finish flow should open on the History screen — set when a
+     * session is recorded while [finishToReport] is on, cleared by [consumeReportWorkout]
+     * once History has opened the card. A one-shot, so opening History by hand never
+     * re-expands an older session.
+     */
+    private val _reportWorkoutId = MutableStateFlow<Long?>(null)
+    val reportWorkoutId: StateFlow<Long?> = _reportWorkoutId.asStateFlow()
+
     /**
      * Whether the hidden Debug card in Settings has been revealed by the General-tab gesture.
      * Deliberately **not** persisted: the reveal lasts for the life of the process, so it
@@ -455,6 +468,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _smallHomeBanner.value = on
             }
         }
+        viewModelScope.launch {
+            container.configStore.finishToReport.collect { on ->
+                _finishToReport.value = on
+            }
+        }
         // Internal alpha update check: one listing read per launch, off the main thread. A
         // failure is silent (the folder is a personal public link, not an update service).
         viewModelScope.launch {
@@ -662,6 +680,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setSmallHomeBanner(on: Boolean) {
         viewModelScope.launch { container.configStore.setSmallHomeBanner(on) }
+    }
+
+    /**
+     * Send a finished workout to its History report instead of back to Home — the hidden
+     * **Finish to History report (debug)** switch.
+     */
+    fun setFinishToReport(on: Boolean) {
+        viewModelScope.launch { container.configStore.setFinishToReport(on) }
+    }
+
+    /** History has opened the report card for the finished workout; stop offering it. */
+    fun consumeReportWorkout() {
+        _reportWorkoutId.value = null
     }
 
     /**
@@ -947,6 +978,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val ended = System.currentTimeMillis()
         val started = ended - ls.totalSeconds * 1000L
         val activeProfileAtFinish = _activeProfile.value
+        // Finish-to-report (hidden debug switch): the UI opens this session's History card
+        // instead of going Home. Never for a baseline — that finish goes to Settings to
+        // confirm the calibration, so its report would fight that navigation.
+        val reportToHistory = _finishToReport.value &&
+            (activeProfileAtFinish == null || !isBaselineProfile(activeProfileAtFinish))
         viewModelScope.launch {
             val entity = WorkoutEntity(
                 startTime = started,
@@ -969,6 +1005,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 phaseAverages = ls.phaseAverages,
             )
             val id = container.workoutDao.insert(entity)
+            if (reportToHistory) _reportWorkoutId.value = id
             val stored = entity.copy(id = id)
             // Health Connect backfill: only when the Wear relay is off; real-time
             // values already recorded (BLE strap) are never overwritten — each

@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -120,6 +121,11 @@ private fun extraStats(w: WorkoutEntity): String? {
  * above the list ([adsEnabled]), or — under the pinned placement — a full-page
  * native ad over the whole screen on the accesses [fullPageAd] names, closed by
  * its own button or the system back gesture ([onFullPageAdDismiss]).
+ *
+ * [openWorkoutId] is how the finish flow hands the session it just recorded to
+ * this screen: the card opens as if the user had tapped it, so a finish under the
+ * hidden **Finish to History report (debug)** switch lands on the report rather
+ * than on the Home screen.
  */
 @Suppress("FunctionName")
 @Composable
@@ -127,6 +133,13 @@ fun HistoryScreen(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onWorkoutOpened: (WorkoutEntity) -> Unit,
+    /**
+     * Row to open on arrival — the session that just finished, under the hidden **Finish to
+     * History report (debug)** switch. Null leaves the list as the user left it. Consumed by
+     * [onOpenConsumed] once the card is open, so arriving at History later does not re-open it.
+     */
+    openWorkoutId: Long? = null,
+    onOpenConsumed: () -> Unit = {},
     /** Whether the inline ad card is drawn (hidden Debug switch); off draws nothing and requests nothing. */
     adsEnabled: Boolean = false,
     /** Whether this access opens the full-page native ad instead of the inline card. */
@@ -139,6 +152,19 @@ fun HistoryScreen(
     val workouts by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
     // At most one card is open at a time, and the open one survives rotation.
     var expandedId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    // Finish-to-report: open the recorded session's card on arrival, exactly as a tap would —
+    // including the Health Connect re-read the row gets when a card is opened. The row is
+    // already first in the list (newest first), so nothing has to be scrolled to. Both the id
+    // and the row arrive asynchronously (the insert coroutine writes it), so this waits for
+    // each rather than reading them once.
+    LaunchedEffect(openWorkoutId, workouts) {
+        val id = openWorkoutId ?: return@LaunchedEffect
+        expandedId = id
+        val row = workouts.firstOrNull { it.id == id } ?: return@LaunchedEffect
+        onWorkoutOpened(row)
+        onOpenConsumed()
+    }
 
     if (fullPageAd) {
         // Its own window, so the ad covers the bottom bar too and back closes it.

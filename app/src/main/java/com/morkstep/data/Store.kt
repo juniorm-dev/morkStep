@@ -44,6 +44,7 @@ class ConfigStore(private val context: Context) {
         private val TEST_ADS = booleanPreferencesKey("testAds")
         private val PINNED_ADS = booleanPreferencesKey("pinnedAds")
         private val SMALL_HOME_BANNER = booleanPreferencesKey("smallHomeBanner")
+        private val FINISH_TO_REPORT = booleanPreferencesKey("finishToReport")
         private val HISTORY_AD_ACCESSES = intPreferencesKey("historyAdAccesses")
     }
 
@@ -140,6 +141,20 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setSmallHomeBanner(value: Boolean) = context.dataStore.edit { p ->
         p[SMALL_HOME_BANNER] = value
+    }
+
+    /**
+     * Whether a finished workout goes to its History report instead of back to Home — the
+     * hidden **Finish to History report (debug)** switch in Settings → General → Debug.
+     * Default OFF, which keeps the original flow: the workout's finish button (Finish, Done or
+     * Finish early) pops back to the Home screen. On, the finish navigates to History with the
+     * session's card already expanded, so the report of the session just run is what is on
+     * screen.
+     */
+    val finishToReport: Flow<Boolean> = preferences.map { it[FINISH_TO_REPORT] ?: false }.distinctUntilChanged()
+
+    suspend fun setFinishToReport(value: Boolean) = context.dataStore.edit { p ->
+        p[FINISH_TO_REPORT] = value
     }
 
     /**
