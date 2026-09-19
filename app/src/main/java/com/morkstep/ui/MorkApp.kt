@@ -72,6 +72,8 @@ fun MorkApp(viewModel: MainViewModel) {
     val adsServing by viewModel.adsServing.collectAsStateWithLifecycle()
     val pinnedAds by viewModel.pinnedAds.collectAsStateWithLifecycle()
     val smallHomeBanner by viewModel.smallHomeBanner.collectAsStateWithLifecycle()
+    val finishToReport by viewModel.finishToReport.collectAsStateWithLifecycle()
+    val reportWorkoutId by viewModel.reportWorkoutId.collectAsStateWithLifecycle()
     val debugUnlocked by viewModel.debugUnlocked.collectAsStateWithLifecycle()
     val fullPageAdDue by viewModel.fullPageAdDue.collectAsStateWithLifecycle()
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
@@ -250,6 +252,10 @@ fun MorkApp(viewModel: MainViewModel) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Routes.HOME) {
+                // Landing on Home means the finish did not take the report path (that one
+                // goes straight to History, never through here), so a pending report is
+                // dropped — a later visit to History must not open an older session.
+                LaunchedEffect(Unit) { viewModel.consumeReportWorkout() }
                 HomeScreen(
                     profiles = profiles,
                     activeId = activeId,
@@ -278,9 +284,19 @@ WorkoutScreen(
                         onExportLog = ::launchLogExport,
                                             onEnd = {
                         viewModel.endWorkout()
-                        // Baseline: the finish event above returns Home itself.
+                        // Baseline finishes return to Settings themselves (the finish
+                        // event above); otherwise Home — or, under the hidden Finish to
+                        // History report switch, straight to the session's History card,
+                        // which [reportWorkoutId] names once the row is written.
                         if (activeProfile?.let { isBaselineProfile(it) } != true) {
-                            navController.popBackStack()
+                            if (finishToReport) {
+                                navController.navigate(Routes.HISTORY) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            } else {
+                                navController.popBackStack()
+                            }
                         }
                     },
                         onStop = {
@@ -322,6 +338,8 @@ WorkoutScreen(
                     onPinnedAdsChange = viewModel::setPinnedAds,
                     smallHomeBanner = smallHomeBanner,
                     onSmallHomeBannerChange = viewModel::setSmallHomeBanner,
+                    finishToReport = finishToReport,
+                    onFinishToReportChange = viewModel::setFinishToReport,
                     batteryUnrestricted = batteryUnrestricted,
                     onRequestBatteryUnrestricted = {
                         batteryOptimizationLauncher.launch(
@@ -363,6 +381,8 @@ WorkoutScreen(
                 HistoryScreen(
                     onExport = ::launchHistoryExport,
                     onImport = ::launchHistoryImport,
+                    openWorkoutId = reportWorkoutId,
+                    onOpenConsumed = viewModel::consumeReportWorkout,
                     adsEnabled = adsServing && !pinnedAds,
                     fullPageAd = adsServing && pinnedAds && fullPageAdDue,
                     onFullPageAdDismiss = viewModel::consumeFullPageAd,

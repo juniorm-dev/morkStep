@@ -199,6 +199,8 @@ fun ConfigScreen(
     onPinnedAdsChange: (Boolean) -> Unit,
     smallHomeBanner: Boolean,
     onSmallHomeBannerChange: (Boolean) -> Unit,
+    finishToReport: Boolean,
+    onFinishToReportChange: (Boolean) -> Unit,
     onExportProfiles: () -> Unit,
     onImportProfiles: () -> Unit,
     /** Hidden Debug card revealed by the General-tab gesture; owned by the view model. */
@@ -285,6 +287,8 @@ fun ConfigScreen(
                             onPinnedAdsChange = onPinnedAdsChange,
                             smallHomeBanner = smallHomeBanner,
                             onSmallHomeBannerChange = onSmallHomeBannerChange,
+                            finishToReport = finishToReport,
+                            onFinishToReportChange = onFinishToReportChange,
                             batteryUnrestricted = batteryUnrestricted,
                             onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
                             activityRecognitionGranted = activityRecognitionGranted,
@@ -775,6 +779,8 @@ private fun GeneralSettingsPage(
     onPinnedAdsChange: (Boolean) -> Unit,
     smallHomeBanner: Boolean,
     onSmallHomeBannerChange: (Boolean) -> Unit,
+    finishToReport: Boolean,
+    onFinishToReportChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -967,6 +973,19 @@ private fun GeneralSettingsPage(
                     Text(
                         "Sets the watch-fallback window to 0s: the phone's own step sensor drives pace unconditionally " +
                             "and watch pace samples are ignored. Useful to isolate whether pace comes from the phone at all.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    SwitchRow(
+                        label = "Finish to History report (debug)",
+                        checked = finishToReport,
+                        onCheckedChange = onFinishToReportChange,
+                    )
+                    Text(
+                        "Off (the default), the workout's Finish/Done/Finish early button returns to the Home screen. " +
+                            "On, it opens the History screen with the session just recorded already expanded, so its " +
+                            "report — averages, HR stats and the per-phase breakdown — is what is on screen when the " +
+                            "workout ends. Baseline finishes are unaffected: they still return to Settings to confirm " +
+                            "the calibrated profile.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     SwitchRow(
