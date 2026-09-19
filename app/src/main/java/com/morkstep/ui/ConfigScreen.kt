@@ -685,12 +685,19 @@ private fun ProfileSettingsPage(
                         "the History screen.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onExportProfiles, modifier = Modifier.fillMaxWidth()) {
-                        Text("Export profiles")
+                // Side by side, as on the History screen: both labels fit on one line at the
+                // default font, and a scaled-up font wraps them to two lines — which is why the
+                // labels are centered. A wrapped Text reports its width as the button's whole
+                // content box, so the default start alignment would pin both lines to the left.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onExportProfiles, modifier = Modifier.weight(1f)) {
+                        Text("Export profiles", textAlign = TextAlign.Center)
                     }
-                    OutlinedButton(onClick = onImportProfiles, modifier = Modifier.fillMaxWidth()) {
-                        Text("Import profiles")
+                    OutlinedButton(onClick = onImportProfiles, modifier = Modifier.weight(1f)) {
+                        Text("Import profiles", textAlign = TextAlign.Center)
                     }
                 }
             }
