@@ -22,8 +22,12 @@ object UpdateCheck {
     private const val ENCODED_ENDPOINT =
         "aHR0cHM6Ly9lYXBpLnBjbG91ZC5jb20vc2hvd3B1Ymxpbms/Y29kZT1rWk00a1VaRk9uVnpDZFNoajU2ZjUxdGUwV21TSDBuRURYWA=="
 
-    /** The phone build's published name; the Wear APK (`morkStep-wear-debug-…`) is not matched. */
-    private val publishedApk = Regex("""morkStep-debug-(\d+\.\d+\.\d+)\.apk""")
+    /**
+     * The phone build's published name; the Wear APK (`morkStep-wear-debug-…`) is not matched.
+     * The trailing `[^"]*` tolerates a suffix the folder may add — a pCloud duplicate rename
+     * (`…0.16.4 (1).apk`) or an `-unsigned` release — without crossing the JSON string's quote.
+     */
+    private val publishedApk = Regex("""morkStep-debug-(\d+\.\d+\.\d+)[^"]*\.apk""")
 
     /**
      * The newest published version, or null when the folder lists none or the request fails
@@ -38,14 +42,22 @@ object UpdateCheck {
         }
         return try {
             if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            publishedApk.findAll(body)
-                .map { it.groupValues[1] }
-                .maxWithOrNull(::compareVersions)
+            latestVersionIn(connection.inputStream.bufferedReader().use { it.readText() })
         } finally {
             connection.disconnect()
         }
     }
+
+    /**
+     * The highest `morkStep-debug-<version>.apk` version a listing body names, or null when it
+     * names none. The folder is expected to hold several builds at once, so the choice is by
+     * numeric version — not by listing order or file date — and a re-uploaded older build can
+     * never win over a newer one.
+     */
+    internal fun latestVersionIn(body: String): String? =
+        publishedApk.findAll(body)
+            .map { it.groupValues[1] }
+            .maxWithOrNull(::compareVersions)
 
     /** True when [remote] is a strictly newer dotted version than [current]. */
     fun isNewer(remote: String, current: String): Boolean = compareVersions(remote, current) > 0

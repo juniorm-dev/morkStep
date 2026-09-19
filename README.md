@@ -405,6 +405,8 @@ The harness also auto-loads built-in `pylsp` for Python regardless.
 
 `app/src/test/java/com/morkstep/DebugLogTest.kt` covers (3 tests): the export keeps the whole retained trace while the screen mirrors only the newest lines, both views drop the oldest line once full, and `clear()` wipes both.
 
+`app/src/test/java/com/morkstep/UpdateCheckTest.kt` covers (5 tests): the internal alpha update check picks the **highest** published version when the folder holds several (numeric, not textual — `0.16.10` beats `0.16.9`), ignores the Wear APK and the debug-log names that share the folder, tolerates a suffixed file name (a pCloud duplicate rename or `-unsigned`), and `isNewer` for the running/published pair.
+
 `app/src/test/java/com/morkstep/ui/HistoryCardHrTest.kt` covers (7 tests): the collapsed History card's averages — the pooled push/recovery values beside the overall per metric (speed, pace, HR), no line for a metric the workout never recorded — and its HR line's fallbacks: the pooled pair when only the buckets landed, a single pooled value, the min–max pair when that is all Health Connect held, and silence when the workout recorded no HR at all.
 
 The remaining suite classes:
@@ -418,4 +420,4 @@ The remaining suite classes:
 - `sensing/FallbackPaceSourceTest.kt` (4 tests): the watch/phone merge — the phone drives until the watch appears, the phone takes over after the watch goes silent and hands back when it resumes, a null watch sample does not blank the phone value, and a 0 staleness window forces the phone pedometer.
 - `wear/…/WearSessionStateTest.kt` (5 tests): the 47-byte `/morkstep/state` payload decode — full round-trip, NaN speed and negative pace/total becoming null, and a short payload yielding defaults.
 
-128 phone unit tests plus 5 in the wear module — `./gradlew testDebugUnitTest` runs both.
+133 phone unit tests plus 5 in the wear module — `./gradlew testDebugUnitTest` runs both.
