@@ -269,7 +269,7 @@ The read is **retried, not one-shot**. Health Connect only holds HR that another
 
 ### Storage — `data/`
 
-- **`ConfigStore`** — the profile list (JSON via kotlinx.serialization) and the active profile id, persisted through Jetpack DataStore (Preferences): coroutine-native, atomic, lock-free. A deliberate round-trip rule: a zero-length warm-up/cool-down is real user intent ("none"), so raw seconds are persisted and re-read skips them, rather than silently resurrecting defaults.
+- **`ConfigStore`** — the profile list (JSON via kotlinx.serialization) and the active profile id, persisted through Jetpack DataStore (Preferences): coroutine-native, atomic, lock-free. Every preference flow ends in `distinctUntilChanged`: a DataStore `edit` re-emits the **whole** store, and a collector that reacts by rebuilding the session engine would otherwise discard a running workout when an unrelated key (the History ad counter, a debug switch) was written. A deliberate round-trip rule: a zero-length warm-up/cool-down is real user intent ("none"), so raw seconds are persisted and re-read skips them, rather than silently resurrecting defaults.
 - **`WorkoutHistory.kt`** — Room `@Entity`/`@Dao` (schema **v3**: v2 added the profile name and the per-phase average list — stored as JSON text through a `@TypeConverter` — and v3 the profile's length label, both captured at the finish; v1 rows carry neither). Because the app has not shipped, older databases are discarded via `fallbackToDestructiveMigration` rather than migrated, and history is a relational, time-ordered list with a stable primary key. Completed workouts stream into the History screen via `Flow`.
 
 ### UI — `ui/`
