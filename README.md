@@ -200,6 +200,8 @@ The pure mapping helpers have **no Android dependencies**, so they are unit-test
 - **Distance is integrated, not sampled.** Each tick adds `speed × dt / 3600` miles, so distance tracks the live speed signal smoothly and its accumulation works even with irregular tick cadence (unit-tested).
 - **Pull sensors, push state.** The engine observes speed/pace/HR via `StateFlow` and emits aggregated state downstream. The UI never drives the engine's truth; it only renders `LiveState`.
 
+**Known limitation — a profile switch during a session discards it.** `MainViewModel.refreshActive()` calls `setupEngine()` whenever the active profile actually changes, and `setupEngine()` builds a **new** `SessionEngine` — a fresh `LiveState` with `running = false`. Selecting a different profile while a workout is running therefore **silently drops that workout**: Home offers *Start workout* again, no history row is written, and the ticker and the foreground `WorkoutService` are not torn down with the engine (`setupEngine()` cancels neither), so the ongoing "session running" notification lingers on an idle snapshot until the next start, discard, or app teardown. Writes that change no profile no longer reach this path — `ConfigStore`'s flows are `distinctUntilChanged` (see *Storage*) — but a genuine profile change still does. Whether a mid-session switch should end the session explicitly, be refused while running, or carry the elapsed time onto the new plan is an open product decision.
+
 ### Sensing — `sensing/`
 
 Speed, pace and HR are narrow interfaces (`SpeedSource`, `PaceSource`, `HeartRateSource`) returning `StateFlow`; the engine and UI depend only on those. Production sources:

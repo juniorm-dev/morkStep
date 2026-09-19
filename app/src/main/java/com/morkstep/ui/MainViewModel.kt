@@ -533,6 +533,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         sim = null
     }
 
+    /**
+     * Re-derive the active profile and rebuild the engine from it. Reached when the profile list
+     * or the active id actually changes — `ConfigStore`'s flows are `distinctUntilChanged`, so a
+     * write to an unrelated key no longer lands here and can no longer discard a running session.
+     *
+     * Known limitation: a *genuine* profile change still does. Rebuilding replaces the engine
+     * (and so resets `live.running`) without ending the session, the ticker, or the foreground
+     * service — see the README's *Interval engine* section.
+     */
     private fun refreshActive() {
         val id = _activeId.value
         _activeProfile.value = _profiles.value.firstOrNull { it.id == id }
