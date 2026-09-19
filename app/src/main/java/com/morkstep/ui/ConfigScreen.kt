@@ -197,8 +197,14 @@ fun ConfigScreen(
     onTestAdsChange: (Boolean) -> Unit,
     pinnedAds: Boolean,
     onPinnedAdsChange: (Boolean) -> Unit,
+    smallHomeBanner: Boolean,
+    onSmallHomeBannerChange: (Boolean) -> Unit,
     onExportProfiles: () -> Unit,
     onImportProfiles: () -> Unit,
+    /** Hidden Debug card revealed by the General-tab gesture; owned by the view model. */
+    debugUnlocked: Boolean,
+    /** Reveal the hidden Debug card (called once the tap threshold is reached). */
+    onDebugUnlock: () -> Unit,
     /** Newer build in the internal alpha folder, or null — see `UpdateCheck`. */
     updateAvailable: String? = null,
 ) {
@@ -206,10 +212,10 @@ fun ConfigScreen(
     var page by rememberSaveable { mutableStateOf(SettingsPage.PROFILE) }
     // Hidden Debug card: revealed by [Constants.SETTINGS_DEBUG_UNLOCK_TAPS]
     // consecutive taps on the General tab with nothing else pressed in between —
-    // any touch in the page area, or any other tab, resets the count. Once
-    // revealed it stays visible while Settings is open.
+    // any touch in the page area, or any other tab, resets the count. The reveal
+    // itself lives in the view model ([debugUnlocked]) so it outlives Settings
+    // and lasts until the app restarts; only the tap count is local to the visit.
     var generalTaps by rememberSaveable { mutableIntStateOf(0) }
-    var debugUnlocked by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = page.ordinal) {
@@ -219,7 +225,7 @@ fun ConfigScreen(
                     onClick = {
                         if (entry == SettingsPage.GENERAL) {
                             generalTaps++
-                            if (generalTaps >= Constants.SETTINGS_DEBUG_UNLOCK_TAPS) debugUnlocked = true
+                            if (generalTaps >= Constants.SETTINGS_DEBUG_UNLOCK_TAPS) onDebugUnlock()
                         } else {
                             generalTaps = 0
                         }
@@ -277,6 +283,8 @@ fun ConfigScreen(
                             onTestAdsChange = onTestAdsChange,
                             pinnedAds = pinnedAds,
                             onPinnedAdsChange = onPinnedAdsChange,
+                            smallHomeBanner = smallHomeBanner,
+                            onSmallHomeBannerChange = onSmallHomeBannerChange,
                             batteryUnrestricted = batteryUnrestricted,
                             onRequestBatteryUnrestricted = onRequestBatteryUnrestricted,
                             activityRecognitionGranted = activityRecognitionGranted,
@@ -765,6 +773,8 @@ private fun GeneralSettingsPage(
     onTestAdsChange: (Boolean) -> Unit,
     pinnedAds: Boolean,
     onPinnedAdsChange: (Boolean) -> Unit,
+    smallHomeBanner: Boolean,
+    onSmallHomeBannerChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -981,6 +991,17 @@ private fun GeneralSettingsPage(
                             "replaces the ad card with a full-page native ad that opens on every third History " +
                             "access and stays until it is closed. Inert while Test ads is off; the full-page ad " +
                             "never opens during a workout.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    SwitchRow(
+                        label = "Small home banner (debug)",
+                        checked = smallHomeBanner,
+                        onCheckedChange = onSmallHomeBannerChange,
+                    )
+                    Text(
+                        "Draws the Home screen's banner at the small fixed 320×50 size the Workout route uses " +
+                            "instead of the large anchored adaptive default, so the two can be compared. " +
+                            "Inert while Test ads is off.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

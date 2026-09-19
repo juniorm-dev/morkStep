@@ -39,6 +39,8 @@ fun HomeScreen(
     debugLog: Boolean = false,
     /** Whether ads are served (hidden Debug switch); off draws no banner and makes no request. */
     adsEnabled: Boolean = false,
+    /** Draw the banner at the Workout route's small fixed 320×50 size (hidden debug toggle). */
+    smallBanner: Boolean = false,
     onSelectProfile: (Long) -> Unit,
     onStart: () -> Unit,
     /** Exports the captured debug trace; only offered while [debugLog] is on. */
@@ -142,6 +144,10 @@ fun HomeScreen(
         }
 
         // Last in the column, so the ad never sits between the user and Start workout.
-        BannerAdSlot(enabled = adsEnabled, modifier = Modifier.padding(top = 24.dp))
+        BannerAdSlot(
+            enabled = adsEnabled,
+            large = !smallBanner,
+            modifier = Modifier.padding(top = 24.dp),
+        )
     }
 }

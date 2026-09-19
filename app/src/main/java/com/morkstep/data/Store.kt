@@ -43,6 +43,7 @@ class ConfigStore(private val context: Context) {
         private val FORCE_PHONE_PACE = booleanPreferencesKey("forcePhonePace")
         private val TEST_ADS = booleanPreferencesKey("testAds")
         private val PINNED_ADS = booleanPreferencesKey("pinnedAds")
+        private val SMALL_HOME_BANNER = booleanPreferencesKey("smallHomeBanner")
         private val HISTORY_AD_ACCESSES = intPreferencesKey("historyAdAccesses")
     }
 
@@ -126,6 +127,19 @@ class ConfigStore(private val context: Context) {
 
     suspend fun setPinnedAds(value: Boolean) = context.dataStore.edit { p ->
         p[PINNED_ADS] = value
+    }
+
+    /**
+     * Whether the Home screen's banner uses the small fixed 320×50 size instead of the large
+     * anchored adaptive one — the hidden **Small home banner (debug)** switch in Settings →
+     * General → Debug. Default OFF, which is the large size every screen but the Workout route
+     * shows; on matches the Workout route's banner so the two can be compared. Placement only:
+     * [testAds] still decides whether anything is served.
+     */
+    val smallHomeBanner: Flow<Boolean> = preferences.map { it[SMALL_HOME_BANNER] ?: false }.distinctUntilChanged()
+
+    suspend fun setSmallHomeBanner(value: Boolean) = context.dataStore.edit { p ->
+        p[SMALL_HOME_BANNER] = value
     }
 
     /**
