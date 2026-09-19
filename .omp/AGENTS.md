@@ -80,5 +80,12 @@ Treat LSP as a hard gate on editing — the same way the build is a hard gate on
   a doc comment quoting the Settings label, wired through the Settings screen's
   per-profile `rememberSaveable` state + `Save profile` copy. This is the established
   pattern (`audioMode`, `vibrationMode`, `resetPhaseAverages`).
+- **Paired buttons are a weighted `Row`, and their labels are centered.** Side-by-side
+  actions (History *Export/Import history*, Settings → Profile → *Backup* *Export/Import
+  profiles*) use `Modifier.weight(1f)` on each button plus
+  `textAlign = TextAlign.Center` on each label. A label that wraps to two lines — the
+  normal case once the system font is scaled up — makes the `Text` node take the button's
+  whole content box, so the default start alignment pins both lines to the left edge. See
+  README → *UI — `ui/`* → **Button-label layout**.
 - When introducing a new behavior knob, check `Constants.kt` / `WorkoutProfile` first
   for an existing parameter that should cover it before adding a new one.
