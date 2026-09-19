@@ -71,6 +71,7 @@ fun MorkApp(viewModel: MainViewModel) {
     val testAds by viewModel.testAds.collectAsStateWithLifecycle()
     val pinnedAds by viewModel.pinnedAds.collectAsStateWithLifecycle()
     val fullPageAdDue by viewModel.fullPageAdDue.collectAsStateWithLifecycle()
+    val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
     val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
     val activityRecognitionGranted by viewModel.activityRecognitionGranted.collectAsStateWithLifecycle()
     val sensorNote by viewModel.sensorNote.collectAsStateWithLifecycle()
@@ -329,6 +330,7 @@ WorkoutScreen(
                     bluetoothGranted = bluetoothGranted,
                     onExportProfiles = ::launchProfileExport,
                     onImportProfiles = ::launchProfileImport,
+                    updateAvailable = updateAvailable,
                 )
             }
             composable(Routes.HISTORY) {

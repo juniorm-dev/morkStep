@@ -15,6 +15,7 @@ import com.morkstep.AppContainer
 import com.morkstep.Constants
 import com.morkstep.DebugLog
 import com.morkstep.MorkApplication
+import com.morkstep.UpdateCheck
 import com.morkstep.WorkoutService
 import com.morkstep.ads.Ads
 import com.morkstep.audio.CueSpeaker
@@ -58,6 +59,7 @@ import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +67,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private class SpeakerSink(
     private val speaker: CueSpeaker,
@@ -187,6 +190,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _fullPageAdDue = MutableStateFlow(false)
     val fullPageAdDue: StateFlow<Boolean> = _fullPageAdDue.asStateFlow()
+
+    /**
+     * Newer build published to the internal alpha folder, or null while the running build is
+     * current or the check could not read the folder. See `UpdateCheck` and the README's
+     * *Internal alpha update check* note.
+     */
+    private val _updateAvailable = MutableStateFlow<String?>(null)
+    val updateAvailable: StateFlow<String?> = _updateAvailable.asStateFlow()
 
     /** Whether the app is exempt from battery optimization (sensors stay live in background). */
     private val _batteryUnrestricted = MutableStateFlow(false)
@@ -416,6 +427,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // Placement only — the gate above still decides whether anything is served.
                 // Turning it off mid-visit takes the pending full-page ad down with it.
                 if (!on) _fullPageAdDue.value = false
+            }
+        }
+        // Internal alpha update check: one listing read per launch, off the main thread. A
+        // failure is silent (the folder is a personal public link, not an update service).
+        viewModelScope.launch {
+            val latest = withContext(Dispatchers.IO) {
+                runCatching { UpdateCheck.fetchLatestVersion() }.getOrNull()
+            }
+            val current = appVersionName()
+            if (latest != null && UpdateCheck.isNewer(latest, current)) {
+                _updateAvailable.value = latest
+                debugLog.log("[update] newer build available: v$latest (running v$current)")
+            } else {
+                debugLog.log("[update] no newer build (published=${latest ?: "unknown"}, running v$current)")
             }
         }
         refreshHealthConnectState()
