@@ -98,6 +98,10 @@ private const val INLINE_AD_MEDIA_HEIGHT_DP = 240
  *   On the Workout route that bottom-bar banner drops to the fixed 320×50 size, so it takes
  *   less of the live session's height.
  *
+ * A third hidden switch, **Small home banner (debug)**, drops the Home route's banner to that
+ * same fixed 320×50 size — whichever layout is on, the Home column banner when off and the
+ * bottom-bar banner on the Home route when on — so the two sizes can be compared.
+ *
  * Every slot is destroyed when it leaves composition, and each history ad carries its own
  * close control **outside** the `NativeAdView`, so it is never mistakable for an ad asset.
  */
@@ -107,7 +111,8 @@ private const val INLINE_AD_MEDIA_HEIGHT_DP = 240
  * leaves — the screens inset their own content by [SCREEN_PADDING_DP], the bottom bar by
  * nothing — so the ad may not exceed the width that is left. [large] picks the full-width
  * large anchored adaptive size (the default) or the fixed 320×50 [AdSize.BANNER] used on the
- * Workout route, which is the smaller non-deprecated format (the SDK deprecates every
+ * Workout route and — under the hidden **Small home banner (debug)** switch — on the Home
+ * route, which is the smaller non-deprecated format (the SDK deprecates every
  * non-large anchored adaptive size in favour of the large one). The ad is registered into the
  * [AdView] that hosts it (the supported path — `BannerAd.load`/`getView` are deprecated) and
  * the view is destroyed when the slot leaves composition.

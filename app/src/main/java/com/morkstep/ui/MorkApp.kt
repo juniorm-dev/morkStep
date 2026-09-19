@@ -71,6 +71,8 @@ fun MorkApp(viewModel: MainViewModel) {
     val testAds by viewModel.testAds.collectAsStateWithLifecycle()
     val adsServing by viewModel.adsServing.collectAsStateWithLifecycle()
     val pinnedAds by viewModel.pinnedAds.collectAsStateWithLifecycle()
+    val smallHomeBanner by viewModel.smallHomeBanner.collectAsStateWithLifecycle()
+    val debugUnlocked by viewModel.debugUnlocked.collectAsStateWithLifecycle()
     val fullPageAdDue by viewModel.fullPageAdDue.collectAsStateWithLifecycle()
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
     val batteryUnrestricted by viewModel.batteryUnrestricted.collectAsStateWithLifecycle()
@@ -205,11 +207,14 @@ fun MorkApp(viewModel: MainViewModel) {
     // screen's scrolling can carry it away and every route shows the same one. It is the only
     // placement outside the Home/History screens (no full-screen ad opens during a session).
     // On the Workout route the banner drops to the fixed 320×50 size so the live session
-    // keeps its height; every other route shows the large anchored adaptive one.
+    // keeps its height; every other route shows the large anchored adaptive one — except the
+    // Home route under the hidden **Small home banner (debug)** switch, which matches Workout's
+    // small size there too.
     // [adsServing], not [testAds], gates every placement: a request before the SDK has
     // initialized throws.
     val bannerPin = adsServing && pinnedAds
     val onWorkoutRoute = currentDestination?.route == Routes.WORKOUT
+    val onHomeRoute = currentDestination?.route == Routes.HOME
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -219,7 +224,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     enabled = bannerPin,
                     modifier = Modifier.fillMaxWidth(),
                     horizontalInsetDp = 0,
-                    large = !onWorkoutRoute,
+                    large = !onWorkoutRoute && !(onHomeRoute && smallHomeBanner),
                 )
                 NavigationBar {
                     bottomTabs.forEach { (route, label, icon) ->
@@ -251,6 +256,7 @@ fun MorkApp(viewModel: MainViewModel) {
                     workoutActive = live.running,
                     debugLog = debugEnabled,
                     adsEnabled = adsServing && !pinnedAds,
+                    smallBanner = smallHomeBanner,
                     onSelectProfile = viewModel::selectProfile,
                     onStart = {
                         viewModel.startWorkout()
@@ -314,6 +320,8 @@ WorkoutScreen(
                     onTestAdsChange = viewModel::setTestAds,
                     pinnedAds = pinnedAds,
                     onPinnedAdsChange = viewModel::setPinnedAds,
+                    smallHomeBanner = smallHomeBanner,
+                    onSmallHomeBannerChange = viewModel::setSmallHomeBanner,
                     batteryUnrestricted = batteryUnrestricted,
                     onRequestBatteryUnrestricted = {
                         batteryOptimizationLauncher.launch(
@@ -333,6 +341,8 @@ WorkoutScreen(
                     bluetoothGranted = bluetoothGranted,
                     onExportProfiles = ::launchProfileExport,
                     onImportProfiles = ::launchProfileImport,
+                    debugUnlocked = debugUnlocked,
+                    onDebugUnlock = viewModel::unlockDebug,
                     updateAvailable = updateAvailable,
                 )
             }

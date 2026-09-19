@@ -182,6 +182,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _pinnedAds = MutableStateFlow(false)
     val pinnedAds: StateFlow<Boolean> = _pinnedAds.asStateFlow()
 
+    /** Debug: draw the Home screen's banner at the Workout route's small 320×50 size. */
+    private val _smallHomeBanner = MutableStateFlow(false)
+    val smallHomeBanner: StateFlow<Boolean> = _smallHomeBanner.asStateFlow()
+
+    /**
+     * Whether the hidden Debug card in Settings has been revealed by the General-tab gesture.
+     * Deliberately **not** persisted: the reveal lasts for the life of the process, so it
+     * survives navigating away from Settings (the reason it lives here rather than in a
+     * `rememberSaveable`, which the popped Settings entry takes with it) but is gone on the
+     * next app start.
+     */
+    private val _debugUnlocked = MutableStateFlow(false)
+    val debugUnlocked: StateFlow<Boolean> = _debugUnlocked.asStateFlow()
+
     /**
      * Whether the ad SDK has finished initializing, so a placement may load — the placements
      * gate on this, not on [testAds] alone, because a request made before initialization
@@ -436,6 +450,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (!on) _fullPageAdDue.value = false
             }
         }
+        viewModelScope.launch {
+            container.configStore.smallHomeBanner.collect { on ->
+                _smallHomeBanner.value = on
+            }
+        }
         // Internal alpha update check: one listing read per launch, off the main thread. A
         // failure is silent (the folder is a personal public link, not an update service).
         viewModelScope.launch {
@@ -635,6 +654,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setPinnedAds(on: Boolean) {
         viewModelScope.launch { container.configStore.setPinnedAds(on) }
+    }
+
+    /**
+     * Shrink the Home screen's banner to the Workout route's 320×50 size — the hidden **Small
+     * home banner (debug)** switch. Placement only, inert while Test ads is off.
+     */
+    fun setSmallHomeBanner(on: Boolean) {
+        viewModelScope.launch { container.configStore.setSmallHomeBanner(on) }
+    }
+
+    /**
+     * Reveal the hidden Debug card (the General-tab gesture). In-memory by design: the reveal
+     * survives navigating away from Settings but not an app restart — see [debugUnlocked].
+     */
+    fun unlockDebug() {
+        _debugUnlocked.value = true
     }
 
     /**
